@@ -674,6 +674,8 @@ add_library(Common STATIC
 	Common/Crypto/sha1.h
 	Common/Crypto/sha256.cpp
 	Common/Crypto/sha256.h
+	Common/Data/HLC.cpp
+	Common/Data/HLC.h
 	Common/Data/Collections/ConstMap.h
 	Common/Data/Collections/FixedSizeQueue.h
 	Common/Data/Collections/Hashmaps.h
@@ -835,13 +837,26 @@ add_library(Common STATIC
 	Common/Net/HTTPRequest.h
 	Common/Net/HTTPServer.cpp
 	Common/Net/HTTPServer.h
+	Common/Net/MDNS.cpp
+	Common/Net/MDNS.h
+	Common/Net/MDNS_Android.cpp
+	Common/Net/MDNS_Unix.cpp
+	Common/Net/MDNS_Windows.cpp
 	Common/Net/NetBuffer.cpp
 	Common/Net/NetBuffer.h
+	Common/Net/PlatformKeyStore.h
+	Common/Net/PlatformKeyStore_Android.cpp
+	Common/Net/PlatformKeyStore_Unix.cpp
+	Common/Net/PlatformKeyStore_Windows.cpp
 	Common/Net/Resolve.cpp
 	Common/Net/Resolve.h
 	Common/Net/Sinks.cpp
 	Common/Net/Sinks.h
 	Common/Net/SocketCompat.h
+	Common/Net/TLSServer.cpp
+	Common/Net/TLSServer.h
+	Common/Net/UDPDiscovery.cpp
+	Common/Net/UDPDiscovery.h
 	Common/Net/URL.cpp
 	Common/Net/URL.h
 	Common/Net/WebsocketServer.cpp
@@ -1399,6 +1414,8 @@ if(ANDROID)
 		android/jni/AndroidGraphicsContext.h
 		android/jni/AndroidAudio.cpp
 		android/jni/AndroidAudio.h
+		android/jni/AndroidLANSync.cpp
+		android/jni/AndroidLANSync.h
 		android/jni/OpenSLContext.cpp
 		android/jni/OpenSLContext.h
 	)
@@ -1517,10 +1534,14 @@ else()
 		endif()
 		add_compile_definitions(SDL)
 		list(APPEND nativeExtra
+			SDL/SDLGLGraphicsContext.cpp
 			SDL/SDLJoystick.h
 			SDL/SDLJoystick.cpp
+			SDL/LinuxLANSync.cpp
+			SDL/LinuxLANSync.h
+			SDL/SDLLANSync.cpp
+			SDL/SDLLANSync.h
 			SDL/SDLMain.cpp
-			SDL/SDLGLGraphicsContext.cpp
 		)
 		if(NOT USE_LIBNX)
 			list(APPEND nativeExtra
@@ -1556,7 +1577,11 @@ else()
 			SDL/MacCameraHelper.mm
 			Common/Battery/AppleBatteryClient.m
 			UI/PSPNSApplicationDelegate.mm
-			UI/PSPNSApplicationDelegate.h)
+			UI/PSPNSApplicationDelegate.h
+			macOS/CocoaLANSync.h
+			macOS/CocoaLANSync.mm
+			macOS/MacLANSync.h
+			macOS/MacLANSync.mm)
 
 			# TODO
 			# set_source_files_properties(SDL/SDLMain.mm PROPERTIES COMPILE_FLAGS -fobjc-arc)
@@ -1637,6 +1662,8 @@ list(APPEND NativeAppSource
 	UI/GameInfoCache.cpp
 	UI/IAPScreen.cpp
 	UI/IAPScreen.h
+	UI/LANSyncSettings.cpp
+	UI/LANSyncSettings.h
 	UI/MainScreen.h
 	UI/MainScreen.cpp
 	UI/GameBrowser.h
@@ -1760,6 +1787,24 @@ elseif(WIN32)
 	target_link_libraries(native ws2_32 winmm)
 elseif(${CMAKE_SYSTEM_NAME} MATCHES "^(DragonFly|FreeBSD|NetBSD)$")
 	target_link_libraries(native execinfo)
+elseif(${CMAKE_SYSTEM_NAME} MATCHES "^Linux$")
+	find_package(PkgConfig REQUIRED)
+	pkg_check_modules(AVAHI avahi-client)
+	if(AVAHI_FOUND)
+		target_link_libraries(native ${AVAHI_LIBRARIES})
+		target_include_directories(native PRIVATE ${AVAHI_INCLUDE_DIRS})
+		message(STATUS "Avahi found: ${AVAHI_LIBRARIES}")
+	else()
+		message(STATUS "Avahi not found - LAN sync mDNS will use UDP fallback only")
+	endif()
+	# OpenSSL for TLS in LAN sync
+	find_package(OpenSSL)
+	if(OPENSSL_FOUND)
+		target_link_libraries(native OpenSSL::SSL OpenSSL::Crypto)
+		message(STATUS "OpenSSL found: ${OPENSSL_VERSION}")
+	else()
+		message(STATUS "OpenSSL not found - LAN sync will use plain TCP")
+	endif()
 endif()
 
 add_library(kirk STATIC
@@ -2178,6 +2223,8 @@ add_library(${CoreLibName} ${CoreLinkType}
 	Core/KeyMap.h
 	Core/KeyMapDefaults.cpp
 	Core/KeyMapDefaults.h
+	Core/LANSyncConfig.cpp
+	Core/LANSyncConfig.h
 	Core/LuaContext.cpp
 	Core/LuaContext.h
 	Core/RetroAchievements.h
@@ -2550,8 +2597,12 @@ add_library(${CoreLibName} ${CoreLinkType}
 	Core/Replay.h
 	Core/SaveState.cpp
 	Core/SaveState.h
+	Core/SaveStateLANSync.cpp
+	Core/SaveStateLANSync.h
 	Core/SaveStateRewind.cpp
 	Core/SaveStateRewind.h
+	Core/SaveStateSyncMetadata.cpp
+	Core/SaveStateSyncMetadata.h
 	Core/Screenshot.cpp
 	Core/Screenshot.h
 	Core/System.cpp
@@ -2884,6 +2935,8 @@ set(WindowsFiles
 	Windows/MainWindow.h
 	Windows/MainWindowMenu.cpp
 	Windows/MainWindowMenu.h
+	Windows/WinLANSync.cpp
+	Windows/WinLANSync.h
 	Windows/RawInput.cpp
 	Windows/RawInput.h
 	Windows/TouchInputHandler.cpp

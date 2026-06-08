@@ -1174,6 +1174,19 @@ static const ConfigSetting vrSettings[] = {
 	ConfigSetting("VRHeadUpDisplayScale", SETTING(g_Config, fHeadUpDisplayScale), 0.3f, CfgFlag::PER_GAME),
 };
 
+// LAN Save State Sync settings
+static const ConfigSetting lansyncSettings[] = {
+	ConfigSetting("LANSyncEnabled", SETTING(g_Config.lanSync, bEnabled), CfgFlag::DEFAULT),
+	ConfigSetting("LANSyncDeviceName", SETTING(g_Config.lanSync, sDeviceName), (const char *)"", CfgFlag::DEFAULT),
+	ConfigSetting("LANSyncAutoDiscover", SETTING(g_Config.lanSync, bAutoDiscover), CfgFlag::DEFAULT),
+	ConfigSetting("LANSyncMaxPeers", SETTING(g_Config.lanSync, iMaxPeers), CfgFlag::DEFAULT),
+	ConfigSetting("LANSyncConflictResolution", SETTING(g_Config.lanSync, iConflictResolution), CfgFlag::DEFAULT),
+	ConfigSetting("LANSyncPairedPeers", SETTING(g_Config.lanSync, sPairedPeers), (const char *)"", CfgFlag::DEFAULT),
+	ConfigSetting("LANSyncHttpPort", SETTING(g_Config.lanSync, iHttpPort), CfgFlag::DEFAULT),
+	ConfigSetting("LANSyncUseTLS", SETTING(g_Config.lanSync, bUseTLS), CfgFlag::DEFAULT),
+	ConfigSetting("LANSyncAutoSync", SETTING(g_Config.lanSync, bAutoSync), CfgFlag::DEFAULT),
+};
+
 // The first column says what structure the parameters are relative to.
 static const ConfigSectionMeta g_sectionMeta[] = {
 	{ &g_Config, generalSettings, ARRAY_SIZE(generalSettings), "General" },
@@ -1195,6 +1208,7 @@ static const ConfigSectionMeta g_sectionMeta[] = {
 	{ &g_Config.touchControlsPortrait, touchControlSettings, ARRAY_SIZE(touchControlSettings), "TouchControls.Portrait"},  // These we don't want to read from the old settings, since for most people, those settings will be bad.
 	{ &g_Config.gestureControls[0], gestureControlSettings, ARRAY_SIZE(gestureControlSettings), "GestureControls.Left", "General"},  // We read the old settings from [General], since most of them used to be there (except the analog stuff).
 	{ &g_Config.gestureControls[1], gestureControlSettings, ARRAY_SIZE(gestureControlSettings), "GestureControls.Right", "General"},  // We read the old settings from [General], since most of them used to be there (except the analog stuff).
+	{ &g_Config.lanSync, lansyncSettings, ARRAY_SIZE(lansyncSettings), "LANSync"},
 };
 
 ConfigBlock *GetConfigBlockForSection(std::string_view sectionName) {

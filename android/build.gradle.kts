@@ -67,7 +67,10 @@ dependencies {
 	// Will replace with a different plugin soon.
 	implementation("androidx.appcompat:appcompat:1.7.1")
 	implementation("androidx.documentfile:documentfile:1.1.0")
+	implementation("androidx.security:security-crypto:1.1.0-alpha06")
 	implementation("com.google.protobuf:protobuf-javalite:4.33.5")
+	// ML Kit for QR code scanning (LAN sync pairing)
+	implementation("com.google.mlkit:barcode-scanning:17.3.0")
 }
 
 protobuf {

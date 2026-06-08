@@ -29,6 +29,7 @@
 #include "Common/File/Path.h"
 #include "Common/Math/geom2d.h"
 #include "Core/ConfigValues.h"
+#include "Core/LANSyncConfig.h"
 
 extern const char *PPSSPP_GIT_VERSION;
 
@@ -597,6 +598,8 @@ public:
 	bool bDontDownloadInfraJson;
 	int iChatButtonPosition;
 	int iChatScreenPosition;
+	// LAN Save State Sync
+	LANSyncConfig lanSync;
 
 	bool bEnableQuickChat;
 	std::string sQuickChat[5];
