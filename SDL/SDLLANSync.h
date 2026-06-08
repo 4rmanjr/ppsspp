@@ -46,6 +46,12 @@ public:
 	// Conflict resolution dialog
 	void DrawConflictDialog(bool *open);
 
+	// Large save warning dialog
+	void DrawLargeSaveWarningDialog(bool *open);
+
+	// Called from SDLMain.cpp background thread polling
+	void UpdateProgress();
+
 	// === Actions ===
 
 	void OpenSettings();
@@ -55,9 +61,6 @@ public:
 	// Start sync with selected peer
 	void StartSync(const std::string &peerId);
 
-	// Called from SDLMain.cpp background thread polling
-	void UpdateProgress();
-
 private:
 	void DoStartSync(const std::string &peerId);
 	void DrawPeerList();
@@ -66,15 +69,17 @@ private:
 	void DrawPINSection();
 	void DrawProgressBar();
 	void DrawSlotList();
-	void DrawLargeSaveWarningDialog(bool *open);
 
-	// UI state
+public:
+	// UI state (public for SDLMain.cpp render loop)
 	bool settingsOpen_ = false;
 	bool pairingOpen_ = false;
 	bool serverPairingOpen_ = false;
 	bool progressOpen_ = false;
 	bool conflictOpen_ = false;
+	bool showLargeSaveWarning_ = false;
 
+private:
 	// Pairing state
 	bool awaitingPIN_ = false;
 	char ipBuf_[64] = {};
@@ -91,7 +96,6 @@ private:
 
 	// Large save warning
 	static constexpr int64_t LARGE_SAVE_BYTES = 50 * 1024 * 1024;  // 50MB
-	bool showLargeSaveWarning_ = false;
 	std::string pendingSyncPeerId_;
 	int64_t largestSaveBytes_ = 0;
 	std::string largestSaveName_;

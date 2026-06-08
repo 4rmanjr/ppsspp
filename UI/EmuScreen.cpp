@@ -73,6 +73,9 @@ using namespace std::placeholders;
 #include "Core/SaveState.h"
 #include "Core/Screenshot.h"
 #include "UI/ImDebugger/ImDebugger.h"
+#if !defined(MOBILE_DEVICE)
+#include "SDL/SDLLANSync.h"
+#endif
 #include "Core/HLE/__sceAudio.h"
 #include "Core/HW/Display.h"
 
@@ -1879,6 +1882,13 @@ void EmuScreen::runImDebugger() {
 			ImGui_ImplPlatform_Init(GetSysDirectory(DIRECTORY_SYSTEM) / "imgui.ini");
 			imDebugger_ = std::make_unique<ImDebugger>();
 
+#if !defined(MOBILE_DEVICE)
+			// Initialize LAN Sync UI (desktop SDL only)
+			if (g_Config.lanSync.bEnabled) {
+				new SDLLANSyncUI();
+			}
+#endif
+
 			// Read the TTF font
 			size_t propSize = 0;
 			const uint8_t *propFontData = g_VFS.ReadFile("Roboto_Condensed-Regular.ttf", &propSize);
@@ -1944,6 +1954,23 @@ void EmuScreen::renderImDebugger() {
 			ImGui_ImplThin3d_RenderDrawData(ImGui::GetDrawData(), draw);
 		}
 	}
+
+#if !defined(MOBILE_DEVICE)
+	// Render LAN Sync UI if enabled (desktop SDL only)
+	if (g_Config.lanSync.bEnabled && g_LANSyncUI) {
+		Draw::DrawContext *draw = screenManager()->getDrawContext();
+		if (PSP_IsInited()) {
+			g_LANSyncUI->DrawSettingsWindow(&g_LANSyncUI->settingsOpen_);
+			g_LANSyncUI->DrawPairingDialog(&g_LANSyncUI->pairingOpen_);
+			g_LANSyncUI->DrawServerPairingScreen(&g_LANSyncUI->serverPairingOpen_);
+			g_LANSyncUI->DrawProgressDialog(&g_LANSyncUI->progressOpen_);
+			g_LANSyncUI->DrawConflictDialog(&g_LANSyncUI->conflictOpen_);
+			g_LANSyncUI->DrawLargeSaveWarningDialog(&g_LANSyncUI->showLargeSaveWarning_);
+			g_LANSyncUI->UpdateProgress();
+			ImGui_ImplThin3d_RenderDrawData(ImGui::GetDrawData(), draw);
+		}
+	}
+#endif
 }
 
 bool EmuScreen::hasVisibleUI() {

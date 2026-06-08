@@ -106,9 +106,8 @@ void UITabbedBaseDialogScreen::CreateViews() {
 	CreateTabs();
 	if (currentTabSetting_) {
 		tabHolder_->SetInitialTab(*currentTabSetting_);
-	} else {
-		tabHolder_->EnsureTab(tabHolder_->GetCurrentTab());
 	}
+	tabHolder_->EnsureAllCreated();
 
 	tabHolder_->OnChangeTab.Add([this](UI::EventParams &e) {
 		if (currentTabSetting_) {
