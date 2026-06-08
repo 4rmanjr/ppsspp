@@ -334,10 +334,13 @@ if(NOT LIBRETRO AND NOT IOS AND NOT MACOSX)
 	find_package(OpenSSL)
 
 	# Avahi and QREncode - use pkg-config since no CMake config provided
-	find_package(PkgConfig)
-	if(PkgConfig_FOUND)
-		pkg_check_modules(AVAHI IMPORTED_TARGET avahi-client avahi-core)
-		pkg_check_modules(QRENCODE IMPORTED_TARGET libqrencode)
+	# Skip on Android - uses NsdManager (mDNS) and ML Kit (QR) natively
+	if(NOT ANDROID)
+		find_package(PkgConfig)
+		if(PkgConfig_FOUND)
+			pkg_check_modules(AVAHI IMPORTED_TARGET avahi-client avahi-core)
+			pkg_check_modules(QRENCODE IMPORTED_TARGET libqrencode)
+		endif()
 	endif()
 
 	# TODO: this can be removed once CI supports newer SDL2_ttf
@@ -1790,15 +1793,17 @@ endif()
 
 target_link_libraries(native ${LIBZIP_LIBRARY} ${LIB7ZIP_LIBRARY} ${PNG_LIBRARIES} ${BASISU_LIBRARIES} ${ZLIB_LIBRARY} pugixml vma gason udis86 ${RT_LIB} ${nativeExtraLibs} ${ATOMIC_LIB} Common)
 
-# LAN Sync libraries
-if(AVAHI_FOUND)
-	target_link_libraries(native avahi-common avahi-client)
+# LAN Sync libraries (not available for Android cross-compile)
+if(NOT ANDROID)
+	if(AVAHI_FOUND)
+		target_link_libraries(native avahi-common avahi-client)
+	endif()
+	if(QRENCODE_FOUND)
+		target_link_libraries(native qrencode)
+	endif()
 endif()
 if(OPENSSL_FOUND)
 	target_link_libraries(native OpenSSL::SSL OpenSSL::Crypto)
-endif()
-if(QRENCODE_FOUND)
-	target_link_libraries(native qrencode)
 endif()
 
 if(TARGET Ext::GLEW)
@@ -2965,11 +2970,14 @@ endif()
 list(APPEND LinkCommon ${CoreLibName} ${CMAKE_THREAD_LIBS_INIT})
 
 # LAN Sync libraries - needed for mDNS (avahi) and QR code (qrencode)
-if(TARGET AVAHI::AVAHI)
-	list(APPEND LinkCommon AVAHI::AVAHI)
-endif()
-if(TARGET QRENCODE::QRENCODE)
-	list(APPEND LinkCommon QRENCODE::QRENCODE)
+# Skiped on Android - uses NsdManager (mDNS) and ML Kit (QR) natively
+if(NOT ANDROID)
+	if(TARGET AVAHI::AVAHI)
+		list(APPEND LinkCommon AVAHI::AVAHI)
+	endif()
+	if(TARGET QRENCODE::QRENCODE)
+		list(APPEND LinkCommon QRENCODE::QRENCODE)
+	endif()
 endif()
 
 if(WIN32)

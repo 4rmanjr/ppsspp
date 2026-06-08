@@ -113,6 +113,11 @@ android {
 	compileSdk = 37
 	ndkVersion = "29.0.14206865"
 
+	configurations.all {
+		exclude(group = "org.jetbrains.kotlin", module = "kotlin-stdlib-jdk7")
+		exclude(group = "org.jetbrains.kotlin", module = "kotlin-stdlib-jdk8")
+	}
+
 	compileOptions {
 		sourceCompatibility = JavaVersion.VERSION_11
 		targetCompatibility = JavaVersion.VERSION_11

@@ -73,7 +73,9 @@ using namespace std::placeholders;
 #include "Core/SaveState.h"
 #include "Core/Screenshot.h"
 #include "UI/ImDebugger/ImDebugger.h"
+#if !defined(MOBILE_DEVICE)
 #include "SDL/SDLLANSync.h"
+#endif
 #include "Core/HLE/__sceAudio.h"
 #include "Core/HW/Display.h"
 
@@ -1880,10 +1882,12 @@ void EmuScreen::runImDebugger() {
 			ImGui_ImplPlatform_Init(GetSysDirectory(DIRECTORY_SYSTEM) / "imgui.ini");
 			imDebugger_ = std::make_unique<ImDebugger>();
 
-			// Initialize LAN Sync UI
+#if !defined(MOBILE_DEVICE)
+			// Initialize LAN Sync UI (desktop SDL only)
 			if (g_Config.lanSync.bEnabled) {
 				new SDLLANSyncUI();
 			}
+#endif
 
 			// Read the TTF font
 			size_t propSize = 0;
@@ -1951,7 +1955,8 @@ void EmuScreen::renderImDebugger() {
 		}
 	}
 
-	// Render LAN Sync UI if enabled
+#if !defined(MOBILE_DEVICE)
+	// Render LAN Sync UI if enabled (desktop SDL only)
 	if (g_Config.lanSync.bEnabled && g_LANSyncUI) {
 		Draw::DrawContext *draw = screenManager()->getDrawContext();
 		if (PSP_IsInited()) {
@@ -1965,6 +1970,7 @@ void EmuScreen::renderImDebugger() {
 			ImGui_ImplThin3d_RenderDrawData(ImGui::GetDrawData(), draw);
 		}
 	}
+#endif
 }
 
 bool EmuScreen::hasVisibleUI() {
