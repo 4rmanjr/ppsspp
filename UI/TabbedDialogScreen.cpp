@@ -104,6 +104,7 @@ void UITabbedBaseDialogScreen::CreateViews() {
 
 	// Let the subclass create its tabs.
 	CreateTabs();
+	tabHolder_->EnsureAllCreated();
 	if (currentTabSetting_) {
 		tabHolder_->SetInitialTab(*currentTabSetting_);
 	} else {
