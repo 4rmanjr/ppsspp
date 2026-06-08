@@ -418,16 +418,28 @@ bool SaveStateLANSync::StartServer() {
 							allBody.resize(bytesRead);
 						}
 
-						size_t lastUnderscore = filename.rfind('_');
-						size_t dot = filename.rfind('.');
-						std::string gameId = (lastUnderscore != std::string::npos) ?
-							filename.substr(0, lastUnderscore) : "unknown";
-						int slot = (lastUnderscore != std::string::npos && dot != std::string::npos) ?
-							atoi(filename.substr(lastUnderscore + 1, dot - lastUnderscore - 1).c_str()) : -1;
+						if (endsWith(filename, ".jpg")) {
+							Path filePath = GetSysDirectory(DIRECTORY_SAVESTATE) / filename;
+							Path tmp = filePath.WithExtraExtension(".tmp");
+							if (File::WriteDataToFile(false, allBody.data(), allBody.size(), tmp)) {
+								File::Rename(tmp, filePath);
+								WriteHTTPResponse(clientFd, 201, "{\"ok\":true}");
+							} else {
+								File::Delete(tmp);
+								WriteHTTPResponse(clientFd, 500, "{\"error\":\"write_failed\"}");
+							}
+						} else {
+							size_t lastUnderscore = filename.rfind('_');
+							size_t dot = filename.rfind('.');
+							std::string gameId = (lastUnderscore != std::string::npos) ?
+								filename.substr(0, lastUnderscore) : "unknown";
+							int slot = (lastUnderscore != std::string::npos && dot != std::string::npos) ?
+								atoi(filename.substr(lastUnderscore + 1, dot - lastUnderscore - 1).c_str()) : -1;
 
-						std::string response;
-						HandleSaveUpload(gameId, slot, allBody, "", response);
-						WriteHTTPResponse(clientFd, 201, response);
+							std::string response;
+							HandleSaveUpload(gameId, slot, allBody, "", response);
+							WriteHTTPResponse(clientFd, 201, response);
+						}
 					} else {
 						WriteHTTPResponse(clientFd, 405, "{\"error\":\"method_not_allowed\"}");
 					}
@@ -705,14 +717,17 @@ SaveStateLANSync::SyncResult SaveStateLANSync::DoSync(const PeerInfo &peer, Save
 				remoteHash = jsonBody.substr(hashPos, hashEnd - hashPos);
 		}
 
+		bool remoteHasThumb = jsonBody.find("\"hasThumbnail\":true", slotPos) != std::string::npos &&
+			jsonBody.find("\"hasThumbnail\":true", slotPos) < jsonBody.find("\"gameId\":\"", end + 1);
+
 	// Helper lambdas for single save transfer
-	auto downloadSave = [&](const Path &path, const std::string &gid, int sl) -> bool {
+	auto downloadSave = [&](const Path &path, const std::string &gid, int sl, const char *ext = "ppst") -> bool {
 		std::string dlReq = StringFromFormat(
-			"GET /api/v1/saves/%s_%d.ppst HTTP/1.1\r\n"
+			"GET /api/v1/saves/%s_%d.%s HTTP/1.1\r\n"
 			"Host: %s:%d\r\n"
 			"Authorization: Bearer %s\r\n"
 			"Connection: close\r\n\r\n",
-			gid.c_str(), sl, peer.host.c_str(), peer.port, peer.token.c_str());
+			gid.c_str(), sl, ext, peer.host.c_str(), peer.port, peer.token.c_str());
 		int sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 		if (sock < 0) return false;
 		struct timeval tv;
@@ -750,15 +765,15 @@ SaveStateLANSync::SyncResult SaveStateLANSync::DoSync(const PeerInfo &peer, Save
 		return ok;
 	};
 
-	auto uploadSave = [&](const std::string &gid, int sl, const std::string &data) -> bool {
+	auto uploadSave = [&](const std::string &gid, int sl, const std::string &data, const char *ext = "ppst") -> bool {
 		std::string body = StringFromFormat(
-			"POST /api/v1/saves/%s_%d.ppst HTTP/1.1\r\n"
+			"POST /api/v1/saves/%s_%d.%s HTTP/1.1\r\n"
 			"Host: %s:%d\r\n"
 			"Authorization: Bearer %s\r\n"
 			"Content-Type: application/octet-stream\r\n"
 			"Content-Length: %d\r\n"
 			"Connection: close\r\n\r\n%s",
-			gid.c_str(), sl, peer.host.c_str(), peer.port, peer.token.c_str(),
+			gid.c_str(), sl, ext, peer.host.c_str(), peer.port, peer.token.c_str(),
 			(int)data.size(), data.c_str());
 		int sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 		if (sock < 0) return false;
@@ -818,12 +833,22 @@ SaveStateLANSync::SyncResult SaveStateLANSync::DoSync(const PeerInfo &peer, Save
 		auto cr = DetectConflict(localHlc, localParentHlc, remoteHlc, remoteParentHlc);
 		switch (cr.action) {
 		case ConflictResult::KEEP_REMOTE:
-			if (downloadSave(localPath, gameId, slot)) result.downloaded++;
-			else result.failed++;
+			if (downloadSave(localPath, gameId, slot)) {
+				result.downloaded++;
+				if (remoteHasThumb) {
+					Path thumbPath = saveDir / StringFromFormat("%s_%d.jpg", gameId.c_str(), slot);
+					downloadSave(thumbPath, gameId, slot, "jpg");
+				}
+			} else result.failed++;
 			break;
 		case ConflictResult::KEEP_LOCAL:
-			if (hasLocal && uploadSave(gameId, slot, localData)) result.uploaded++;
-			else result.skipped++;
+			if (hasLocal && uploadSave(gameId, slot, localData)) {
+				result.uploaded++;
+				Path thumbPath = saveDir / StringFromFormat("%s_%d.jpg", gameId.c_str(), slot);
+				std::string localThumbData;
+				if (File::ReadBinaryFileToString(thumbPath, &localThumbData))
+					uploadSave(gameId, slot, localThumbData, "jpg");
+			} else result.skipped++;
 			break;
 		case ConflictResult::SKIP:
 			result.skipped++;
@@ -831,14 +856,24 @@ SaveStateLANSync::SyncResult SaveStateLANSync::DoSync(const PeerInfo &peer, Save
 		case ConflictResult::MERGE: {
 			ConflictResolution autoResolve = (ConflictResolution)g_Config.lanSync.iConflictResolution;
 			if (autoResolve == ConflictResolution::KEEP_REMOTE) {
-				if (downloadSave(localPath, gameId, slot)) result.downloaded++;
-				else result.failed++;
+				if (downloadSave(localPath, gameId, slot)) {
+					result.downloaded++;
+					if (remoteHasThumb) {
+						Path thumbPath = saveDir / StringFromFormat("%s_%d.jpg", gameId.c_str(), slot);
+						downloadSave(thumbPath, gameId, slot, "jpg");
+					}
+				} else result.failed++;
 			} else if (autoResolve == ConflictResolution::KEEP_LOCAL) {
 				result.skipped++;
 			} else if (autoResolve == ConflictResolution::NEWEST_WINS) {
 				if (remoteHlc.IsAfter(localHlc)) {
-					if (downloadSave(localPath, gameId, slot)) result.downloaded++;
-					else result.failed++;
+					if (downloadSave(localPath, gameId, slot)) {
+						result.downloaded++;
+						if (remoteHasThumb) {
+							Path thumbPath = saveDir / StringFromFormat("%s_%d.jpg", gameId.c_str(), slot);
+							downloadSave(thumbPath, gameId, slot, "jpg");
+						}
+					} else result.failed++;
 				} else {
 					result.skipped++;
 				}
@@ -934,6 +969,50 @@ void SaveStateLANSync::ResolveConflict(const ConflictInfo &conflict, ConflictRes
 		}
 	}
 	closesocket(sock);
+
+	// Also download thumbnail
+	Path thumbPath = GetSysDirectory(DIRECTORY_SAVESTATE) /
+		StringFromFormat("%s_%d.jpg", conflict.gameId.c_str(), conflict.slot);
+	std::string thumbReq = StringFromFormat(
+		"GET /api/v1/saves/%s_%d.jpg HTTP/1.1\r\n"
+		"Host: %s:%d\r\n"
+		"Authorization: Bearer %s\r\n"
+		"Connection: close\r\n\r\n",
+		conflict.gameId.c_str(), conflict.slot,
+		peer.host.c_str(), peer.port, peer.token.c_str());
+
+	int thumbSock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+	if (thumbSock >= 0) {
+		setsockopt(thumbSock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+		struct sockaddr_in thumbAddr;
+		memset(&thumbAddr, 0, sizeof(thumbAddr));
+		thumbAddr.sin_family = AF_INET;
+		thumbAddr.sin_port = htons(peer.port);
+		inet_pton(AF_INET, peer.host.c_str(), &thumbAddr.sin_addr);
+		if (connect(thumbSock, (struct sockaddr *)&thumbAddr, sizeof(thumbAddr)) >= 0) {
+			send(thumbSock, thumbReq.c_str(), thumbReq.size(), 0);
+			std::vector<uint8_t> buf(65536);
+			int total = 0, n;
+			while ((n = recv(thumbSock, (char *)buf.data() + total, buf.size() - total - 1, 0)) > 0) {
+				total += n;
+				if (total >= (int)buf.size() - 1024) buf.resize(buf.size() * 2);
+			}
+			if (total > 0) {
+				std::string resp((char *)buf.data(), total);
+				size_t bStart = resp.find("\r\n\r\n");
+				if (bStart != std::string::npos && resp.find("200 OK") != std::string::npos) {
+					bStart += 4;
+					std::vector<uint8_t> fd(buf.begin() + bStart, buf.begin() + total);
+					Path tmp = thumbPath.WithExtraExtension(".tmp");
+					if (File::WriteDataToFile(false, fd.data(), fd.size(), tmp))
+						File::Rename(tmp, thumbPath);
+					else
+						File::Delete(tmp);
+				}
+			}
+		}
+		closesocket(thumbSock);
+	}
 }
 
 void SaveStateLANSync::ResolveAllConflicts(ConflictResolution resolution) {
@@ -1117,13 +1196,17 @@ void SaveStateLANSync::HandleSaveList(const std::string &gameId, std::string &re
 		SaveStateSyncMetadata meta;
 		SaveStateSyncMetadata::ReadFromFile(ppstPath, meta);
 
+		Path thumbPath = saveDir / StringFromFormat("%s_%d.jpg", prefix.c_str(), slot);
+		bool hasThumb = File::Exists(thumbPath);
+
 		if (!first) response += ","; first = false;
 		response += StringFromFormat(
 			"{\"gameId\":\"%s\",\"slot\":%d,\"size\":%lld,\"hash\":\"%s\","
 			"\"hlc\":%s,\"parentHlc\":%s,"
-			"\"ppssppVersion\":\"\",\"saveFormatVersion\":0,\"hasThumbnail\":false}",
+			"\"ppssppVersion\":\"\",\"saveFormatVersion\":0,\"hasThumbnail\":%s}",
 			prefix.c_str(), slot, (long long)meta.fileSize, meta.hash.c_str(),
-			meta.hlc.ToJSON().c_str(), meta.parentHlc.ToJSON().c_str());
+			meta.hlc.ToJSON().c_str(), meta.parentHlc.ToJSON().c_str(),
+			hasThumb ? "true" : "false");
 	}
 	response += "]";
 }
