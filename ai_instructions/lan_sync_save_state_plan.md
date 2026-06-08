@@ -1,5 +1,7 @@
 # LAN Save State Sync - Implementation Plan
 
+> **Bug tracking moved to [`BUGS.md`](../BUGS.md)** — 10 bugs tracked (5 fixed, 5 open)
+
 ## Overview
 
 Fitur sinkronisasi save state antar device PPSSPP melalui jaringan lokal (LAN).
@@ -23,7 +25,7 @@ Target platform: Android ↔ PC (Windows/Linux/macOS).
 | 10 | Max peers | **5** paired devices |
 | 11 | Sync progress | **Separate dialog** |
 | 12 | Error handling | **Dialog for critical**, toast for warning |
-| 13 | Conflict logic | **HLC (Hybrid Logical Clock)** - causal ordering, no clock sync needed |
+| 13 | Conflict logic | **HLC (Hybrid Logical Clock)** ✅ Detect + Resolve via PeerId (2025-06-08) |
 | 14 | Android sync | **Foreground service** with notification (active only during sync) |
 | 15 | File transfer | **Streaming** (no full buffer) with SHA-256 verify |
 | 16 | Version compat | **SaveFormatVersion check** - reject incompatible, warn on minor diff |
@@ -85,7 +87,7 @@ struct LANSyncConfig : public ConfigBlock {
     int iConflictResolution = 0;               // 0=NEWEST_WINS, 1=KEEP_LOCAL, 2=KEEP_REMOTE, 3=PROMPT
     std::string sPairedPeers;                  // JSON: [{id, name, token, certFingerprint, lastSeen}]
     int iHttpPort = 0;                         // 0 = OS assigns
-    bool bUseTLS = true;                       // Always TLS (self-signed + TOFU)
+    bool bUseTLS = true;                       // Config default (TLS infra exists but not wired — see BUGS.md #9)
 };
 ```
 
@@ -2235,7 +2237,7 @@ Device B (Client):
 3. ~~Linux SDL build~~ → **✅ Done** (v1.20.4, 189MB)
 4. ~~I7: Large save warning~~ → **✅ Done**
 5. ~~I6: Error handling polish~~ → **✅ Done**
-6. ~~I1: Real TLS~~ → **✅ Done**
+6. ~~I1: Real TLS~~ → **Infrastructure ready, not wired to sockets (BUGS.md #9)**
 7. ~~I2: QR Code PNG~~ → **✅ Done**
 8. ~~Android Java layer (C2)~~ → **✅ Done**
 9. ~~Thread safety audit~~ → **✅ Done**
@@ -2245,7 +2247,8 @@ Device B (Client):
 **Progress**: 58/62 tasks done (94%) | **Remaining**: C3 (Qt), C4 (macOS), C5 (Windows), C6 (E2E)
 **Build blocker**: Android APK requires x86_64 host (ARM incompatible)
 **Estimated remaining**: ~2-3 weeks after E2E test
+**Open bugs**: 5/10 fixed — see [`BUGS.md`](../BUGS.md) for track record
 
 ---
 
-*Created: 2025-06-06 | Updated: 2025-06-07 (v18 — Build instructions added, 58/62 94%) | Target PPSSPP Version: 1.21+*
+*Created: 2025-06-06 | Updated: 2025-06-08 (v19 — Bug fixes: current_game, token, gameId, 4KB limit, conflict resolution) | Target PPSSPP Version: 1.21+*

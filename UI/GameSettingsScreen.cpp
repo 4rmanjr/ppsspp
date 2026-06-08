@@ -99,11 +99,14 @@
 #if PPSSPP_PLATFORM(ANDROID)
 
 #include "android/jni/AndroidAudio.h"
+#include "android/jni/AndroidLANSync.h"
 #include "Common/File/AndroidStorage.h"
 
 extern AndroidAudioState *g_audioState;
 
 #endif
+
+#include "Core/SaveStateLANSync.h"
 
 #if PPSSPP_PLATFORM(MAC) || PPSSPP_PLATFORM(IOS)
 void SetMemStickDirDarwin(int requesterToken) {
@@ -1128,7 +1131,19 @@ void GameSettingsScreen::CreateNetworkingSettings(UI::ViewGroup *networkingSetti
 
 	networkingSettings->Add(new ItemHeader(n->T("LAN Save State Sync")));
 
-	networkingSettings->Add(new CheckBox(&g_Config.lanSync.bEnabled, n->T("Enable LAN Sync")));
+	CheckBox *enableCb = networkingSettings->Add(new CheckBox(&g_Config.lanSync.bEnabled, n->T("Enable LAN Sync")));
+#if PPSSPP_PLATFORM(ANDROID)
+	enableCb->OnClick.Add([this](UI::EventParams &e) {
+		if (g_Config.lanSync.bEnabled) {
+			std::string deviceName = g_Config.lanSync.sDeviceName;
+			if (deviceName.empty()) deviceName = "PPSSPP";
+			AndroidLANSync::Instance().Enable(deviceName);
+		} else {
+			AndroidLANSync::Instance().Disable();
+		}
+		return UI::EVENT_DONE;
+	});
+#endif
 
 	auto *deviceName = networkingSettings->Add(new PopupTextInputChoice(GetRequesterToken(), &g_Config.lanSync.sDeviceName, n->T("Device Name"), "", 32, screenManager()));
 	deviceName->SetEnabledPtr(&g_Config.lanSync.bEnabled);
@@ -1140,11 +1155,49 @@ void GameSettingsScreen::CreateNetworkingSettings(UI::ViewGroup *networkingSetti
 
 	networkingSettings->Add(new CheckBox(&g_Config.lanSync.bAutoSync, n->T("Auto Sync on App Close")))->SetEnabledPtr(&g_Config.lanSync.bEnabled);
 
+	// Show LAN sync status on Android
+#if PPSSPP_PLATFORM(ANDROID)
+	if (g_Config.lanSync.bEnabled) {
+		auto &core = SaveStateLANSync::Instance();
+		int port = core.GetServerPort();
+		if (port > 0) {
+			char status[128];
+			snprintf(status, sizeof(status), "Status: Running on port %d", port);
+			networkingSettings->Add(new UI::TextView(status, UI::ALIGN_LEFT, false))->SetEnabledPtr(&g_Config.lanSync.bEnabled);
+		}
+	}
+#endif
+
 	Choice *pairBtn = networkingSettings->Add(new Choice(n->T("Pair New Device"), ImageID("I_WIFI")));
 	pairBtn->SetEnabledPtr(&g_Config.lanSync.bEnabled);
-	pairBtn->OnClick.Add([](UI::EventParams &) {
-#ifdef USING_QT_UI
+	pairBtn->OnClick.Add([this](UI::EventParams &) {
+#if defined(USING_QT_UI)
 		LANSyncQtUI::ShowPairing();
+#elif PPSSPP_PLATFORM(ANDROID)
+		auto &core = SaveStateLANSync::Instance();
+		std::string myPin = core.GeneratePairingPin();
+		int port = core.GetServerPort();
+		System_Toast(StringFromFormat("Your PIN: %s - Port: %d", myPin.c_str(), port));
+
+		RequesterToken token = GetRequesterToken();
+		System_InputBoxGetString(token, "Enter peer IP:Port", "", false,
+			[token](std::string_view addr, int) {
+				if (addr.empty()) return;
+				std::string peerAddr(addr);
+				System_InputBoxGetString(token, "Enter peer's 6-digit PIN", "", false,
+					[peerAddr](std::string_view pinVal, int) {
+						if (pinVal.empty()) return;
+						SaveStateLANSync::Instance().PairWithPeer(peerAddr, std::string(pinVal),
+							[](bool ok, const std::string &err) {
+								if (ok) System_Toast("Paired!");
+								else System_Toast(("Failed: " + err).c_str());
+							});
+					}, nullptr);
+			}, nullptr);
+#elif defined(SDL)
+		if (g_LANSyncUI) {
+			g_LANSyncUI->OpenSettings();
+		}
 #endif
 	});
 
@@ -1153,6 +1206,23 @@ void GameSettingsScreen::CreateNetworkingSettings(UI::ViewGroup *networkingSetti
 	syncBtn->OnClick.Add([](UI::EventParams &) {
 #if defined(USING_QT_UI)
 		LANSyncQtUI::ShowProgress();
+#elif PPSSPP_PLATFORM(ANDROID)
+		auto &core = SaveStateLANSync::Instance();
+		auto peers = core.GetDiscoveredPeers();
+		for (auto &p : peers) {
+			if (p.paired && p.online) {
+				core.SyncWithPeer(p.id, SaveStateLANSync::SyncDirection::BIDIRECTIONAL,
+					nullptr,
+					[](const SaveStateLANSync::SyncResult &result) {
+						if (result.success)
+							System_Toast(StringFromFormat("Sync OK: %d up, %d down", result.uploaded, result.downloaded));
+						else
+							System_Toast("Sync failed");
+					});
+				return UI::EVENT_DONE;
+			}
+		}
+		System_Toast("No online paired peers");
 #elif defined(SDL)
 		if (g_LANSyncUI) {
 			g_LANSyncUI->OpenSettings();  // This will open the settings, user can then click Sync Now

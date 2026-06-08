@@ -13,6 +13,8 @@ import android.os.Build;
 import android.os.IBinder;
 import android.util.Log;
 
+import java.util.Map;
+
 import androidx.annotation.Nullable;
 import androidx.core.app.NotificationCompat;
 
@@ -255,6 +257,16 @@ public class LANSyncService extends Service {
                         String id = "";
                         String fingerprint = "";
                         String device = "Unknown";
+
+                        Map<String, byte[]> attributes = info.getAttributes();
+                        if (attributes != null) {
+                            byte[] idBytes = attributes.get("id");
+                            if (idBytes != null) id = new String(idBytes, java.nio.charset.StandardCharsets.UTF_8);
+                            byte[] fpBytes = attributes.get("fp");
+                            if (fpBytes != null) fingerprint = new String(fpBytes, java.nio.charset.StandardCharsets.UTF_8);
+                            byte[] devBytes = attributes.get("device");
+                            if (devBytes != null) device = new String(devBytes, java.nio.charset.StandardCharsets.UTF_8);
+                        }
 
                         // Notify callback
                         if (peerCallback != null) {
