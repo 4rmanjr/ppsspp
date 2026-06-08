@@ -29,6 +29,7 @@
 #include "Common/File/Path.h"
 #include "Common/Math/geom2d.h"
 #include "Core/ConfigValues.h"
+#include "Core/LANSyncConfig.h"
 
 extern const char *PPSSPP_GIT_VERSION;
 
@@ -568,6 +569,9 @@ public:
 	int iButtonPreference;
 	int iLockParentalLevel;
 	bool bEncryptSave;
+
+	// LAN Save State Sync
+	LANSyncConfig lanSync;
 
 	// Networking
 	bool bEnableAdhocServer;

@@ -330,6 +330,16 @@ if(NOT LIBRETRO AND NOT IOS AND NOT MACOSX)
 	find_package(SDL2_ttf)
 	find_package(Fontconfig)
 
+	# LAN Sync dependencies
+	find_package(OpenSSL)
+
+	# Avahi and QREncode - use pkg-config since no CMake config provided
+	find_package(PkgConfig)
+	if(PkgConfig_FOUND)
+		pkg_check_modules(AVAHI IMPORTED_TARGET avahi-client avahi-core)
+		pkg_check_modules(QRENCODE IMPORTED_TARGET libqrencode)
+	endif()
+
 	# TODO: this can be removed once CI supports newer SDL2_ttf
 	if (NOT SDL2_ttf_FOUND)
 		find_package(PkgConfig)
@@ -714,6 +724,8 @@ add_library(Common STATIC
 	Common/Data/Format/ZIMSave.h
 	Common/Data/Hash/Hash.cpp
 	Common/Data/Hash/Hash.h
+	Common/Data/HLC.h
+	Common/Data/HLC.cpp
 	Common/Data/Text/I18n.cpp
 	Common/Data/Text/I18n.h
 	Common/Data/Text/Parsers.cpp
@@ -722,6 +734,7 @@ add_library(Common STATIC
 	Common/Data/Text/WrapText.cpp
 	Common/Data/Text/WrapText.h
 	Common/Data/Random/Rng.h
+	Common/Data/HLC.h
 	Common/File/VFS/VFS.h
 	Common/File/VFS/VFS.cpp
 	Common/File/VFS/ZipFileReader.cpp
@@ -846,6 +859,19 @@ add_library(Common STATIC
 	Common/Net/URL.h
 	Common/Net/WebsocketServer.cpp
 	Common/Net/WebsocketServer.h
+	Common/Net/MDNS.cpp
+	Common/Net/MDNS.h
+	Common/Net/MDNS_Android.cpp
+	Common/Net/MDNS_Windows.cpp
+	Common/Net/MDNS_Unix.cpp
+	Common/Net/UDPDiscovery.cpp
+	Common/Net/UDPDiscovery.h
+	Common/Net/TLSServer.cpp
+	Common/Net/TLSServer.h
+	Common/Net/PlatformKeyStore.h
+	Common/Net/PlatformKeyStore_Android.cpp
+	Common/Net/PlatformKeyStore_Windows.cpp
+	Common/Net/PlatformKeyStore_Unix.cpp
 	Common/Profiler/Profiler.cpp
 	Common/Profiler/Profiler.h
 	Common/Render/AtlasGen.cpp
@@ -1390,18 +1416,20 @@ if(IOS OR MACOSX)
 endif()
 
 if(ANDROID)
-	list(APPEND NativeAppSource
-		android/jni/app-android.cpp
-		android/jni/AndroidJavaGLContext.cpp
-		android/jni/AndroidJavaGLContext.h
-		android/jni/AndroidVulkanContext.cpp
-		android/jni/AndroidVulkanContext.h
-		android/jni/AndroidGraphicsContext.h
-		android/jni/AndroidAudio.cpp
-		android/jni/AndroidAudio.h
-		android/jni/OpenSLContext.cpp
-		android/jni/OpenSLContext.h
-	)
+		list(APPEND NativeAppSource
+			android/jni/app-android.cpp
+			android/jni/AndroidJavaGLContext.cpp
+			android/jni/AndroidJavaGLContext.h
+			android/jni/AndroidVulkanContext.cpp
+			android/jni/AndroidVulkanContext.h
+			android/jni/AndroidGraphicsContext.h
+			android/jni/AndroidAudio.cpp
+			android/jni/AndroidAudio.h
+			android/jni/OpenSLContext.cpp
+			android/jni/OpenSLContext.h
+			android/jni/AndroidLANSync.h
+			android/jni/AndroidLANSync.cpp
+		)
 	# No target
 elseif(IOS AND NOT LIBRETRO)
 	list(APPEND nativeExtra
@@ -1477,6 +1505,10 @@ elseif(USING_QT_UI)
 		Qt/mainwindow.cpp
 		Qt/mainwindow.h
 	)
+	list(APPEND NativeAppSource
+		UI/LANSyncSettings.h
+		UI/LANSyncSettings.cpp
+	)
 	add_compile_definitions(USING_QT_UI)
 	if(USING_GLES2)
 		add_compile_definitions(QT_OPENGL_ES QT_OPENGL_ES_2)
@@ -1521,6 +1553,10 @@ else()
 			SDL/SDLJoystick.cpp
 			SDL/SDLMain.cpp
 			SDL/SDLGLGraphicsContext.cpp
+			SDL/LinuxLANSync.h
+			SDL/LinuxLANSync.cpp
+			SDL/SDLLANSync.h
+			SDL/SDLLANSync.cpp
 		)
 		if(NOT USE_LIBNX)
 			list(APPEND nativeExtra
@@ -1556,7 +1592,11 @@ else()
 			SDL/MacCameraHelper.mm
 			Common/Battery/AppleBatteryClient.m
 			UI/PSPNSApplicationDelegate.mm
-			UI/PSPNSApplicationDelegate.h)
+			UI/PSPNSApplicationDelegate.h
+			macOS/MacLANSync.h
+			macOS/MacLANSync.mm
+			macOS/CocoaLANSync.h
+			macOS/CocoaLANSync.mm)
 
 			# TODO
 			# set_source_files_properties(SDL/SDLMain.mm PROPERTIES COMPILE_FLAGS -fobjc-arc)
@@ -1749,6 +1789,17 @@ if(ANDROID OR (LINUX AND ARM_DEVICE) OR (LINUX AND RISCV64) OR (LINUX AND LOONGA
 endif()
 
 target_link_libraries(native ${LIBZIP_LIBRARY} ${LIB7ZIP_LIBRARY} ${PNG_LIBRARIES} ${BASISU_LIBRARIES} ${ZLIB_LIBRARY} pugixml vma gason udis86 ${RT_LIB} ${nativeExtraLibs} ${ATOMIC_LIB} Common)
+
+# LAN Sync libraries
+if(AVAHI_FOUND)
+	target_link_libraries(native avahi-common avahi-client)
+endif()
+if(OPENSSL_FOUND)
+	target_link_libraries(native OpenSSL::SSL OpenSSL::Crypto)
+endif()
+if(QRENCODE_FOUND)
+	target_link_libraries(native qrencode)
+endif()
 
 if(TARGET Ext::GLEW)
 	target_link_libraries(native Ext::GLEW)
@@ -2550,6 +2601,12 @@ add_library(${CoreLibName} ${CoreLinkType}
 	Core/Replay.h
 	Core/SaveState.cpp
 	Core/SaveState.h
+	Core/SaveStateLANSync.cpp
+	Core/SaveStateLANSync.h
+	Core/SaveStateSyncMetadata.cpp
+	Core/SaveStateSyncMetadata.h
+	Core/LANSyncConfig.cpp
+	Core/LANSyncConfig.h
 	Core/SaveStateRewind.cpp
 	Core/SaveStateRewind.h
 	Core/Screenshot.cpp
@@ -2896,6 +2953,8 @@ set(WindowsFiles
 	Windows/resource.h
 	Windows/stdafx.cpp
 	Windows/stdafx.h
+	Windows/WinLANSync.h
+	Windows/WinLANSync.cpp
 )
 
 if(ANDROID AND ARM64)
@@ -2904,6 +2963,14 @@ if(ANDROID AND ARM64)
 endif()
 
 list(APPEND LinkCommon ${CoreLibName} ${CMAKE_THREAD_LIBS_INIT})
+
+# LAN Sync libraries - needed for mDNS (avahi) and QR code (qrencode)
+if(TARGET AVAHI::AVAHI)
+	list(APPEND LinkCommon AVAHI::AVAHI)
+endif()
+if(TARGET QRENCODE::QRENCODE)
+	list(APPEND LinkCommon QRENCODE::QRENCODE)
+endif()
 
 if(WIN32)
 	#setup_target_project(${TargetBin} Windows)

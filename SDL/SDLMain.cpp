@@ -66,6 +66,7 @@ SDLJoystick *joystick = NULL;
 #include "Core/Core.h"
 #include "Core/Config.h"
 #include "Core/ConfigValues.h"
+#include "SDL/SDLLANSync.h"
 #include "SDLGLGraphicsContext.h"
 #include "SDLVulkanGraphicsContext.h"
 

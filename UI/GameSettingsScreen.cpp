@@ -58,6 +58,10 @@
 #include "UI/MemStickScreen.h"
 #include "UI/Theme.h"
 #include "UI/RetroAchievementScreens.h"
+
+#if defined(SDL)
+#include "SDL/SDLLANSync.h"
+#endif
 #include "UI/OnScreenDisplay.h"
 #include "UI/DiscordIntegration.h"
 #include "UI/Background.h"
@@ -1016,6 +1020,9 @@ MacAddressChooser::MacAddressChooser(RequesterToken token, Path gamePath, std::s
 }
 
 void GameSettingsScreen::CreateNetworkingSettings(UI::ViewGroup *networkingSettings) {
+#if defined(SDL)
+	extern SDLLANSyncUI *g_LANSyncUI;
+#endif
 	using namespace UI;
 
 	auto n = GetI18NCategory(I18NCat::NETWORKING);
@@ -1118,6 +1125,40 @@ void GameSettingsScreen::CreateNetworkingSettings(UI::ViewGroup *networkingSetti
 		PopupTextInputChoice *qc1 = networkingSettings->Add(new PopupTextInputChoice(GetRequesterToken(), &g_Config.sQuickChat[i], ApplySafeSubstitutions(n->T("Quick chat %1"), i + 1), "", 32, screenManager()));
 		qc1->SetEnabledFunc([] { return g_Config.bEnableQuickChat && g_Config.bEnableNetworkChat; });
 	}
+
+	networkingSettings->Add(new ItemHeader(n->T("LAN Save State Sync")));
+
+	networkingSettings->Add(new CheckBox(&g_Config.lanSync.bEnabled, n->T("Enable LAN Sync")));
+
+	auto *deviceName = networkingSettings->Add(new PopupTextInputChoice(GetRequesterToken(), &g_Config.lanSync.sDeviceName, n->T("Device Name"), "", 32, screenManager()));
+	deviceName->SetEnabledPtr(&g_Config.lanSync.bEnabled);
+
+	networkingSettings->Add(new CheckBox(&g_Config.lanSync.bAutoDiscover, n->T("Auto Discover Peers")))->SetEnabledPtr(&g_Config.lanSync.bEnabled);
+
+	static const char *conflictResolutions[] = {"Newest Wins", "Keep Local", "Keep Remote", "Prompt"};
+	networkingSettings->Add(new PopupMultiChoice(&g_Config.lanSync.iConflictResolution, n->T("Conflict Resolution"), conflictResolutions, 0, ARRAY_SIZE(conflictResolutions), I18NCat::DIALOG, screenManager()))->SetEnabledPtr(&g_Config.lanSync.bEnabled);
+
+	networkingSettings->Add(new CheckBox(&g_Config.lanSync.bAutoSync, n->T("Auto Sync on App Close")))->SetEnabledPtr(&g_Config.lanSync.bEnabled);
+
+	Choice *pairBtn = networkingSettings->Add(new Choice(n->T("Pair New Device"), ImageID("I_WIFI")));
+	pairBtn->SetEnabledPtr(&g_Config.lanSync.bEnabled);
+	pairBtn->OnClick.Add([](UI::EventParams &) {
+#ifdef USING_QT_UI
+		LANSyncQtUI::ShowPairing();
+#endif
+	});
+
+	Choice *syncBtn = networkingSettings->Add(new Choice(n->T("Sync Now"), ImageID("I_SYNC")));
+	syncBtn->SetEnabledPtr(&g_Config.lanSync.bEnabled);
+	syncBtn->OnClick.Add([](UI::EventParams &) {
+#if defined(USING_QT_UI)
+		LANSyncQtUI::ShowProgress();
+#elif defined(SDL)
+		if (g_LANSyncUI) {
+			g_LANSyncUI->OpenSettings();  // This will open the settings, user can then click Sync Now
+		}
+#endif
+	});
 
 	networkingSettings->Add(new ItemHeader(n->T("Misc", "Misc (default = compatibility)")));
 	Choice *wiki = networkingSettings->Add(new Choice(n->T("Open PPSSPP Multiplayer Wiki Page"), ImageID("I_LINK_OUT")));

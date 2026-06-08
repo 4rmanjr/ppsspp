@@ -51,6 +51,7 @@
 #include "Core/Config.h"
 #include "Core/ConfigSettings.h"
 #include "Core/ConfigValues.h"
+#include "Core/LANSyncConfig.h"
 #include "Core/KeyMap.h"
 #include "Core/HLE/sceUtility.h"
 #include "Core/Instance.h"
@@ -1095,6 +1096,18 @@ static const ConfigSetting networkSettings[] = {
 	ConfigSetting("QuickChat5", SETTING(g_Config, sQuickChat[4]), "Quick Chat 5", CfgFlag::PER_GAME),
 };
 
+static const ConfigSetting lanSyncSettings[] = {
+	ConfigSetting("EnableLANSync", SETTING(g_Config.lanSync, bEnabled), false, CfgFlag::DEFAULT),
+	ConfigSetting("DeviceName", SETTING(g_Config.lanSync, sDeviceName), "", CfgFlag::DEFAULT),
+	ConfigSetting("AutoDiscover", SETTING(g_Config.lanSync, bAutoDiscover), true, CfgFlag::DEFAULT),
+	ConfigSetting("MaxPeers", SETTING(g_Config.lanSync, iMaxPeers), 5, CfgFlag::DEFAULT),
+	ConfigSetting("ConflictResolution", SETTING(g_Config.lanSync, iConflictResolution), 0, CfgFlag::DEFAULT),
+	ConfigSetting("PairedPeers", SETTING(g_Config.lanSync, sPairedPeers), "", CfgFlag::DEFAULT),
+	ConfigSetting("HttpPort", SETTING(g_Config.lanSync, iHttpPort), 0, CfgFlag::DEFAULT),
+	ConfigSetting("UseTLS", SETTING(g_Config.lanSync, bUseTLS), true, CfgFlag::DEFAULT),
+	ConfigSetting("AutoSync", SETTING(g_Config.lanSync, bAutoSync), false, CfgFlag::DEFAULT),
+};
+
 static const ConfigSetting systemParamSettings[] = {
 	ConfigSetting("PSPModel", SETTING(g_Config, iPSPModel), PSP_MODEL_SLIM, CfgFlag::PER_GAME | CfgFlag::REPORT),
 	ConfigSetting("PSPFirmwareVersion", SETTING(g_Config, iFirmwareVersion), PSP_DEFAULT_FIRMWARE, CfgFlag::PER_GAME | CfgFlag::REPORT),
@@ -1189,12 +1202,13 @@ static const ConfigSectionMeta g_sectionMeta[] = {
 	{ &g_Config, vrSettings, ARRAY_SIZE(vrSettings), "VR" },
 	{ &g_Config, achievementSettings, ARRAY_SIZE(achievementSettings), "Achievements" },
 	{ &g_Config, upgradeSettings, ARRAY_SIZE(upgradeSettings), "Upgrade" },
-	{ &g_Config.displayLayoutLandscape, displayLayoutSettings, ARRAY_SIZE(displayLayoutSettings), "DisplayLayout.Landscape", "Graphics" },  // We read the old settings from [Graphics], since most people played in landscape before.
-	{ &g_Config.displayLayoutPortrait, displayLayoutSettings, ARRAY_SIZE(displayLayoutSettings), "DisplayLayout.Portrait"},  // These we don't want to read from the old settings, since for most people, those settings will be bad.
-	{ &g_Config.touchControlsLandscape, touchControlSettings, ARRAY_SIZE(touchControlSettings), "TouchControls.Landscape", "Control" },  // We read the old settings from [Control], since most people played in landscape before.
-	{ &g_Config.touchControlsPortrait, touchControlSettings, ARRAY_SIZE(touchControlSettings), "TouchControls.Portrait"},  // These we don't want to read from the old settings, since for most people, those settings will be bad.
-	{ &g_Config.gestureControls[0], gestureControlSettings, ARRAY_SIZE(gestureControlSettings), "GestureControls.Left", "General"},  // We read the old settings from [General], since most of them used to be there (except the analog stuff).
-	{ &g_Config.gestureControls[1], gestureControlSettings, ARRAY_SIZE(gestureControlSettings), "GestureControls.Right", "General"},  // We read the old settings from [General], since most of them used to be there (except the analog stuff).
+	{ &g_Config.lanSync, lanSyncSettings, ARRAY_SIZE(lanSyncSettings), "LANSync" },
+	{ &g_Config.displayLayoutLandscape, displayLayoutSettings, ARRAY_SIZE(displayLayoutSettings), "DisplayLayout.Landscape", "Graphics" },
+	{ &g_Config.displayLayoutPortrait, displayLayoutSettings, ARRAY_SIZE(displayLayoutSettings), "DisplayLayout.Portrait"},
+	{ &g_Config.touchControlsLandscape, touchControlSettings, ARRAY_SIZE(touchControlSettings), "TouchControls.Landscape", "Control" },
+	{ &g_Config.touchControlsPortrait, touchControlSettings, ARRAY_SIZE(touchControlSettings), "TouchControls.Portrait"},
+	{ &g_Config.gestureControls[0], gestureControlSettings, ARRAY_SIZE(gestureControlSettings), "GestureControls.Left", "General"},
+	{ &g_Config.gestureControls[1], gestureControlSettings, ARRAY_SIZE(gestureControlSettings), "GestureControls.Right", "General"},
 };
 
 ConfigBlock *GetConfigBlockForSection(std::string_view sectionName) {

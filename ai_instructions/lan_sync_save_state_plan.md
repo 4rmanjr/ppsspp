@@ -2247,5 +2247,4 @@ Device B (Client):
 **Estimated remaining**: ~2-3 weeks after E2E test
 
 ---
-
-*Created: 2025-06-06 | Updated: 2025-06-07 (v18 — Build instructions added, 58/62 94%) | Target PPSSPP Version: 1.21+*
+*Created: 2025-06-06 | Updated: 2025-06-08 (v19 — Integration verified on CachyOS: CMakeLists.txt, Config.cpp, SaveState.cpp hooks, SDL/EmuScreen.cpp, GameSettingsScreen.cpp) | Target PPSSPP Version: 1.21+*

@@ -53,6 +53,7 @@
 #include "Core/MIPS/JitCommon/JitBlockCache.h"
 #include "Core/RetroAchievements.h"
 #include "HW/MemoryStick.h"
+#include "Core/SaveStateLANSync.h"
 
 #ifndef MOBILE_DEVICE
 #include "Core/AVIDump.h"
@@ -432,6 +433,10 @@ int g_screenshotFailures;
 			} else {
 				Load(fn, slot, callback);
 			}
+			
+			if (g_Config.lanSync.bEnabled) {
+				SaveStateLANSync::Instance().OnSaveStateLoaded(std::string(gamePrefix), slot);
+			}
 		} else {
 			if (callback) {
 				auto sy = GetI18NCategory(I18NCat::SYSTEM);
@@ -502,6 +507,10 @@ int g_screenshotFailures;
 			}
 			ScheduleSaveScreenshot(shot);
 			Save(fn.WithExtraExtension(".tmp"), slot, renameCallback);
+			
+			if (g_Config.lanSync.bEnabled) {
+				SaveStateLANSync::Instance().OnSaveStateSaved(std::string(gamePrefix), slot);
+			}
 		} else {
 			if (callback) {
 				auto sy = GetI18NCategory(I18NCat::SYSTEM);
