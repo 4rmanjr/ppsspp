@@ -125,6 +125,16 @@
 			</intent-filter>
 		</receiver>
         <profileable android:shell="true" android:enabled="true" />
+
+        <!-- LAN Save State Sync -->
+        <service
+            android:name=".LANSyncService"
+            android:foregroundServiceType="dataSync"
+            android:exported="false" />
+        <activity
+            android:name=".LANSyncQRScanActivity"
+            android:exported="false"
+            android:theme="@android:style/Theme.NoTitleBar.Fullscreen" />
     </application>
 
 </manifest>

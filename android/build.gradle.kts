@@ -68,6 +68,10 @@ dependencies {
 	implementation("androidx.appcompat:appcompat:1.7.1")
 	implementation("androidx.documentfile:documentfile:1.1.0")
 	implementation("com.google.protobuf:protobuf-javalite:4.33.5")
+
+	// LAN Save State Sync
+	implementation("com.google.mlkit:barcode-scanning:17.3.0")
+	implementation("androidx.security:security-crypto:1.1.0")
 }
 
 protobuf {
