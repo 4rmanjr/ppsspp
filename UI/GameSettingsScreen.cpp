@@ -1148,7 +1148,7 @@ void GameSettingsScreen::CreateNetworkingSettings(UI::ViewGroup *networkingSetti
 #endif
 	});
 
-	Choice *syncBtn = networkingSettings->Add(new Choice(n->T("Sync Now"), ImageID("I_SYNC")));
+	Choice *syncBtn = networkingSettings->Add(new Choice(n->T("Sync Now")));
 	syncBtn->SetEnabledPtr(&g_Config.lanSync.bEnabled);
 	syncBtn->OnClick.Add([](UI::EventParams &) {
 #if defined(USING_QT_UI)
