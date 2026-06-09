@@ -113,7 +113,7 @@ public:
 		connect(timer, &QTimer::timeout, this, [this]() {
 			refreshPeerList();
 		});
-		timer->start(5000);  // every 5 seconds
+		timer->start(2000);  // every 2 seconds
 
 		refreshUI();
 	}

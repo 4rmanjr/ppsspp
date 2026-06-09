@@ -115,9 +115,9 @@ void SDLLANSyncUI::DoStartSync(const std::string &peerId) {
 }
 
 void SDLLANSyncUI::UpdateProgress() {
-	// Poll peer list every 5 seconds
+	// Poll peer list every 2 seconds (responsive to discovery changes)
 	double now = time_now_d();
-	if (now - lastPeerRefresh_ > 5.0) {
+	if (now - lastPeerRefresh_ > 2.0) {
 		cachedPeers_ = SaveStateLANSync::Instance().GetDiscoveredPeers();
 		lastPeerRefresh_ = now;
 	}

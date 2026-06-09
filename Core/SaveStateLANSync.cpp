@@ -1694,6 +1694,14 @@ void SaveStateLANSync::HandleAutoPairRequest(const std::string &body, const std:
 
 	{
 		std::lock_guard<std::mutex> lock(pendingMutex_);
+		// Cleanup expired/rejected/accepted entries first
+		double now = time_now_d();
+		pendingRequests_.erase(
+			std::remove_if(pendingRequests_.begin(), pendingRequests_.end(),
+				[now](const PendingPairRequest &r) {
+					return r.accepted || r.rejected || ((now - r.timestamp) > 60.0);
+				}),
+			pendingRequests_.end());
 		if (pendingRequests_.size() >= 10) {
 			response = "{\"error\":\"too_many_requests\"}";
 			return;
@@ -1894,13 +1902,15 @@ void SaveStateLANSync::HandlePairStatus(const std::string &query, std::string &r
 std::vector<SaveStateLANSync::PendingPairRequest> SaveStateLANSync::GetPendingRequests() const {
 	std::lock_guard<std::mutex> lock(pendingMutex_);
 	double now = time_now_d();
-	pendingRequests_.erase(
-		std::remove_if(pendingRequests_.begin(), pendingRequests_.end(),
-			[now](const PendingPairRequest &r) {
-				return r.accepted || r.rejected || ((now - r.timestamp) > 60.0);
-			}),
-		pendingRequests_.end());
-	return pendingRequests_;
+	// Return active (non-expired) pending requests without modifying the vector.
+	// Cleanup happens lazily on next Add/Respond/Verify operation.
+	std::vector<PendingPairRequest> active;
+	for (const auto &r : pendingRequests_) {
+		if (!r.accepted && !r.rejected && (now - r.timestamp) <= 60.0) {
+			active.push_back(r);
+		}
+	}
+	return active;
 }
 
 void SaveStateLANSync::HandleSaveList(const std::string &gameId, std::string &response) {
