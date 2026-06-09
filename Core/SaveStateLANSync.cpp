@@ -706,14 +706,28 @@ void SaveStateLANSync::PairWithPeer(const std::string &peerId, const std::string
 
 		send(sock, request.c_str(), request.size(), 0);
 
-		// Read response
+		// Read response with loop to handle partial TCP reads
+		std::string response;
 		char buf[4096];
-		int n = recv(sock, buf, sizeof(buf) - 1, 0);
+		int n;
+		while ((n = recv(sock, buf, sizeof(buf) - 1, 0)) > 0) {
+			buf[n] = '\0';
+			response.append(buf, n);
+			size_t hdrEnd = response.find("\r\n\r\n");
+			if (hdrEnd == std::string::npos) continue;
+			size_t clPos = response.find("Content-Length:");
+			size_t contentLength = 0;
+			if (clPos != std::string::npos && clPos < hdrEnd) {
+				clPos += 15;
+				while (clPos < response.size() && response[clPos] == ' ') clPos++;
+				contentLength = strtoul(response.c_str() + clPos, nullptr, 10);
+			}
+			size_t bodySize = response.size() - hdrEnd - 4;
+			if (contentLength == 0 || bodySize >= contentLength) break;
+		}
 		closesocket(sock);
 
-		if (n > 0) {
-			buf[n] = '\0';
-			std::string response(buf, n);
+		if (!response.empty()) {
 
 			// Look for 200 status
 			if (response.find("200 OK") != std::string::npos) {
