@@ -205,8 +205,13 @@ public class LANSyncService extends Service {
 
         nsdManager.registerService(serviceInfo, NsdManager.PROTOCOL_DNS_SD, registrationListener);
 
-        // Start foreground notification
-        startForeground(NOTIFICATION_ID, buildNotification("LAN Sync active - port " + port));
+        // Start foreground notification (Android 13+ requires POST_NOTIFICATIONS permission)
+        try {
+            startForeground(NOTIFICATION_ID, buildNotification("LAN Sync active - port " + port));
+        } catch (SecurityException e) {
+            Log.w(TAG, "Cannot show notification — POST_NOTIFICATIONS permission not granted");
+            // Service still runs, just without visible notification
+        }
     }
 
     public void unregisterService() {
@@ -302,7 +307,12 @@ public class LANSyncService extends Service {
             }
         };
 
-        nsdManager.discoverServices(SERVICE_TYPE, NsdManager.PROTOCOL_DNS_SD, discoveryListener);
+        try {
+            nsdManager.discoverServices(SERVICE_TYPE, NsdManager.PROTOCOL_DNS_SD, discoveryListener);
+        } catch (SecurityException e) {
+            Log.e(TAG, "Cannot discover services — NEARBY_WIFI_DEVICES permission needed (Android 13+)");
+            isDiscovering = false;
+        }
     }
 
     public void stopDiscovery() {
