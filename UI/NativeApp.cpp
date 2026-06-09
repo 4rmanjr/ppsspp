@@ -584,6 +584,21 @@ void NativeInit(int argc, const char *argv[], const char *savegame_dir, const ch
 	// Note that if we don't have storage permission here, loading the config will
 	// fail and it will be set to the default. Later, we load again when we get permission.
 	g_Config.Load();
+
+	// Auto-enable LAN sync if config was saved with it enabled
+#if PPSSPP_PLATFORM(ANDROID)
+	if (g_Config.lanSync.bEnabled) {
+		std::string name = g_Config.lanSync.sDeviceName;
+		if (name.empty()) name = "PPSSPP";
+		AndroidLANSync::Instance().Enable(name);
+	}
+#elif (PPSSPP_PLATFORM(LINUX) || PPSSPP_PLATFORM(MAC)) && !PPSSPP_PLATFORM(ANDROID)
+	if (g_Config.lanSync.bEnabled) {
+		std::string name = g_Config.lanSync.sDeviceName;
+		if (name.empty()) name = "PPSSPP";
+		GetLinuxLANSync().Enable(name);
+	}
+#endif
 #endif
 
 	const char *fileToLog = nullptr;
