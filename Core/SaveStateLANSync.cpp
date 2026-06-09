@@ -381,6 +381,24 @@ bool SaveStateLANSync::StartServer() {
 
 			// Handle each connection on a separate thread
 			AddBackgroundThread(std::thread([this, clientFd, clientHost]() {
+#if PPSSPP_PLATFORM(ANDROID)
+				// RAII JVM attach: detach automatically on scope exit
+				extern JavaVM *gJvm;
+				struct JVMDetacher {
+					JavaVM *vm = nullptr;
+					bool attached = false;
+					~JVMDetacher() { if (attached && vm) vm->DetachCurrentThread(); }
+				} jvmDetacher;
+				if (gJvm) {
+					JNIEnv *jniEnv = nullptr;
+					int status = gJvm->GetEnv((void **)&jniEnv, JNI_VERSION_1_6);
+					if (status == JNI_EDETACHED) {
+						JavaVMAttachArgs args = {JNI_VERSION_1_6, "LANSyncServer", nullptr};
+						jvmDetacher.vm = gJvm;
+						jvmDetacher.attached = (gJvm->AttachCurrentThread(&jniEnv, &args) == JNI_OK);
+					}
+				}
+#endif
 				// Read full request (headers + body)
 				std::string request;
 				char tempBuf[16384];
@@ -850,25 +868,26 @@ void SaveStateLANSync::SyncWithPeer(const std::string &peerId, SyncDirection dir
 
 	AddBackgroundThread(std::thread([this, target, onProgress, onDone]() {
 #if PPSSPP_PLATFORM(ANDROID)
-		// Attach thread to JVM for Android content URI file access
+		// RAII JVM attach: detach automatically on scope exit
 		extern JavaVM *gJvm;
-		JNIEnv *jniEnv = nullptr;
-		bool attached = false;
+		struct JVMDetacher {
+			JavaVM *vm = nullptr;
+			bool attached = false;
+			~JVMDetacher() { if (attached && vm) vm->DetachCurrentThread(); }
+		} jvmDetacher;
 		if (gJvm) {
+			JNIEnv *jniEnv = nullptr;
 			int status = gJvm->GetEnv((void **)&jniEnv, JNI_VERSION_1_6);
 			if (status == JNI_EDETACHED) {
 				JavaVMAttachArgs args = {JNI_VERSION_1_6, "LANSyncWorker", nullptr};
-				attached = (gJvm->AttachCurrentThread(&jniEnv, &args) == JNI_OK);
+				jvmDetacher.vm = gJvm;
+				jvmDetacher.attached = (gJvm->AttachCurrentThread(&jniEnv, &args) == JNI_OK);
 			}
 		}
 #endif
 		SaveStateLANSync::SyncResult result = DoSync(target, onProgress);
 		syncStatus_ = result.success ? SyncStatus::DONE : SyncStatus::ERROR;
 		if (onDone) onDone(result);
-#if PPSSPP_PLATFORM(ANDROID)
-		if (attached && gJvm)
-			gJvm->DetachCurrentThread();
-#endif
 	}));
 }
 
