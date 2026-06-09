@@ -52,6 +52,7 @@ bool LinuxLANSync::Enable(const std::string &deviceName) {
 	if (enabled_) return true;
 
 	auto &core = SaveStateLANSync::Instance();
+	core.SetDeviceInfo(deviceName, "Linux");
 
 	// Start discovery (mDNS browser + UDP listener)
 	core.StartDiscovery();

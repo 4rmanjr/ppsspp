@@ -218,11 +218,14 @@ void SDLLANSyncUI::DrawSettingsWindow(bool *open) {
 void SDLLANSyncUI::DrawPairingDialog(bool *open) {
 	if (!*open) return;
 
-	ImGui::SetNextWindowSize(ImVec2(400, 350), ImGuiCond_FirstUseEver);
+	ImGui::SetNextWindowSize(ImVec2(420, 420), ImGuiCond_FirstUseEver);
 	if (!ImGui::Begin("Pair New Device", open, ImGuiWindowFlags_NoCollapse)) {
 		ImGui::End();
 		return;
 	}
+
+	// Pending requests (Accept/Reject for incoming pair requests)
+	DrawPendingRequestsSection();
 
 	DrawAutoDiscoverSection();
 
@@ -236,6 +239,36 @@ void SDLLANSyncUI::DrawPairingDialog(bool *open) {
 	}
 
 	ImGui::End();
+}
+
+void SDLLANSyncUI::DrawPendingRequestsSection() {
+	auto pending = SaveStateLANSync::Instance().GetPendingRequests();
+	if (pending.empty())
+		return;
+
+	ImGui::Separator();
+	ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.2f, 1.0f), "Pending Requests:");
+	ImGui::BeginChild("Pending", ImVec2(0, 80), true);
+
+	for (const auto &req : pending) {
+		ImGui::Text("%s (%s) wants to pair", req.peerName.c_str(), req.device.c_str());
+		ImGui::SameLine();
+		if (ImGui::SmallButton(StringFromFormat("Accept##%s", req.requestId.c_str()).c_str())) {
+			std::string body = StringFromFormat(
+				"{\"requestId\":\"%s\",\"accept\":\"true\"}", req.requestId.c_str());
+			std::string response;
+			SaveStateLANSync::Instance().HandlePairRespond(body, response);
+		}
+		ImGui::SameLine();
+		if (ImGui::SmallButton(StringFromFormat("Reject##%s", req.requestId.c_str()).c_str())) {
+			std::string body = StringFromFormat(
+				"{\"requestId\":\"%s\",\"accept\":\"false\"}", req.requestId.c_str());
+			std::string response;
+			SaveStateLANSync::Instance().HandlePairRespond(body, response);
+		}
+	}
+
+	ImGui::EndChild();
 }
 
 void SDLLANSyncUI::DrawAutoDiscoverSection() {
@@ -255,12 +288,17 @@ void SDLLANSyncUI::DrawAutoDiscoverSection() {
 		if (peer.paired) continue;
 		hasUnpaired = true;
 
-		ImGui::Text("%s (%s)", peer.name.c_str(), peer.device.c_str());
+		ImGui::Text("%s (%s)  %s:%d", peer.name.c_str(), peer.device.c_str(), peer.host.c_str(), peer.port);
 		ImGui::SameLine();
 		if (ImGui::SmallButton(StringFromFormat("Pair##%s", peer.id.c_str()).c_str())) {
-			snprintf(ipBuf_, sizeof(ipBuf_), "%s", peer.host.c_str());
-			port_ = peer.port;
-			awaitingPIN_ = true;
+			// Use AutoPairWithPeer instead of PIN-based flow
+			SaveStateLANSync::Instance().AutoPairWithPeer(peer.host, peer.port,
+				[](bool success, const std::string &error) {
+					if (success)
+						INFO_LOG(Log::System, "ImGui: Pair request sent to peer");
+					else
+						INFO_LOG(Log::System, "ImGui: Pair failed: %s", error.c_str());
+				});
 		}
 	}
 

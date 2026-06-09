@@ -64,6 +64,7 @@ public:
 private:
 	void DoStartSync(const std::string &peerId);
 	void DrawPeerList();
+	void DrawPendingRequestsSection();
 	void DrawAutoDiscoverSection();
 	void DrawManualEntrySection();
 	void DrawPINSection();

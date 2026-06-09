@@ -201,8 +201,6 @@ Java_org_ppsspp_ppsspp_LANSyncService_onPeerDiscovered(JNIEnv *env, jclass clz,
                                                         jstring jId, jstring jName,
                                                         jstring jHost, jint jPort,
                                                         jstring jFingerprint, jstring jDevice) {
-	std::lock_guard<std::mutex> lock(g_peerMutex);
-
 	SaveStateLANSync::PeerInfo peer;
 	peer.id = jId ? env->GetStringUTFChars(jId, nullptr) : "";
 	if (jId) env->ReleaseStringUTFChars(jId, peer.id.c_str());
@@ -218,11 +216,8 @@ Java_org_ppsspp_ppsspp_LANSyncService_onPeerDiscovered(JNIEnv *env, jclass clz,
 	peer.online = true;
 	peer.lastSeen = time(nullptr);
 
-	// Check if already in list
-	for (auto &p : g_discoveredPeers) {
-		if (p.id == peer.id) { p = peer; return; }
-	}
-	g_discoveredPeers.push_back(peer);
+	// Feed into core's peer list (also stored in LAN-side g_discoveredPeers for legacy)
+	SaveStateLANSync::Instance().AddDiscoveredPeer(peer);
 }
 
 extern "C" JNIEXPORT void JNICALL
@@ -326,6 +321,7 @@ bool AndroidLANSync::Enable(const std::string &deviceName) {
 	deviceName_ = deviceName;
 
 	auto &core = SaveStateLANSync::Instance();
+	core.SetDeviceInfo(deviceName, "Android");
 	core.StartDiscovery();
 	if (!core.StartServer()) {
 		core.StopDiscovery();

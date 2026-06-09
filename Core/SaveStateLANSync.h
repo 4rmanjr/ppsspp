@@ -116,6 +116,19 @@ public:
 		std::vector<ConflictInfo> unresolvedConflicts;
 	};
 
+	struct PendingPairRequest {
+		std::string requestId;
+		std::string peerId;
+		std::string peerName;
+		std::string device;
+		std::string host;
+		int port = 0;
+		std::string token;          // Auth token (set when accepted, returned on poll)
+		double timestamp = 0;
+		bool accepted = false;
+		bool rejected = false;
+	};
+
 	using ProgressCallback = std::function<void(const SyncProgress &progress)>;
 	using DoneCallback = std::function<void(const SyncResult &result)>;
 
@@ -130,6 +143,15 @@ public:
 	void StartDiscovery();
 	void StopDiscovery();
 	std::vector<PeerInfo> GetDiscoveredPeers() const;
+
+	// Called by platform backends (e.g. Android JNI NsdManager callback)
+	// to feed discovered peers into the core's peer list.
+	void AddDiscoveredPeer(const PeerInfo &peer);
+	void RemoveDiscoveredPeer(const std::string &id);
+
+	// Called by platform backends to set device name and type after init
+	// (in case user changed the name after LoadConfig)
+	void SetDeviceInfo(const std::string &name, const std::string &type);
 
 	// === Server ===
 	bool StartServer();
@@ -147,6 +169,9 @@ public:
 	void AcceptPairing(const std::string &peerId, const std::string &peerName,
 	                   std::function<void(bool success)> callback);
 	void UnpairPeer(const std::string &peerId);
+	void AutoPairWithPeer(const std::string &host, int port,
+	                      std::function<void(bool success, const std::string &error)> callback);
+	std::vector<PendingPairRequest> GetPendingRequests() const;
 
 	// === Sync ===
 	void SyncWithPeer(const std::string &peerId,
@@ -171,6 +196,9 @@ public:
 
 	// === Pairing server handlers (API endpoints) ===
 	void HandlePairRequest(const std::string &body, std::string &response);
+	void HandleAutoPairRequest(const std::string &body, const std::string &clientHost, std::string &response);
+	void HandlePairRespond(const std::string &body, std::string &response);
+	void HandlePairStatus(const std::string &query, std::string &response);
 	void HandleSaveList(const std::string &gameId, std::string &response);
 	void HandleSaveDownload(const std::string &gameId, int slot,
 	                        std::vector<uint8_t> &data);
@@ -200,6 +228,7 @@ private:
 	// State
 	std::string deviceId_;
 	std::string deviceName_;
+	std::string deviceType_;
 	std::string pairingPin_;
 	int serverPort_ = 0;
 
@@ -231,6 +260,11 @@ private:
 	std::atomic<bool> serverRunning_{false};
 	int listenSock_ = -1;
 	mutable std::mutex serverMutex_;
+
+	// Pending pair requests
+	mutable std::vector<PendingPairRequest> pendingRequests_;
+	mutable std::mutex pendingMutex_;
+	mutable int pendingRequestCounter_ = 0;
 
 	// Background threads (must be joined before destruction)
 	std::vector<std::thread> backgroundThreads_;

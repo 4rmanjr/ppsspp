@@ -13,6 +13,7 @@
 #include <cstring>
 #include <chrono>
 #include <algorithm>
+#include <set>
 #include <fstream>
 #include <sstream>
 #include <iomanip>
@@ -42,6 +43,11 @@
 #include "Common/Net/HTTPServer.h"
 #include "Common/Net/HTTPClient.h"
 #include "Common/Net/SocketCompat.h"
+#include "Common/System/System.h"
+
+#if PPSSPP_PLATFORM(ANDROID)
+#include <jni.h>
+#endif
 
 // ==================== Utility ====================
 
@@ -145,7 +151,19 @@ void SaveStateLANSync::Init() {
 	deviceId_ = GenerateDeviceId();
 	PlatformKeyStore::Init();
 	LoadConfig();
-	INFO_LOG(Log::System, "LANSync: initialized deviceId=%s", deviceId_.c_str());
+
+	// Set device type based on platform
+#if PPSSPP_PLATFORM(ANDROID)
+	deviceType_ = "Android";
+#elif PPSSPP_PLATFORM(WINDOWS)
+	deviceType_ = "Windows";
+#elif PPSSPP_PLATFORM(MAC)
+	deviceType_ = "macOS";
+#else
+	deviceType_ = "Linux";
+#endif
+
+	INFO_LOG(Log::System, "LANSync: initialized deviceId=%s deviceType=%s", deviceId_.c_str(), deviceType_.c_str());
 }
 
 void SaveStateLANSync::Shutdown() {
@@ -162,6 +180,9 @@ void SaveStateLANSync::StartDiscovery() {
 	mdnsBrowser_.reset(mDNS::Browser::Create());
 	mdnsBrowser_->Start(
 		[this](const mDNS::PeerInfo &peer) {
+			// Don't discover ourselves
+			if (peer.id == deviceId_)
+				return;
 			std::lock_guard<std::mutex> lock(peerMutex_);
 			PeerInfo info;
 			info.id = peer.id; info.name = peer.name; info.device = peer.device;
@@ -184,9 +205,12 @@ void SaveStateLANSync::StartDiscovery() {
 	udpListener_.reset(new UDPDiscovery::Listener());
 	udpListener_->Start(
 		[this](const UDPDiscovery::PeerInfo &peer) {
+			// Don't discover ourselves
+			if (peer.id == deviceId_)
+				return;
 			std::lock_guard<std::mutex> lock(peerMutex_);
 			PeerInfo info;
-			info.id = peer.id; info.name = peer.name; info.host = peer.host; info.port = peer.port;
+			info.id = peer.id; info.name = peer.name; info.device = peer.device; info.host = peer.host; info.port = peer.port;
 			info.online = true; info.lastSeen = time(nullptr);
 			for (auto &p : pairedPeers_) { if (p.id == info.id) { p.online = true; return; } }
 			for (auto &p : discoveredPeers_) { if (p.id == info.id) return; }
@@ -203,9 +227,66 @@ void SaveStateLANSync::StopDiscovery() {
 
 std::vector<SaveStateLANSync::PeerInfo> SaveStateLANSync::GetDiscoveredPeers() const {
 	std::lock_guard<std::mutex> lock(peerMutex_);
-	std::vector<PeerInfo> result = pairedPeers_;
-	result.insert(result.end(), discoveredPeers_.begin(), discoveredPeers_.end());
+	std::vector<PeerInfo> result;
+	for (const auto &p : pairedPeers_) {
+		if (p.id != deviceId_)  // Filter out any self-paired entries
+			result.push_back(p);
+	}
+	for (const auto &p : discoveredPeers_) {
+		if (p.id != deviceId_)
+			result.push_back(p);
+	}
 	return result;
+}
+
+void SaveStateLANSync::AddDiscoveredPeer(const PeerInfo &peer) {
+	if (peer.id == deviceId_ || peer.id.empty())
+		return;
+	std::lock_guard<std::mutex> lock(peerMutex_);
+	// Check paired peers first
+	for (auto &p : pairedPeers_) {
+		if (p.id == peer.id) {
+			p.online = true;
+			p.lastSeen = time(nullptr);
+			p.host = peer.host;
+			p.port = peer.port;
+			return;
+		}
+	}
+	// Check already discovered
+	for (auto &p : discoveredPeers_) {
+		if (p.id == peer.id) {
+			p.online = true;
+			p.lastSeen = time(nullptr);
+			return;
+		}
+	}
+	// New peer
+	discoveredPeers_.push_back(peer);
+	discoveredPeers_.back().online = true;
+	discoveredPeers_.back().lastSeen = time(nullptr);
+}
+
+void SaveStateLANSync::RemoveDiscoveredPeer(const std::string &id) {
+	if (id.empty())
+		return;
+	std::lock_guard<std::mutex> lock(peerMutex_);
+	for (auto &p : pairedPeers_) {
+		if (p.id == id) {
+			p.online = false;
+			return;
+		}
+	}
+	discoveredPeers_.erase(std::remove_if(discoveredPeers_.begin(), discoveredPeers_.end(),
+		[&id](const PeerInfo &p) { return p.id == id; }), discoveredPeers_.end());
+}
+
+void SaveStateLANSync::SetDeviceInfo(const std::string &name, const std::string &type) {
+	deviceName_ = name;
+	deviceType_ = type;
+	g_Config.lanSync.sDeviceName = name;
+	SaveConfig();
+	INFO_LOG(Log::System, "LANSync: device info updated: name=%s type=%s", name.c_str(), type.c_str());
 }
 
 // ==================== Server ====================
@@ -262,13 +343,13 @@ bool SaveStateLANSync::StartServer() {
 		// NOW announce via mDNS + UDP (port is known)
 		mdnsAnnouncer_.reset(mDNS::Announcer::Create());
 		mDNS::ServiceInfo svc;
-		svc.id = deviceId_; svc.name = deviceName_;
+		svc.id = deviceId_; svc.name = deviceName_; svc.device = deviceType_;
 		svc.port = serverPort_;
 		svc.certFingerprint = tlsCtx_->GetFingerprint();
 		mdnsAnnouncer_->Register(svc, nullptr);
 
 		UDPDiscovery::PeerInfo udpInfo;
-		udpInfo.id = deviceId_; udpInfo.name = deviceName_;
+		udpInfo.id = deviceId_; udpInfo.name = deviceName_; udpInfo.device = deviceType_;
 		udpInfo.port = serverPort_;
 		udpInfo.certFingerprint = tlsCtx_->GetFingerprint();
 		udpAnnouncer_.reset(new UDPDiscovery::Announcer());
@@ -288,8 +369,18 @@ bool SaveStateLANSync::StartServer() {
 			// Set recv timeout on client socket too
 			setsockopt(clientFd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
 
+			// Get client IP for pairing
+			struct sockaddr_in peerAddr;
+			socklen_t peerAddrLen = sizeof(peerAddr);
+			std::string clientHost = "0.0.0.0";
+			if (getpeername(clientFd, (struct sockaddr *)&peerAddr, &peerAddrLen) == 0) {
+				char buf[INET_ADDRSTRLEN];
+				inet_ntop(AF_INET, &peerAddr.sin_addr, buf, sizeof(buf));
+				clientHost = buf;
+			}
+
 			// Handle each connection on a separate thread
-			AddBackgroundThread(std::thread([this, clientFd]() {
+			AddBackgroundThread(std::thread([this, clientFd, clientHost]() {
 				// Read full request (headers + body)
 				std::string request;
 				char tempBuf[16384];
@@ -341,6 +432,22 @@ bool SaveStateLANSync::StartServer() {
 				if (path == "/api/v1/pair" && method == "POST") {
 					std::string response;
 					HandlePairRequest(body, response);
+					WriteHTTPResponse(clientFd, 200, response);
+				} else if (path == "/api/v1/pair-request" && method == "POST") {
+					std::string response;
+					HandleAutoPairRequest(body, clientHost, response);
+					WriteHTTPResponse(clientFd, 200, response);
+				} else if (path == "/api/v1/pair-respond" && method == "POST") {
+					std::string response;
+					HandlePairRespond(body, response);
+					WriteHTTPResponse(clientFd, 200, response);
+				} else if (path.find("/api/v1/pair-status") == 0) {
+					std::string query;
+					size_t qPos = path.find('?');
+					if (qPos != std::string::npos) query = path.substr(qPos + 1);
+					else query = "";
+					std::string response;
+					HandlePairStatus(query, response);
 					WriteHTTPResponse(clientFd, 200, response);
 				} else if (path == "/api/v1/saves/list") {
 					std::string game;
@@ -576,6 +683,132 @@ void SaveStateLANSync::PairWithPeer(const std::string &peerId, const std::string
 	}));
 }
 
+void SaveStateLANSync::AutoPairWithPeer(const std::string &host, int port,
+                                         std::function<void(bool, const std::string &)> callback) {
+	// Don't pair with ourselves
+	if (serverPort_ > 0 && port == serverPort_) {
+		// Check if this is our own IP - just compare port as rough check
+		// Exact IP comparison is unreliable on multi-homed devices, but port collision
+		// on the same machine is a strong indicator of self-connection.
+		if (callback) callback(false, "Cannot pair with self");
+		return;
+	}
+	AddBackgroundThread(std::thread([this, host, port, callback]() {
+		std::string body = StringFromFormat(
+			"{\"id\":\"%s\",\"name\":\"%s\",\"device\":\"Android\",\"port\":%d}",
+			deviceId_.c_str(), deviceName_.c_str(), serverPort_);
+
+		// POST /api/v1/pair-request
+		int sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+		if (sock < 0) { if (callback) callback(false, "Socket error"); return; }
+
+		struct sockaddr_in addr;
+		memset(&addr, 0, sizeof(addr));
+		addr.sin_family = AF_INET;
+		addr.sin_port = htons(port);
+		inet_pton(AF_INET, host.c_str(), &addr.sin_addr);
+
+		if (connect(sock, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
+			closesocket(sock);
+			if (callback) callback(false, "Connection refused");
+			return;
+		}
+
+		std::string req = StringFromFormat(
+			"POST /api/v1/pair-request HTTP/1.1\r\n"
+			"Host: %s:%d\r\n"
+			"Content-Type: application/json\r\n"
+			"Content-Length: %d\r\n"
+			"Connection: close\r\n\r\n%s",
+			host.c_str(), port, (int)body.size(), body.c_str());
+		send(sock, req.c_str(), req.size(), 0);
+
+		char buf[4096];
+		int n = recv(sock, buf, sizeof(buf) - 1, 0);
+		closesocket(sock);
+		if (n <= 0) { if (callback) callback(false, "No response"); return; }
+		buf[n] = '\0';
+		std::string resp(buf, n);
+
+		auto extractStr = [&resp](const char *key) -> std::string {
+			std::string search = std::string("\"") + key + "\":\"";
+			size_t pos = resp.find(search);
+			if (pos == std::string::npos) return "";
+			pos += search.size();
+			size_t end = resp.find('"', pos);
+			return (end != std::string::npos) ? resp.substr(pos, end - pos) : "";
+		};
+
+		std::string requestId = extractStr("requestId");
+		if (requestId.empty()) {
+			WARN_LOG(Log::System, "AutoPairWithPeer: Bad response from %s:%d — response was: %s",
+				host.c_str(), port, resp.c_str());
+			if (callback) callback(false, "Bad response");
+			return;
+		}
+
+		// Poll for status (up to 30s, 1s interval)
+		for (int i = 0; i < 30; i++) {
+			sleep_ms(1000, "auto-pair-poll");
+
+			int pollSock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+			if (pollSock < 0) continue;
+
+			memset(&addr, 0, sizeof(addr));
+			addr.sin_family = AF_INET;
+			addr.sin_port = htons(port);
+			inet_pton(AF_INET, host.c_str(), &addr.sin_addr);
+
+			if (connect(pollSock, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
+				closesocket(pollSock);
+				continue;
+			}
+
+			std::string pollReq = StringFromFormat(
+				"GET /api/v1/pair-status?requestId=%s HTTP/1.1\r\n"
+				"Host: %s:%d\r\n"
+				"Connection: close\r\n\r\n",
+				requestId.c_str(), host.c_str(), port);
+			send(pollSock, pollReq.c_str(), pollReq.size(), 0);
+
+			char pollBuf[1024];
+			int pollN = recv(pollSock, pollBuf, sizeof(pollBuf) - 1, 0);
+			closesocket(pollSock);
+			if (pollN <= 0) continue;
+			pollBuf[pollN] = '\0';
+			std::string pollResp(pollBuf, pollN);
+
+			std::string status = extractStr("status");
+			if (status == "approved") {
+				std::string token = extractStr("token");
+				std::string peerId = extractStr("peerId");
+
+				PeerInfo peer;
+				peer.id = peerId;
+				peer.host = host;
+				peer.port = port;
+				peer.token = token;
+				peer.paired = true;
+				peer.online = true;
+				peer.lastSeen = time(nullptr);
+
+				{
+					std::lock_guard<std::mutex> lock(peerMutex_);
+					pairedPeers_.push_back(peer);
+				}
+				SaveConfig();
+
+				if (callback) callback(true, "");
+				return;
+			} else if (status == "rejected" || status == "expired") {
+				if (callback) callback(false, status);
+				return;
+			}
+		}
+		if (callback) callback(false, "Timeout");
+	}));
+}
+
 void SaveStateLANSync::AcceptPairing(const std::string &peerId, const std::string &peerName,
                                       std::function<void(bool)> callback) {
 	PeerInfo peer;
@@ -616,9 +849,26 @@ void SaveStateLANSync::SyncWithPeer(const std::string &peerId, SyncDirection dir
 	syncCancelled_ = false;
 
 	AddBackgroundThread(std::thread([this, target, onProgress, onDone]() {
+#if PPSSPP_PLATFORM(ANDROID)
+		// Attach thread to JVM for Android content URI file access
+		extern JavaVM *gJvm;
+		JNIEnv *jniEnv = nullptr;
+		bool attached = false;
+		if (gJvm) {
+			int status = gJvm->GetEnv((void **)&jniEnv, JNI_VERSION_1_6);
+			if (status == JNI_EDETACHED) {
+				JavaVMAttachArgs args = {JNI_VERSION_1_6, "LANSyncWorker", nullptr};
+				attached = (gJvm->AttachCurrentThread(&jniEnv, &args) == JNI_OK);
+			}
+		}
+#endif
 		SaveStateLANSync::SyncResult result = DoSync(target, onProgress);
 		syncStatus_ = result.success ? SyncStatus::DONE : SyncStatus::ERROR;
 		if (onDone) onDone(result);
+#if PPSSPP_PLATFORM(ANDROID)
+		if (attached && gJvm)
+			gJvm->DetachCurrentThread();
+#endif
 	}));
 }
 
@@ -693,34 +943,7 @@ SaveStateLANSync::SyncResult SaveStateLANSync::DoSync(const PeerInfo &peer, Save
 	if (bodyStart == std::string::npos) { result.success = false; return result; }
 	std::string jsonBody = response.substr(bodyStart + 4);
 
-	// Simple JSON array parse: [{slot, size, hash, hlc, parentHlc, ppssppVersion, saveFormatVersion}]
-	size_t pos = 0;
-	int syncedCount = 0;
-	while ((pos = jsonBody.find("\"gameId\":\"", pos)) != std::string::npos) {
-		pos += 10;
-		size_t end = jsonBody.find('"', pos);
-		if (end == std::string::npos) break;
-		std::string gameId = jsonBody.substr(pos, end - pos);
-
-		size_t slotPos = jsonBody.find("\"slot\":", end);
-		if (slotPos == std::string::npos) break;
-		slotPos += 7;
-		int slot = atoi(jsonBody.c_str() + slotPos);
-
-		// Extract hash
-		size_t hashPos = jsonBody.find("\"hash\":\"", slotPos);
-		std::string remoteHash;
-		if (hashPos != std::string::npos && hashPos < jsonBody.find('}', slotPos)) {
-			hashPos += 8;
-			size_t hashEnd = jsonBody.find('"', hashPos);
-			if (hashEnd != std::string::npos)
-				remoteHash = jsonBody.substr(hashPos, hashEnd - hashPos);
-		}
-
-		bool remoteHasThumb = jsonBody.find("\"hasThumbnail\":true", slotPos) != std::string::npos &&
-			jsonBody.find("\"hasThumbnail\":true", slotPos) < jsonBody.find("\"gameId\":\"", end + 1);
-
-	// Helper lambdas for single save transfer
+	// Helper lambdas for single save transfer (defined outside while loop for scope)
 	auto downloadSave = [&](const Path &path, const std::string &gid, int sl, const char *ext = "ppst") -> bool {
 		std::string dlReq = StringFromFormat(
 			"GET /api/v1/saves/%s_%d.%s HTTP/1.1\r\n"
@@ -809,6 +1032,35 @@ SaveStateLANSync::SyncResult SaveStateLANSync::DoSync(const PeerInfo &peer, Save
 		return HLC::FromJSON(jsonBody.substr(p, end - p));
 	};
 
+	// Simple JSON array parse: [{slot, size, hash, hlc, parentHlc, ppssppVersion, saveFormatVersion}]
+	std::set<std::pair<std::string,int>> remoteEntriesSeen;
+	size_t pos = 0;
+	int syncedCount = 0;
+	while ((pos = jsonBody.find("\"gameId\":\"", pos)) != std::string::npos) {
+		pos += 10;
+		size_t end = jsonBody.find('"', pos);
+		if (end == std::string::npos) break;
+		std::string gameId = jsonBody.substr(pos, end - pos);
+
+		size_t slotPos = jsonBody.find("\"slot\":", end);
+		if (slotPos == std::string::npos) break;
+		slotPos += 7;
+		int slot = atoi(jsonBody.c_str() + slotPos);
+		remoteEntriesSeen.insert({gameId, slot});
+
+		// Extract hash
+		size_t hashPos = jsonBody.find("\"hash\":\"", slotPos);
+		std::string remoteHash;
+		if (hashPos != std::string::npos && hashPos < jsonBody.find('}', slotPos)) {
+			hashPos += 8;
+			size_t hashEnd = jsonBody.find('"', hashPos);
+			if (hashEnd != std::string::npos)
+				remoteHash = jsonBody.substr(hashPos, hashEnd - hashPos);
+		}
+
+		bool remoteHasThumb = jsonBody.find("\"hasThumbnail\":true", slotPos) != std::string::npos &&
+			jsonBody.find("\"hasThumbnail\":true", slotPos) < jsonBody.find("\"gameId\":\"", end + 1);
+
 		// Extract remote HLC
 		HLC remoteHlc = extractHLC(slotPos, "hlc");
 		HLC remoteParentHlc = extractHLC(slotPos, "parentHlc");
@@ -827,7 +1079,7 @@ SaveStateLANSync::SyncResult SaveStateLANSync::DoSync(const PeerInfo &peer, Save
 			localParentHlc = localMeta.parentHlc;
 			localHash = localMeta.hash;
 		} else if (hasLocal) {
-			localHash = ComputeSHA256(localData);
+			localHash = ComputeSHA256(localData.data(), localData.size());
 		}
 
 		auto cr = DetectConflict(localHlc, localParentHlc, remoteHlc, remoteParentHlc);
@@ -899,6 +1151,23 @@ SaveStateLANSync::SyncResult SaveStateLANSync::DoSync(const PeerInfo &peer, Save
 		syncedCount++;
 		pos = end;
 	}
+
+	// Upload local saves that don't exist on remote
+	for (const auto &lg : localGames) {
+		for (int slot : lg.second) {
+			if (remoteEntriesSeen.find({lg.first, slot}) == remoteEntriesSeen.end()) {
+				Path localPath = saveDir / StringFromFormat("%s_%d.ppst", lg.first.c_str(), slot);
+				std::string localData;
+				if (File::ReadBinaryFileToString(localPath, &localData)) {
+					if (uploadSave(lg.first, slot, localData))
+						result.uploaded++;
+					else
+						result.failed++;
+				}
+			}
+		}
+	}
+
 	result.success = true;
 	return result;
 }
@@ -1174,6 +1443,186 @@ void SaveStateLANSync::HandlePairRequest(const std::string &body, std::string &r
 	pairingPin_.clear();
 }
 
+void SaveStateLANSync::HandleAutoPairRequest(const std::string &body, const std::string &clientHost, std::string &response) {
+	std::string peerId, peerName, device;
+	auto extractStr = [&body](const char *key) -> std::string {
+		std::string search = std::string("\"") + key + "\":\"";
+		size_t pos = body.find(search);
+		if (pos == std::string::npos) return "";
+		pos += search.size();
+		size_t end = body.find('"', pos);
+		return (end != std::string::npos) ? body.substr(pos, end - pos) : "";
+	};
+	auto extractInt = [&body](const char *key) -> int {
+		std::string search = std::string("\"") + key + "\":";
+		size_t pos = body.find(search);
+		if (pos == std::string::npos) {
+			// Try without quotes (number)
+			search = std::string("\"") + key + "\":";
+			pos = body.find(search);
+			if (pos == std::string::npos) return 0;
+		}
+		pos += search.size();
+		// Read digits
+		int val = 0;
+		while (pos < body.size() && body[pos] >= '0' && body[pos] <= '9') {
+			val = val * 10 + (body[pos] - '0');
+			pos++;
+		}
+		return val;
+	};
+	peerId = extractStr("id");
+	peerName = extractStr("name");
+	device = extractStr("device");
+	int peerPort = extractInt("port");
+
+	if (peerId.empty() || peerName.empty()) {
+		INFO_LOG(Log::System, "LANSync: HandleAutoPairRequest missing fields (id=%s, name=%s)", peerId.c_str(), peerName.c_str());
+		response = "{\"error\":\"missing_fields\"}";
+		return;
+	}
+
+	// Reject pairing request from self
+	if (peerId == deviceId_) {
+		INFO_LOG(Log::System, "LANSync: HandleAutoPairRequest rejected self-pairing from %s", peerId.c_str());
+		response = "{\"error\":\"cannot_pair_with_self\"}";
+		return;
+	}
+
+	INFO_LOG(Log::System, "LANSync: HandleAutoPairRequest from %s (%s) host=%s port=%d",
+		peerName.c_str(), device.c_str(), clientHost.c_str(), peerPort);
+	std::string requestId = StringFromFormat("req-%d-%lld", pendingRequestCounter_++, (long long)time(nullptr));
+	PendingPairRequest req;
+	req.requestId = requestId;
+	req.peerId = peerId;
+	req.peerName = peerName;
+	req.device = device;
+	req.host = clientHost;
+	req.port = peerPort;
+	req.timestamp = time_now_d();
+
+	{
+		std::lock_guard<std::mutex> lock(pendingMutex_);
+		if (pendingRequests_.size() >= 10) {
+			response = "{\"error\":\"too_many_requests\"}";
+			return;
+		}
+		pendingRequests_.push_back(req);
+	}
+
+	System_Toast(StringFromFormat("Pair request from %s", peerName.c_str()));
+	response = StringFromFormat("{\"status\":\"pending\",\"requestId\":\"%s\"}", requestId.c_str());
+}
+
+void SaveStateLANSync::HandlePairRespond(const std::string &body, std::string &response) {
+	INFO_LOG(Log::System, "LANSync: HandlePairRespond called with body=%s", body.c_str());
+	std::string requestId, acceptStr;
+	auto extractStr = [&body](const char *key) -> std::string {
+		std::string search = std::string("\"") + key + "\":\"";
+		size_t pos = body.find(search);
+		if (pos == std::string::npos) return "";
+		pos += search.size();
+		size_t end = body.find('"', pos);
+		return (end != std::string::npos) ? body.substr(pos, end - pos) : "";
+	};
+	requestId = extractStr("requestId");
+	acceptStr = extractStr("accept");
+
+	if (requestId.empty()) {
+		response = "{\"error\":\"missing_requestId\"}";
+		return;
+	}
+	bool accept = (acceptStr == "true" || acceptStr == "1");
+
+	std::lock_guard<std::mutex> lock(pendingMutex_);
+	for (auto &req : pendingRequests_) {
+		if (req.requestId == requestId) {
+			if (accept) {
+				req.accepted = true;
+				GeneratePairingPin();
+
+				std::string storedToken = GenerateSessionToken();
+				req.token = storedToken;  // Store for HandlePairStatus polling
+
+				PeerInfo peer;
+				peer.id = req.peerId;
+				peer.name = req.peerName;
+				peer.device = req.device;
+				peer.host = req.host;
+				peer.port = req.port;  // Use the port the client sent
+				peer.paired = true;
+				peer.online = true;
+				peer.token = storedToken;
+				peer.lastSeen = time(nullptr);
+
+				{
+					std::lock_guard<std::mutex> pLock(peerMutex_);
+					if (pairedPeers_.size() >= 5) {
+						response = "{\"error\":\"too_many_peers\"}";
+						return;
+					}
+					pairedPeers_.push_back(peer);
+				}
+				SaveConfig();
+
+				response = StringFromFormat(
+					"{\"status\":\"approved\",\"token\":\"%s\",\"peerId\":\"%s\"}",
+					storedToken.c_str(), deviceId_.c_str());
+			} else {
+				req.rejected = true;
+				response = "{\"status\":\"rejected\"}";
+			}
+			return;
+		}
+	}
+	response = "{\"error\":\"request_not_found\"}";
+}
+
+void SaveStateLANSync::HandlePairStatus(const std::string &query, std::string &response) {
+	std::string requestId;
+	size_t eqPos = query.find("requestId=");
+	if (eqPos != std::string::npos) {
+		eqPos += 10;
+		size_t end = query.find_first_of("& \r\n", eqPos);
+		requestId = query.substr(eqPos, end - eqPos);
+	}
+
+	if (requestId.empty()) {
+		response = "{\"error\":\"missing_requestId\"}";
+		return;
+	}
+
+	std::lock_guard<std::mutex> lock(pendingMutex_);
+	double now = time_now_d();
+	for (const auto &req : pendingRequests_) {
+		if (req.requestId == requestId) {
+			if (req.accepted) {
+				response = StringFromFormat(
+					"{\"status\":\"approved\",\"token\":\"%s\",\"peerId\":\"%s\"}",
+					req.token.c_str(), deviceId_.c_str());
+			} else if (req.rejected) {
+				response = "{\"status\":\"rejected\"}";
+			} else if ((now - req.timestamp) > 60.0) {
+				response = "{\"status\":\"expired\"}";
+			} else {
+				response = "{\"status\":\"pending\"}";
+			}
+			return;
+		}
+	}
+	response = "{\"status\":\"expired\"}";
+}
+
+std::vector<SaveStateLANSync::PendingPairRequest> SaveStateLANSync::GetPendingRequests() const {
+	std::lock_guard<std::mutex> lock(pendingMutex_);
+	double now = time_now_d();
+	pendingRequests_.erase(
+		std::remove_if(pendingRequests_.begin(), pendingRequests_.end(),
+			[now](const PendingPairRequest &r) { return (now - r.timestamp) > 60.0 && !r.accepted; }),
+		pendingRequests_.end());
+	return pendingRequests_;
+}
+
 void SaveStateLANSync::HandleSaveList(const std::string &gameId, std::string &response) {
 	Path saveDir = GetSysDirectory(DIRECTORY_SAVESTATE);
 	std::vector<File::FileInfo> files;
@@ -1199,7 +1648,7 @@ void SaveStateLANSync::HandleSaveList(const std::string &gameId, std::string &re
 		Path thumbPath = saveDir / StringFromFormat("%s_%d.jpg", prefix.c_str(), slot);
 		bool hasThumb = File::Exists(thumbPath);
 
-		if (!first) response += ","; first = false;
+		if (!first) { response += ","; } first = false;
 		response += StringFromFormat(
 			"{\"gameId\":\"%s\",\"slot\":%d,\"size\":%lld,\"hash\":\"%s\","
 			"\"hlc\":%s,\"parentHlc\":%s,"

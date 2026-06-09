@@ -107,6 +107,7 @@ extern AndroidAudioState *g_audioState;
 #endif
 
 #include "Core/SaveStateLANSync.h"
+#include "UI/LANPeerListScreen.h"
 
 #if PPSSPP_PLATFORM(MAC) || PPSSPP_PLATFORM(IOS)
 void SetMemStickDirDarwin(int requesterToken) {
@@ -1145,7 +1146,16 @@ void GameSettingsScreen::CreateNetworkingSettings(UI::ViewGroup *networkingSetti
 		} else {
 			AndroidLANSync::Instance().Disable();
 		}
-		return UI::EVENT_DONE;
+	});
+#elif (PPSSPP_PLATFORM(LINUX) || PPSSPP_PLATFORM(MAC)) && !PPSSPP_PLATFORM(ANDROID)
+	enableCb->OnClick.Add([this](UI::EventParams &e) {
+		if (g_Config.lanSync.bEnabled) {
+			std::string deviceName = g_Config.lanSync.sDeviceName;
+			if (deviceName.empty()) deviceName = "PPSSPP";
+			GetLinuxLANSync().Enable(deviceName);
+		} else {
+			GetLinuxLANSync().Disable();
+		}
 	});
 #endif
 
@@ -1167,7 +1177,7 @@ void GameSettingsScreen::CreateNetworkingSettings(UI::ViewGroup *networkingSetti
 		if (port > 0) {
 			char status[128];
 			snprintf(status, sizeof(status), "Status: Running on port %d", port);
-			networkingSettings->Add(new UI::TextView(status, UI::ALIGN_LEFT, false))->SetEnabledPtr(&g_Config.lanSync.bEnabled);
+			networkingSettings->Add(new UI::TextView(status, ALIGN_LEFT, false))->SetEnabledPtr(&g_Config.lanSync.bEnabled);
 		}
 	}
 #endif
@@ -1177,31 +1187,8 @@ void GameSettingsScreen::CreateNetworkingSettings(UI::ViewGroup *networkingSetti
 	pairBtn->OnClick.Add([this](UI::EventParams &) {
 #if defined(USING_QT_UI)
 		LANSyncQtUI::ShowPairing();
-#elif PPSSPP_PLATFORM(ANDROID)
-		auto &core = SaveStateLANSync::Instance();
-		std::string myPin = core.GeneratePairingPin();
-		int port = core.GetServerPort();
-		System_Toast(StringFromFormat("Your PIN: %s - Port: %d", myPin.c_str(), port));
-
-		RequesterToken token = GetRequesterToken();
-		System_InputBoxGetString(token, "Enter peer IP:Port", "", false,
-			[token](std::string_view addr, int) {
-				if (addr.empty()) return;
-				std::string peerAddr(addr);
-				System_InputBoxGetString(token, "Enter peer's 6-digit PIN", "", false,
-					[peerAddr](std::string_view pinVal, int) {
-						if (pinVal.empty()) return;
-						SaveStateLANSync::Instance().PairWithPeer(peerAddr, std::string(pinVal),
-							[](bool ok, const std::string &err) {
-								if (ok) System_Toast("Paired!");
-								else System_Toast(("Failed: " + err).c_str());
-							});
-					}, nullptr);
-			}, nullptr);
-#elif defined(SDL)
-		if (g_LANSyncUI) {
-			g_LANSyncUI->OpenSettings();
-		}
+#elif PPSSPP_PLATFORM(ANDROID) || defined(SDL)
+		screenManager()->push(new LANPeerListScreen());
 #endif
 	});
 
@@ -1213,20 +1200,22 @@ void GameSettingsScreen::CreateNetworkingSettings(UI::ViewGroup *networkingSetti
 #elif PPSSPP_PLATFORM(ANDROID)
 		auto &core = SaveStateLANSync::Instance();
 		auto peers = core.GetDiscoveredPeers();
+		bool found = false;
 		for (auto &p : peers) {
 			if (p.paired && p.online) {
-				core.SyncWithPeer(p.id, SaveStateLANSync::SyncDirection::BIDIRECTIONAL,
-					nullptr,
-					[](const SaveStateLANSync::SyncResult &result) {
-						if (result.success)
-							System_Toast(StringFromFormat("Sync OK: %d up, %d down", result.uploaded, result.downloaded));
-						else
-							System_Toast("Sync failed");
-					});
-				return UI::EVENT_DONE;
+			found = true;
+			core.SyncWithPeer(p.id, SaveStateLANSync::SyncDirection::BIDIRECTIONAL,
+				nullptr,
+				[](const SaveStateLANSync::SyncResult &result) {
+					if (result.success)
+						System_Toast(StringFromFormat("Sync OK: %d up, %d down", result.uploaded, result.downloaded));
+					else
+						System_Toast("Sync failed");
+				});
 			}
 		}
-		System_Toast("No online paired peers");
+		if (!found)
+			System_Toast("No online paired peers");
 #elif defined(SDL)
 		if (g_LANSyncUI) {
 			g_LANSyncUI->OpenSettings();  // This will open the settings, user can then click Sync Now
