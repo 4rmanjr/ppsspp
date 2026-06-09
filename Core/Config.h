@@ -601,6 +601,8 @@ public:
 	bool bDontDownloadInfraJson;
 	int iChatButtonPosition;
 	int iChatScreenPosition;
+	// LAN Save State Sync
+	LANSyncConfig lanSync;
 
 	bool bEnableQuickChat;
 	std::string sQuickChat[5];

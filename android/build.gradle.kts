@@ -67,11 +67,10 @@ dependencies {
 	// Will replace with a different plugin soon.
 	implementation("androidx.appcompat:appcompat:1.7.1")
 	implementation("androidx.documentfile:documentfile:1.1.0")
+	implementation("androidx.security:security-crypto:1.1.0-alpha06")
 	implementation("com.google.protobuf:protobuf-javalite:4.33.5")
-
-	// LAN Save State Sync
+	// ML Kit for QR code scanning (LAN sync pairing)
 	implementation("com.google.mlkit:barcode-scanning:17.3.0")
-	implementation("androidx.security:security-crypto:1.1.0")
 }
 
 protobuf {
@@ -112,11 +111,6 @@ android {
 
 	compileSdk = 37
 	ndkVersion = "29.0.14206865"
-
-	configurations.all {
-		exclude(group = "org.jetbrains.kotlin", module = "kotlin-stdlib-jdk7")
-		exclude(group = "org.jetbrains.kotlin", module = "kotlin-stdlib-jdk8")
-	}
 
 	compileOptions {
 		sourceCompatibility = JavaVersion.VERSION_11

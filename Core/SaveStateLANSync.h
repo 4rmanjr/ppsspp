@@ -103,6 +103,7 @@ public:
 		int64_t remoteSize = 0;
 		std::string localHash;
 		std::string remoteHash;
+		std::string peerId;   // Which peer has the remote version
 	};
 
 	struct SyncResult {

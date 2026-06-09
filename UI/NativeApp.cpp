@@ -144,6 +144,7 @@
 #endif
 #if PPSSPP_PLATFORM(ANDROID)
 #include "android/jni/app-android.h"
+#include "android/jni/AndroidLANSync.h"
 #endif
 
 #if PPSSPP_ARCH(ARM) && defined(__ANDROID__)
@@ -507,6 +508,9 @@ void NativeInit(int argc, const char *argv[], const char *savegame_dir, const ch
 	if (!System_GetPropertyBool(SYSPROP_ANDROID_SCOPED_STORAGE)) {
 		CreateSysDirectories();
 	}
+
+	// Initialize LAN sync
+	AndroidLANSync::Instance().Init();
 #elif PPSSPP_PLATFORM(UWP) && !defined(__LIBRETRO__)
 	Path memstickDirFile = g_Config.internalDataDirectory / "memstick_dir.txt";
 	if (File::Exists(memstickDirFile)) {
@@ -1602,6 +1606,10 @@ void NativeShutdown() {
 
 	// Previously we did exit() here on Android but that makes it hard to do things like restart on backend change.
 	// I think we handle most globals correctly or correct-enough now.
+
+#if PPSSPP_PLATFORM(ANDROID)
+	AndroidLANSync::Instance().Shutdown();
+#endif
 	INFO_LOG(Log::System, "NativeShutdown end");
 }
 

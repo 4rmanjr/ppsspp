@@ -52,6 +52,7 @@
 #include "Core/MemMap.h"
 #include "Core/MIPS/JitCommon/JitBlockCache.h"
 #include "Core/RetroAchievements.h"
+#include "Core/SaveStateLANSync.h"
 #include "HW/MemoryStick.h"
 #include "Core/SaveStateLANSync.h"
 
@@ -954,6 +955,16 @@ int g_screenshotFailures;
 
 			if (op.callback) {
 				op.callback(callbackResult, callbackMessage, callbackMetadata);
+			}
+
+			// LAN sync hooks (non-blocking)
+			if (callbackResult != Status::FAILURE && op.slot >= 0) {
+				std::string gamePrefix = GenerateFullDiscId(g_paramSFO);
+				if (op.type == OperationType::Load) {
+					SaveStateLANSync::Instance().OnSaveStateLoaded(gamePrefix, op.slot);
+				} else if (op.type == OperationType::Save) {
+					SaveStateLANSync::Instance().OnSaveStateSaved(gamePrefix, op.slot);
+				}
 			}
 		}
 		if (operations.size()) {
