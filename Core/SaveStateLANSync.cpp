@@ -1766,7 +1766,7 @@ void SaveStateLANSync::HandlePairRespond(const std::string &body, std::string &r
 					response = StringFromFormat(
 						"{\"status\":\"approved\",\"token\":\"%s\",\"peerId\":\"%s\"}",
 						storedToken.c_str(), deviceId_.c_str());
-				} else if (!req.token.empty()) {
+				} else if (req.clientConfirmed) {
 					// Numeric comparison: client confirmed first, now both done
 					req.accepted = true;
 					response = StringFromFormat(
@@ -1868,13 +1868,18 @@ void SaveStateLANSync::HandlePairStatus(const std::string &query, std::string &r
 
 	std::lock_guard<std::mutex> lock(pendingMutex_);
 	double now = time_now_d();
-	for (auto &req : pendingRequests_) {
+	for (const auto &req : pendingRequests_) {
 		if (req.requestId == requestId) {
 			// Numeric comparison: both client and server must confirm
 			if (req.rejected) {
 				response = "{\"status\":\"rejected\"}";
 			} else if ((now - req.timestamp) > 60.0) {
 				response = "{\"status\":\"expired\"}";
+			} else if (req.accepted && req.nonce.empty()) {
+				// PIN-based flow: approve immediately
+				response = StringFromFormat(
+					"{\"status\":\"approved\",\"token\":\"%s\",\"peerId\":\"%s\"}",
+					req.token.c_str(), deviceId_.c_str());
 			} else if (req.clientConfirmed && req.serverConfirmed && req.accepted) {
 				// Both sides confirmed → complete pairing
 				response = StringFromFormat(
