@@ -27,6 +27,7 @@
 #include <avahi-common/simple-watch.h>
 #include <avahi-common/error.h>
 #include <avahi-common/malloc.h>
+#include <avahi-common/strlist.h>
 
 #define MDNS_USE_AVAHI 1
 #elif PPSSPP_PLATFORM(MAC)
@@ -300,23 +301,27 @@ bool AvahiAnnouncer::Update(const ServiceInfo &info) {
 		return false;
 	}
 
-	// Build TXT records
-	std::string portStr = std::to_string(info.port);
-	const char *txt[] = {
-		(const char *)std::string("version=1").c_str(),
-		(const char *)std::string("device=" + info.device).c_str(),
-		(const char *)std::string("name=" + info.name).c_str(),
-		(const char *)std::string("id=" + info.id).c_str(),
-		(const char *)std::string("fp=" + info.certFingerprint).c_str(),
-		nullptr
-	};
+	// Build TXT records using persistent strings (avoid dangling pointers from temporaries)
+	std::string txtVersion = "version=1";
+	std::string txtDevice = "device=" + info.device;
+	std::string txtName = "name=" + info.name;
+	std::string txtId = "id=" + info.id;
+	std::string txtFp = "fp=" + info.certFingerprint;
+
+	AvahiStringList *txt = nullptr;
+	txt = avahi_string_list_add_pair(txt, "version", "1");
+	txt = avahi_string_list_add_pair(txt, "device", info.device.c_str());
+	txt = avahi_string_list_add_pair(txt, "name", info.name.c_str());
+	txt = avahi_string_list_add_pair(txt, "id", info.id.c_str());
+	txt = avahi_string_list_add_pair(txt, "fp", info.certFingerprint.c_str());
 
 	int error = avahi_entry_group_add_service_strlst(group_, AVAHI_IF_UNSPEC, AVAHI_PROTO_UNSPEC,
 	                                                 (AvahiPublishFlags)0, info.name.c_str(),
 	                                                 SERVICE_TYPE, nullptr, nullptr,
-	                                                 info.port, nullptr);
+	                                                 info.port, txt);
+	avahi_string_list_free(txt);
 	if (error < 0) {
-		// Try with TXT records (some Avahi versions support this)
+		// Fallback: try without TXT records
 		error = avahi_entry_group_add_service_strlst(group_, AVAHI_IF_UNSPEC, AVAHI_PROTO_UNSPEC,
 		                                             (AvahiPublishFlags)0, info.name.c_str(),
 		                                             SERVICE_TYPE, nullptr, nullptr,

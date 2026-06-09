@@ -209,7 +209,7 @@ void SaveStateLANSync::StartDiscovery() {
 			info.certFingerprint = peer.certFingerprint;
 			info.online = true; info.lastSeen = time(nullptr);
 			for (auto &p : pairedPeers_) {
-				if (p.id == info.id) { p.online = true; p.lastSeen = info.lastSeen; return; }
+				if (p.id == info.id) { p.online = true; p.lastSeen = info.lastSeen; p.host = info.host; p.port = info.port; return; }
 			}
 			discoveredPeers_.push_back(info);
 		},
@@ -231,7 +231,7 @@ void SaveStateLANSync::StartDiscovery() {
 			PeerInfo info;
 			info.id = peer.id; info.name = peer.name; info.device = peer.device; info.host = peer.host; info.port = peer.port;
 			info.online = true; info.lastSeen = time(nullptr);
-			for (auto &p : pairedPeers_) { if (p.id == info.id) { p.online = true; return; } }
+			for (auto &p : pairedPeers_) { if (p.id == info.id) { p.online = true; p.lastSeen = info.lastSeen; p.host = info.host; p.port = info.port; return; } }
 			for (auto &p : discoveredPeers_) { if (p.id == info.id) return; }
 			discoveredPeers_.push_back(info);
 		}, nullptr, nullptr);
@@ -502,8 +502,8 @@ bool SaveStateLANSync::StartServer() {
 						"{\"deviceId\":\"%s\",\"name\":\"%s\",\"version\":\"1.0\",\"port\":%d}",
 						deviceId_.c_str(), deviceName_.c_str(), serverPort_);
 					WriteHTTPResponse(clientFd, 200, response);
-				} else if (path.find("/api/v1/saves/") == 0 && path.size() > 15) {
-					std::string filename = path.substr(15);  // after /api/v1/saves/
+				} else if (path.find("/api/v1/saves/") == 0 && path.size() > 14) {
+					std::string filename = path.substr(14);  // after /api/v1/saves/
 					
 					if (!IsValidSaveFilename(filename)) {
 						WriteHTTPResponse(clientFd, 400, "{\"error\":\"invalid_filename\"}");
@@ -1450,6 +1450,22 @@ bool SaveStateLANSync::LoadConfig() {
 					peer.name = peersJSON.substr(namePos, nameEnd - namePos);
 			}
 
+			// Extract host
+			size_t hostPos = peersJSON.find("\"host\":\"", end);
+			if (hostPos != std::string::npos && hostPos < peersJSON.find('}', pos)) {
+				hostPos += 8;
+				size_t hostEnd = peersJSON.find('"', hostPos);
+				if (hostEnd != std::string::npos)
+					peer.host = peersJSON.substr(hostPos, hostEnd - hostPos);
+			}
+
+			// Extract port
+			size_t portPos = peersJSON.find("\"port\":", end);
+			if (portPos != std::string::npos && portPos < peersJSON.find('}', pos)) {
+				portPos += 7;
+				peer.port = atoi(peersJSON.c_str() + portPos);
+			}
+
 			// Extract token
 			size_t tokPos = peersJSON.find("\"token\":\"", end);
 			if (tokPos != std::string::npos && tokPos < peersJSON.find('}', pos)) {
@@ -1474,8 +1490,9 @@ bool SaveStateLANSync::SaveConfig() {
 	for (size_t i = 0; i < pairedPeers_.size(); i++) {
 		if (i > 0) peersJSON += ",";
 		peersJSON += StringFromFormat(
-			"{\"id\":\"%s\",\"name\":\"%s\",\"token\":\"%s\"}",
+			"{\"id\":\"%s\",\"name\":\"%s\",\"host\":\"%s\",\"port\":%d,\"token\":\"%s\"}",
 			pairedPeers_[i].id.c_str(), pairedPeers_[i].name.c_str(),
+			pairedPeers_[i].host.c_str(), pairedPeers_[i].port,
 			pairedPeers_[i].token.c_str());
 	}
 	peersJSON += "]";
@@ -1787,6 +1804,7 @@ void SaveStateLANSync::HandleSaveUpload(const std::string &gameId, int slot,
 	SaveStateSyncMetadata meta;
 	meta.hash = actualHash;
 	meta.hlc = meta.hlc.Increment(deviceId_);
+	meta.parentHlc = meta.hlc;
 	meta.deviceId = deviceId_;
 	meta.fileSize = data.size();
 	meta.lastSyncTime = time(nullptr);
