@@ -23,6 +23,7 @@
 #include "Common/Log.h"
 #include "Common/StringUtils.h"
 
+#include "Core/Config.h"
 #include "Core/SaveStateLANSync.h"
 
 LinuxLANSync &GetLinuxLANSync() {
@@ -38,6 +39,13 @@ bool LinuxLANSync::Init() {
 
 	// Init core sync manager
 	SaveStateLANSync::Instance().Init();
+
+	// Auto-enable if config says it was enabled (restored from previous session)
+	if (g_Config.lanSync.bEnabled) {
+		std::string deviceName = g_Config.lanSync.sDeviceName;
+		if (deviceName.empty()) deviceName = "PPSSPP";
+		Enable(deviceName);
+	}
 
 	return true;
 }

@@ -27,6 +27,7 @@
 #include <android/log.h>
 
 #include "android/jni/AndroidLANSync.h"
+#include "Core/Config.h"
 #include "Core/SaveStateLANSync.h"
 #include "Common/Log.h"
 #include "Common/Net/PlatformKeyStore.h"
@@ -307,6 +308,14 @@ AndroidLANSync &AndroidLANSync::Instance() {
 bool AndroidLANSync::Init() {
 	PlatformKeyStore::Init();
 	SaveStateLANSync::Instance().Init();
+
+	// Auto-enable if config says it was enabled (restored from previous session)
+	if (g_Config.lanSync.bEnabled) {
+		std::string deviceName = g_Config.lanSync.sDeviceName;
+		if (deviceName.empty()) deviceName = "PPSSPP";
+		Enable(deviceName);
+	}
+
 	INFO_LOG(Log::System, "AndroidLANSync: initialized (Phase 3 full)");
 	return true;
 }
