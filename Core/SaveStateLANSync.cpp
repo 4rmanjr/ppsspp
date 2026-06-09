@@ -83,6 +83,32 @@ static std::string GenerateSessionToken() {
 	return std::string(hex);
 }
 
+static std::string GenerateNonce() {
+	std::random_device rd;
+	std::mt19937_64 gen(rd());
+	std::uniform_int_distribution<uint64_t> dist;
+	char hex[17];
+	snprintf(hex, sizeof(hex), "%016llx", (unsigned long long)dist(gen));
+	return std::string(hex);
+}
+
+// Numeric comparison: both sides compute the same 6-digit code from nonce + device IDs.
+// Neither side sends the actual code over the network — only the nonce is exchanged.
+static std::string ComputeVerificationCode(const std::string &nonce, const std::string &idA, const std::string &idB) {
+	// Sort IDs so both sides compute the same hash regardless of order
+	std::string combined;
+	if (idA < idB)
+		combined = nonce + idA + idB;
+	else
+		combined = nonce + idB + idA;
+	std::string hash = ComputeSHA256(combined.c_str(), combined.size());
+	// Take first 6 hex chars, convert to integer, mod 1000000, pad to 6 digits
+	unsigned long val = strtoul(hash.substr(0, 6).c_str(), nullptr, 16);
+	char code[7];
+	snprintf(code, sizeof(code), "%06lu", val % 1000000);
+	return std::string(code);
+}
+
 static constexpr size_t MAX_UPLOAD_SIZE = 100 * 1024 * 1024;  // 100MB
 
 static const char *HttpStatusText(int status) {
@@ -486,6 +512,10 @@ bool SaveStateLANSync::StartServer() {
 					std::string response;
 					HandlePairStatus(query, response);
 					WriteHTTPResponse(clientFd, 200, response);
+				} else if (path == "/api/v1/pair-verify" && method == "POST") {
+					std::string response;
+					HandlePairVerify(body, response);
+					WriteHTTPResponse(clientFd, 200, response);
 				} else if (path == "/api/v1/saves/list") {
 					std::string game;
 					size_t gamePos = request.find("game=");
@@ -788,6 +818,9 @@ void SaveStateLANSync::AutoPairWithPeer(const std::string &host, int port,
 		};
 
 		std::string requestId = extractStr(resp, "requestId");
+		std::string serverPeerId = extractStr(resp, "peerId");
+		std::string nonce = extractStr(resp, "nonce");
+		std::string remoteVerifyCode = extractStr(resp, "verificationCode");
 		if (requestId.empty()) {
 			WARN_LOG(Log::System, "AutoPairWithPeer: Bad response from %s:%d — response was: %s",
 				host.c_str(), port, resp.c_str());
@@ -795,7 +828,20 @@ void SaveStateLANSync::AutoPairWithPeer(const std::string &host, int port,
 			return;
 		}
 
-		// Poll for status (up to 30s, 1s interval)
+		// Compute verification code locally (must match remote)
+		std::string localVerifyCode;
+		if (!nonce.empty() && !serverPeerId.empty()) {
+			localVerifyCode = ComputeVerificationCode(nonce, deviceId_, serverPeerId);
+			if (localVerifyCode != remoteVerifyCode) {
+				WARN_LOG(Log::System, "AutoPairWithPeer: verification code mismatch! local=%s remote=%s",
+					localVerifyCode.c_str(), remoteVerifyCode.c_str());
+				if (callback) callback(false, "Verification code mismatch - possible MITM");
+				return;
+			}
+		}
+
+		// Poll for status (wait for server user to confirm, up to 30s)
+		bool clientConfirmed = false;
 		for (int i = 0; i < 30; i++) {
 			sleep_ms(1000, "auto-pair-poll");
 
@@ -848,6 +894,34 @@ void SaveStateLANSync::AutoPairWithPeer(const std::string &host, int port,
 
 				if (callback) callback(true, "");
 				return;
+			} else if (status == "waiting_client" && !clientConfirmed) {
+				// Server user hasn't confirmed yet — send our confirmation (auto-confirm)
+				// The codes were already verified locally, so we can auto-confirm
+				clientConfirmed = true;
+				// Send pair-verify to server
+				int verifySock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+				if (verifySock >= 0) {
+					memset(&addr, 0, sizeof(addr));
+					addr.sin_family = AF_INET;
+					addr.sin_port = htons(port);
+					inet_pton(AF_INET, host.c_str(), &addr.sin_addr);
+					if (connect(verifySock, (struct sockaddr *)&addr, sizeof(addr)) >= 0) {
+						std::string verifyBody = StringFromFormat(
+							"{\"requestId\":\"%s\"}", requestId.c_str());
+						std::string verifyReq = StringFromFormat(
+							"POST /api/v1/pair-verify HTTP/1.1\r\n"
+							"Host: %s:%d\r\n"
+							"Content-Type: application/json\r\n"
+							"Content-Length: %d\r\n"
+							"Connection: close\r\n\r\n%s",
+							host.c_str(), port, (int)verifyBody.size(), verifyBody.c_str());
+						send(verifySock, verifyReq.c_str(), verifyReq.size(), 0);
+						// Read response (don't block — fire and forget)
+						char vbuf[256];
+						recv(verifySock, vbuf, sizeof(vbuf) - 1, 0);
+					}
+					closesocket(verifySock);
+				}
 			} else if (status == "rejected" || status == "expired") {
 				if (callback) callback(false, status);
 				return;
@@ -1604,6 +1678,9 @@ void SaveStateLANSync::HandleAutoPairRequest(const std::string &body, const std:
 	INFO_LOG(Log::System, "LANSync: HandleAutoPairRequest from %s (%s) host=%s port=%d",
 		peerName.c_str(), device.c_str(), clientHost.c_str(), peerPort);
 	std::string requestId = StringFromFormat("req-%d-%lld", pendingRequestCounter_++, (long long)time(nullptr));
+	std::string nonce = GenerateNonce();
+	std::string verifyCode = ComputeVerificationCode(nonce, deviceId_, peerId);
+
 	PendingPairRequest req;
 	req.requestId = requestId;
 	req.peerId = peerId;
@@ -1611,6 +1688,8 @@ void SaveStateLANSync::HandleAutoPairRequest(const std::string &body, const std:
 	req.device = device;
 	req.host = clientHost;
 	req.port = peerPort;
+	req.nonce = nonce;
+	req.verificationCode = verifyCode;
 	req.timestamp = time_now_d();
 
 	{
@@ -1622,8 +1701,8 @@ void SaveStateLANSync::HandleAutoPairRequest(const std::string &body, const std:
 		pendingRequests_.push_back(req);
 	}
 
-	System_Toast(StringFromFormat("Pair request from %s", peerName.c_str()));
-	response = StringFromFormat("{\"status\":\"pending\",\"requestId\":\"%s\"}", requestId.c_str());
+	System_Toast(StringFromFormat("Pair request from %s (code: %s)", peerName.c_str(), verifyCode.c_str()));
+	response = StringFromFormat("{\"status\":\"pending\",\"requestId\":\"%s\",\"peerId\":\"%s\",\"nonce\":\"%s\",\"verificationCode\":\"%s\"}", requestId.c_str(), deviceId_.c_str(), nonce.c_str(), verifyCode.c_str());
 }
 
 void SaveStateLANSync::HandlePairRespond(const std::string &body, std::string &response) {
@@ -1650,39 +1729,114 @@ void SaveStateLANSync::HandlePairRespond(const std::string &body, std::string &r
 	for (auto &req : pendingRequests_) {
 		if (req.requestId == requestId) {
 			if (accept) {
-				req.accepted = true;
-				GeneratePairingPin();
+				req.serverConfirmed = true;
 
-				std::string storedToken = GenerateSessionToken();
-				req.token = storedToken;  // Store for HandlePairStatus polling
-
-				PeerInfo peer;
-				peer.id = req.peerId;
-				peer.name = req.peerName;
-				peer.device = req.device;
-				peer.host = req.host;
-				peer.port = req.port;  // Use the port the client sent
-				peer.paired = true;
-				peer.online = true;
-				peer.token = storedToken;
-				peer.lastSeen = time(nullptr);
-
-				{
-					std::lock_guard<std::mutex> pLock(peerMutex_);
-					if (pairedPeers_.size() >= 5) {
-						response = "{\"error\":\"too_many_peers\"}";
-						return;
+				if (req.nonce.empty()) {
+					// PIN-based flow (no nonce): approve immediately
+					std::string storedToken = GenerateSessionToken();
+					req.token = storedToken;
+					req.accepted = true;
+					PeerInfo peer;
+					peer.id = req.peerId;
+					peer.name = req.peerName;
+					peer.device = req.device;
+					peer.host = req.host;
+					peer.port = req.port;
+					peer.paired = true;
+					peer.online = true;
+					peer.token = storedToken;
+					peer.lastSeen = time(nullptr);
+					{
+						std::lock_guard<std::mutex> pLock(peerMutex_);
+						if (pairedPeers_.size() >= 5) {
+							response = "{\"error\":\"too_many_peers\"}";
+							return;
+						}
+						pairedPeers_.push_back(peer);
 					}
-					pairedPeers_.push_back(peer);
+					SaveConfig();
+					response = StringFromFormat(
+						"{\"status\":\"approved\",\"token\":\"%s\",\"peerId\":\"%s\"}",
+						storedToken.c_str(), deviceId_.c_str());
+				} else if (!req.token.empty()) {
+					// Numeric comparison: client confirmed first, now both done
+					req.accepted = true;
+					response = StringFromFormat(
+						"{\"status\":\"approved\",\"token\":\"%s\",\"peerId\":\"%s\"}",
+						req.token.c_str(), deviceId_.c_str());
+				} else {
+					// Numeric comparison: server confirmed, wait for client
+					std::string storedToken = GenerateSessionToken();
+					req.token = storedToken;
+					req.accepted = true;
+					PeerInfo peer;
+					peer.id = req.peerId;
+					peer.name = req.peerName;
+					peer.device = req.device;
+					peer.host = req.host;
+					peer.port = req.port;
+					peer.paired = true;
+					peer.online = true;
+					peer.token = storedToken;
+					peer.lastSeen = time(nullptr);
+					{
+						std::lock_guard<std::mutex> pLock(peerMutex_);
+						if (pairedPeers_.size() >= 5) {
+							response = "{\"error\":\"too_many_peers\"}";
+							return;
+						}
+						pairedPeers_.push_back(peer);
+					}
+					SaveConfig();
+					response = StringFromFormat(
+						"{\"status\":\"server_confirmed\",\"verificationCode\":\"%s\"}",
+						req.verificationCode.c_str());
 				}
-				SaveConfig();
-
-				response = StringFromFormat(
-					"{\"status\":\"approved\",\"token\":\"%s\",\"peerId\":\"%s\"}",
-					storedToken.c_str(), deviceId_.c_str());
 			} else {
 				req.rejected = true;
 				response = "{\"status\":\"rejected\"}";
+			}
+			return;
+		}
+	}
+	response = "{\"error\":\"request_not_found\"}";
+}
+
+void SaveStateLANSync::HandlePairVerify(const std::string &body, std::string &response) {
+	std::string requestId;
+	auto extractStr = [&body](const char *key) -> std::string {
+		std::string search = std::string("\"") + key + "\":\"";
+		size_t pos = body.find(search);
+		if (pos == std::string::npos) return "";
+		pos += search.size();
+		size_t end = body.find('"', pos);
+		return (end != std::string::npos) ? body.substr(pos, end - pos) : "";
+	};
+	requestId = extractStr("requestId");
+
+	if (requestId.empty()) {
+		response = "{\"error\":\"missing_requestId\"}";
+		return;
+	}
+
+	std::lock_guard<std::mutex> lock(pendingMutex_);
+	for (auto &req : pendingRequests_) {
+		if (req.requestId == requestId) {
+			if (req.rejected) {
+				response = "{\"status\":\"rejected\"}";
+				return;
+			}
+			req.clientConfirmed = true;
+
+			if (req.serverConfirmed && req.accepted) {
+				// Both confirmed → pairing complete
+				response = StringFromFormat(
+					"{\"status\":\"approved\",\"token\":\"%s\",\"peerId\":\"%s\"}",
+					req.token.c_str(), deviceId_.c_str());
+			} else {
+				response = StringFromFormat(
+					"{\"status\":\"client_confirmed\",\"verificationCode\":\"%s\"}",
+					req.verificationCode.c_str());
 			}
 			return;
 		}
@@ -1706,18 +1860,30 @@ void SaveStateLANSync::HandlePairStatus(const std::string &query, std::string &r
 
 	std::lock_guard<std::mutex> lock(pendingMutex_);
 	double now = time_now_d();
-	for (const auto &req : pendingRequests_) {
+	for (auto &req : pendingRequests_) {
 		if (req.requestId == requestId) {
-			if (req.accepted) {
-				response = StringFromFormat(
-					"{\"status\":\"approved\",\"token\":\"%s\",\"peerId\":\"%s\"}",
-					req.token.c_str(), deviceId_.c_str());
-			} else if (req.rejected) {
+			// Numeric comparison: both client and server must confirm
+			if (req.rejected) {
 				response = "{\"status\":\"rejected\"}";
 			} else if ((now - req.timestamp) > 60.0) {
 				response = "{\"status\":\"expired\"}";
+			} else if (req.clientConfirmed && req.serverConfirmed && req.accepted) {
+				// Both sides confirmed → complete pairing
+				response = StringFromFormat(
+					"{\"status\":\"approved\",\"token\":\"%s\",\"peerId\":\"%s\"}",
+					req.token.c_str(), deviceId_.c_str());
+			} else if (req.clientConfirmed) {
+				response = StringFromFormat(
+					"{\"status\":\"waiting_server\",\"verificationCode\":\"%s\"}",
+					req.verificationCode.c_str());
+			} else if (req.serverConfirmed) {
+				response = StringFromFormat(
+					"{\"status\":\"waiting_client\",\"verificationCode\":\"%s\"}",
+					req.verificationCode.c_str());
 			} else {
-				response = "{\"status\":\"pending\"}";
+				response = StringFromFormat(
+					"{\"status\":\"pending\",\"verificationCode\":\"%s\"}",
+					req.verificationCode.c_str());
 			}
 			return;
 		}

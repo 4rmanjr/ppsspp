@@ -124,9 +124,13 @@ public:
 		std::string host;
 		int port = 0;
 		std::string token;          // Auth token (set when accepted, returned on poll)
+		std::string nonce;          // Random nonce for numeric comparison
+		std::string verificationCode; // Computed 6-digit code shown to both users
 		double timestamp = 0;
 		bool accepted = false;
 		bool rejected = false;
+		bool clientConfirmed = false;  // Client user confirmed codes match
+		bool serverConfirmed = false;  // Server user confirmed codes match
 	};
 
 	using ProgressCallback = std::function<void(const SyncProgress &progress)>;
@@ -199,6 +203,7 @@ public:
 	void HandleAutoPairRequest(const std::string &body, const std::string &clientHost, std::string &response);
 	void HandlePairRespond(const std::string &body, std::string &response);
 	void HandlePairStatus(const std::string &query, std::string &response);
+	void HandlePairVerify(const std::string &body, std::string &response);
 	void HandleSaveList(const std::string &gameId, std::string &response);
 	void HandleSaveDownload(const std::string &gameId, int slot,
 	                        std::vector<uint8_t> &data);

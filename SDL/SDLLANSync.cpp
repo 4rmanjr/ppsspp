@@ -289,10 +289,16 @@ void SDLLANSyncUI::DrawPendingRequestsSection() {
 
 	ImGui::Separator();
 	ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.2f, 1.0f), "Pending Requests:");
-	ImGui::BeginChild("Pending", ImVec2(0, 80), true);
+	ImGui::BeginChild("Pending", ImVec2(0, 120), true);
 
 	for (const auto &req : pending) {
 		ImGui::Text("%s (%s) wants to pair", req.peerName.c_str(), req.device.c_str());
+		if (!req.verificationCode.empty()) {
+			ImGui::SameLine();
+			ImGui::TextColored(ImVec4(0.3f, 1.0f, 1.0f, 1.0f), " Code: %s", req.verificationCode.c_str());
+			ImGui::SameLine();
+			ImGui::TextDisabled("(verify this matches on both devices)");
+		}
 		ImGui::SameLine();
 		if (ImGui::SmallButton(StringFromFormat("Accept##%s", req.requestId.c_str()).c_str())) {
 			std::string body = StringFromFormat(

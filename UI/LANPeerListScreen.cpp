@@ -55,6 +55,9 @@ void LANPeerListScreen::CreatePopupContents(UI::ViewGroup *parent) {
 		for (const auto &req : pending_) {
 			auto *item = new LinearLayout(ORIENT_VERTICAL, new LinearLayoutParams(FILL_PARENT, WRAP_CONTENT, Margins(0, 4)));
 			std::string label = req.peerName + " wants to pair";
+			if (!req.verificationCode.empty()) {
+				label += "\nCode: " + req.verificationCode + " (verify on both devices)";
+			}
 			auto *text = item->Add(new TextView(label, ALIGN_LEFT | FLAG_WRAP_TEXT, false, new LinearLayoutParams(FILL_PARENT, WRAP_CONTENT)));
 			text->SetWordWrap();
 
