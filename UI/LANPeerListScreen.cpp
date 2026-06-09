@@ -14,6 +14,16 @@
 #include "Core/Config.h"
 #include "Core/SaveStateLANSync.h"
 
+void LANPeerListScreen::update() {
+	// Auto-refresh every 3 seconds
+	double now = time_now_d();
+	if (now - lastRefresh_ > 3.0) {
+		RefreshPeers();
+		RecreateViews();
+	}
+	UI::PopupScreen::update();
+}
+
 void LANPeerListScreen::CreatePopupContents(UI::ViewGroup *parent) {
 	using namespace UI;
 	auto n = GetI18NCategory(I18NCat::NETWORKING);

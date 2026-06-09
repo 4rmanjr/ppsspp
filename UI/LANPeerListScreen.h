@@ -15,6 +15,7 @@ public:
 
 protected:
 	void CreatePopupContents(UI::ViewGroup *parent) override;
+	void update() override;
 	void OnCompleted(DialogResult result) override;
 	UI::Size PopupWidth() const override { return 650; }
 	// Using default FillVertical() = false — popup wraps to content height, not full screen
