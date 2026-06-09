@@ -802,11 +802,26 @@ void SaveStateLANSync::AutoPairWithPeer(const std::string &host, int port,
 		send(sock, req.c_str(), req.size(), 0);
 
 		char buf[4096];
-		int n = recv(sock, buf, sizeof(buf) - 1, 0);
+		// Read response with loop to handle partial TCP reads
+		std::string resp;
+		int n;
+		while ((n = recv(sock, buf, sizeof(buf) - 1, 0)) > 0) {
+			buf[n] = '\0';
+			resp.append(buf, n);
+			size_t hdrEnd = resp.find("\r\n\r\n");
+			if (hdrEnd == std::string::npos) continue;
+			size_t clPos = resp.find("Content-Length:");
+			size_t contentLength = 0;
+			if (clPos != std::string::npos && clPos < hdrEnd) {
+				clPos += 15;
+				while (clPos < resp.size() && resp[clPos] == ' ') clPos++;
+				contentLength = strtoul(resp.c_str() + clPos, nullptr, 10);
+			}
+			size_t bodySize = resp.size() - hdrEnd - 4;
+			if (contentLength == 0 || bodySize >= contentLength) break;
+		}
 		closesocket(sock);
-		if (n <= 0) { if (callback) callback(false, "No response"); return; }
-		buf[n] = '\0';
-		std::string resp(buf, n);
+		if (resp.empty()) { if (callback) callback(false, "No response"); return; }
 
 		auto extractStr = [](const std::string &text, const char *key) -> std::string {
 			std::string search = std::string("\"") + key + "\":\"";
@@ -866,11 +881,25 @@ void SaveStateLANSync::AutoPairWithPeer(const std::string &host, int port,
 			send(pollSock, pollReq.c_str(), pollReq.size(), 0);
 
 			char pollBuf[1024];
-			int pollN = recv(pollSock, pollBuf, sizeof(pollBuf) - 1, 0);
+			std::string pollResp;
+			int pollN;
+			while ((pollN = recv(pollSock, pollBuf, sizeof(pollBuf) - 1, 0)) > 0) {
+				pollBuf[pollN] = '\0';
+				pollResp.append(pollBuf, pollN);
+				size_t hdrEnd = pollResp.find("\r\n\r\n");
+				if (hdrEnd == std::string::npos) continue;
+				size_t clPos = pollResp.find("Content-Length:");
+				size_t contentLength = 0;
+				if (clPos != std::string::npos && clPos < hdrEnd) {
+					clPos += 15;
+					while (clPos < pollResp.size() && pollResp[clPos] == ' ') clPos++;
+					contentLength = strtoul(pollResp.c_str() + clPos, nullptr, 10);
+				}
+				size_t bodySize = pollResp.size() - hdrEnd - 4;
+				if (contentLength == 0 || bodySize >= contentLength) break;
+			}
 			closesocket(pollSock);
 			if (pollN <= 0) continue;
-			pollBuf[pollN] = '\0';
-			std::string pollResp(pollBuf, pollN);
 
 			std::string status = extractStr(pollResp, "status");
 			if (status == "approved") {

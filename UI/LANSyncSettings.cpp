@@ -371,8 +371,8 @@ private:
 					running_ = false;
 					startBtn_->setEnabled(false);
 					pauseBtn_->setEnabled(false);
-					summaryLabel_->setText(QString("Done: %1 up, %2 down, %3 skipped")
-						.arg(r.uploaded).arg(r.downloaded).arg(r.skipped));
+					summaryLabel_->setText(QString("Done: %1 up, %2 down, %3 failed, %4 skipped")
+						.arg(r.uploaded).arg(r.downloaded).arg(r.failed).arg(r.skipped));
 				}, Qt::QueuedConnection);
 			}
 		);

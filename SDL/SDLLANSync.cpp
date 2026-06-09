@@ -105,8 +105,8 @@ void SDLLANSyncUI::DoStartSync(const std::string &peerId) {
 		},
 		[this](const SaveStateLANSync::SyncResult &r) {
 			if (r.success) {
-				slotLog_.push_back(StringFromFormat("Sync done: %d up, %d down, %d skipped",
-					r.uploaded, r.downloaded, r.skipped));
+				slotLog_.push_back(StringFromFormat("Sync done: %d up, %d down, %d failed, %d skipped",
+					r.uploaded, r.downloaded, r.failed, r.skipped));
 			} else {
 				slotLog_.push_back("Sync failed");
 			}
