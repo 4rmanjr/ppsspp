@@ -148,9 +148,28 @@ void SaveStateLANSync::JoinAllThreads() {
 }
 
 void SaveStateLANSync::Init() {
+	// Generate a deterministic fallback deviceId from hostname
 	deviceId_ = GenerateDeviceId();
 	PlatformKeyStore::Init();
 	LoadConfig();
+
+	// Try to load a persistent unique deviceId from key store.
+	// This ensures the deviceId stays the same across restarts (paired peers remain valid)
+	// while also being unique across devices even if hostname is identical (e.g. "localhost").
+	std::string storedId = PlatformKeyStore::Load("ppsspp-lansync-deviceid");
+	if (!storedId.empty()) {
+		deviceId_ = storedId;
+	} else {
+		// First run: generate a unique deviceId using hostname + random seed
+		char hostname[256] = {0};
+		gethostname(hostname, sizeof(hostname));
+		std::random_device rd;
+		std::mt19937_64 gen(rd());
+		std::uniform_int_distribution<uint64_t> dist;
+		std::string unique = StringFromFormat("%s-%016llx", hostname, (unsigned long long)dist(gen));
+		deviceId_ = ComputeSHA256(unique.c_str(), unique.size()).substr(0, 16);
+		PlatformKeyStore::Save("ppsspp-lansync-deviceid", deviceId_);
+	}
 
 	// Set device type based on platform
 #if PPSSPP_PLATFORM(ANDROID)
@@ -680,10 +699,21 @@ void SaveStateLANSync::PairWithPeer(const std::string &peerId, const std::string
 						if (tokenEnd != std::string::npos) {
 							std::string token = jsonBody.substr(tokenPos, tokenEnd - tokenPos);
 
-							// Save peer
+							// Extract server's deviceId from peerId field in response
+							std::string serverPeerId;
+							size_t pidPos = jsonBody.find("\"peerId\":\"");
+							if (pidPos != std::string::npos) {
+								pidPos += 10;
+								size_t pidEnd = jsonBody.find('"', pidPos);
+								if (pidEnd != std::string::npos)
+									serverPeerId = jsonBody.substr(pidPos, pidEnd - pidPos);
+							}
+
+							// Save peer — use server's deviceId as ID (matches discovery format)
 							std::lock_guard<std::mutex> lock(peerMutex_);
 							PeerInfo peer;
-							peer.id = peerId; peer.token = token;
+							peer.id = serverPeerId.empty() ? peerId : serverPeerId;
+							peer.token = token;
 							peer.paired = true; peer.online = true;
 							peer.host = host; peer.port = port;
 							peer.lastSeen = time(nullptr);
@@ -713,8 +743,8 @@ void SaveStateLANSync::AutoPairWithPeer(const std::string &host, int port,
 	}
 	AddBackgroundThread(std::thread([this, host, port, callback]() {
 		std::string body = StringFromFormat(
-			"{\"id\":\"%s\",\"name\":\"%s\",\"device\":\"Android\",\"port\":%d}",
-			deviceId_.c_str(), deviceName_.c_str(), serverPort_);
+			"{\"id\":\"%s\",\"name\":\"%s\",\"device\":\"%s\",\"port\":%d}",
+			deviceId_.c_str(), deviceName_.c_str(), deviceType_.c_str(), serverPort_);
 
 		// POST /api/v1/pair-request
 		int sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
@@ -748,16 +778,16 @@ void SaveStateLANSync::AutoPairWithPeer(const std::string &host, int port,
 		buf[n] = '\0';
 		std::string resp(buf, n);
 
-		auto extractStr = [&resp](const char *key) -> std::string {
+		auto extractStr = [](const std::string &text, const char *key) -> std::string {
 			std::string search = std::string("\"") + key + "\":\"";
-			size_t pos = resp.find(search);
+			size_t pos = text.find(search);
 			if (pos == std::string::npos) return "";
 			pos += search.size();
-			size_t end = resp.find('"', pos);
-			return (end != std::string::npos) ? resp.substr(pos, end - pos) : "";
+			size_t end = text.find('"', pos);
+			return (end != std::string::npos) ? text.substr(pos, end - pos) : "";
 		};
 
-		std::string requestId = extractStr("requestId");
+		std::string requestId = extractStr(resp, "requestId");
 		if (requestId.empty()) {
 			WARN_LOG(Log::System, "AutoPairWithPeer: Bad response from %s:%d — response was: %s",
 				host.c_str(), port, resp.c_str());
@@ -796,10 +826,10 @@ void SaveStateLANSync::AutoPairWithPeer(const std::string &host, int port,
 			pollBuf[pollN] = '\0';
 			std::string pollResp(pollBuf, pollN);
 
-			std::string status = extractStr("status");
+			std::string status = extractStr(pollResp, "status");
 			if (status == "approved") {
-				std::string token = extractStr("token");
-				std::string peerId = extractStr("peerId");
+				std::string token = extractStr(pollResp, "token");
+				std::string peerId = extractStr(pollResp, "peerId");
 
 				PeerInfo peer;
 				peer.id = peerId;
@@ -929,14 +959,17 @@ SaveStateLANSync::SyncResult SaveStateLANSync::DoSync(const PeerInfo &peer, Save
 		// Create/update metadata
 		Path ppstPath = saveDir / name;
 		std::string fileData;
-		if (File::ReadBinaryFileToString(ppstPath, &fileData)) {
-			SaveStateSyncMetadata meta;
-			if (!SaveStateSyncMetadata::ReadFromFile(ppstPath, meta)) {
-				meta.hash = ComputeSHA256(fileData.data(), fileData.size());
-				meta.lastSyncTime = 0;
-				meta.deviceId = deviceId_;
-			}
-			meta.WriteToFile(ppstPath);
+		if (File::ReadBinaryFileToString(ppstPath, &fileData)) {					SaveStateSyncMetadata meta;
+					if (!SaveStateSyncMetadata::ReadFromFile(ppstPath, meta)) {
+						meta.hash = ComputeSHA256(fileData.data(), fileData.size());
+						meta.lastSyncTime = time(nullptr);
+						meta.deviceId = deviceId_;
+						// Initialize HLC so DetectConflict can compare meaningfully (fix for zero-HLC skip)
+						meta.hlc = meta.hlc.Increment(deviceId_);
+						meta.parentHlc = meta.hlc;
+						meta.fileSize = (int64_t)f.size;
+					}
+					meta.WriteToFile(ppstPath);
 		}
 	}
 
@@ -949,15 +982,41 @@ SaveStateLANSync::SyncResult SaveStateLANSync::DoSync(const PeerInfo &peer, Save
 		peer.host.c_str(), peer.port, peer.token.c_str());
 	send(sock, request.c_str(), request.size(), 0);
 
-	char buf[65536];
-	int n = recv(sock, buf, sizeof(buf) - 1, 0);
+	// Read response with loop to handle partial reads
+	std::string response;
+	{
+		char buf[65536];
+		size_t contentLength = 0;
+		bool headersParsed = false;
+		for (int i = 0; i < 200; i++) {
+			int n = recv(sock, buf, sizeof(buf) - 1, 0);
+			if (n <= 0) break;
+			buf[n] = '\0';
+			response.append(buf, n);
+			if (!headersParsed) {
+				size_t hdrEnd = response.find("\r\n\r\n");
+				if (hdrEnd != std::string::npos) {
+					headersParsed = true;
+					// Parse Content-Length from response headers
+					size_t clPos = response.find("Content-Length:");
+					if (clPos != std::string::npos && clPos < hdrEnd) {
+						clPos += 15;
+						while (clPos < response.size() && response[clPos] == ' ') clPos++;
+						contentLength = strtoul(response.c_str() + clPos, nullptr, 10);
+					}
+				}
+			}
+			if (headersParsed) {
+				size_t bodyReceived = response.size() - response.find("\r\n\r\n") - 4;
+				if (bodyReceived >= contentLength) break;
+			}
+		}
+	}
 	closesocket(sock);
 
-	if (n <= 0) { result.success = false; return result; }
-	buf[n] = '\0';
+	if (response.empty()) { result.success = false; return result; }
 
 	// Parse response: extract body after \r\n\r\n
-	std::string response(buf, n);
 	size_t bodyStart = response.find("\r\n\r\n");
 	if (bodyStart == std::string::npos) { result.success = false; return result; }
 	std::string jsonBody = response.substr(bodyStart + 4);
@@ -991,15 +1050,18 @@ SaveStateLANSync::SyncResult SaveStateLANSync::DoSync(const PeerInfo &peer, Save
 			}
 			if (total > 0) {
 				std::string resp((char *)buf.data(), total);
-				size_t bStart = resp.find("\r\n\r\n");
-				if (bStart != std::string::npos) {
-					bStart += 4;
-					std::vector<uint8_t> fd(buf.begin() + bStart, buf.begin() + total);
-					Path tmp = path.WithExtraExtension(".tmp");
-					if (File::WriteDataToFile(false, fd.data(), fd.size(), tmp)) {
-						File::Rename(tmp, path);
-						ok = true;
-					} else { File::Delete(tmp); }
+				// Check HTTP status before saving
+				if (resp.find("200 OK") != std::string::npos) {
+					size_t bStart = resp.find("\r\n\r\n");
+					if (bStart != std::string::npos) {
+						bStart += 4;
+						std::vector<uint8_t> fd(buf.begin() + bStart, buf.begin() + total);
+						Path tmp = path.WithExtraExtension(".tmp");
+						if (File::WriteDataToFile(false, fd.data(), fd.size(), tmp)) {
+							File::Rename(tmp, path);
+							ok = true;
+						} else { File::Delete(tmp); }
+					}
 				}
 			}
 		}
