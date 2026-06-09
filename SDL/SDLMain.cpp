@@ -234,7 +234,7 @@ void System_Toast(std::string_view text) {
 	std::wstring str = ConvertUTF8ToWString(text);
 	MessageBox(0, str.c_str(), L"Toast!", MB_ICONINFORMATION);
 #else
-	fprintf(stderr, "%*.s", (int)text.length(), text.data());
+	fprintf(stderr, "%*.s\n", (int)text.length(), text.data());
 #endif
 }
 

@@ -1197,7 +1197,7 @@ void GameSettingsScreen::CreateNetworkingSettings(UI::ViewGroup *networkingSetti
 	syncBtn->OnClick.Add([](UI::EventParams &) {
 #if defined(USING_QT_UI)
 		LANSyncQtUI::ShowProgress();
-#elif PPSSPP_PLATFORM(ANDROID)
+#elif PPSSPP_PLATFORM(ANDROID) || defined(SDL)
 		auto &core = SaveStateLANSync::Instance();
 		auto peers = core.GetDiscoveredPeers();
 		bool found = false;
@@ -1207,18 +1207,19 @@ void GameSettingsScreen::CreateNetworkingSettings(UI::ViewGroup *networkingSetti
 			core.SyncWithPeer(p.id, SaveStateLANSync::SyncDirection::BIDIRECTIONAL,
 				nullptr,
 				[](const SaveStateLANSync::SyncResult &result) {
-					if (result.success)
+					if (result.success) {
 						System_Toast(StringFromFormat("Sync OK: %d up, %d down", result.uploaded, result.downloaded));
-					else
+						INFO_LOG(Log::System, "Sync OK: %d up, %d down", result.uploaded, result.downloaded);
+					} else {
 						System_Toast("Sync failed");
+						INFO_LOG(Log::System, "Sync failed");
+					}
 				});
 			}
 		}
-		if (!found)
+		if (!found) {
 			System_Toast("No online paired peers");
-#elif defined(SDL)
-		if (g_LANSyncUI) {
-			g_LANSyncUI->OpenSettings();  // This will open the settings, user can then click Sync Now
+			INFO_LOG(Log::System, "Sync: No online paired peers");
 		}
 #endif
 	});

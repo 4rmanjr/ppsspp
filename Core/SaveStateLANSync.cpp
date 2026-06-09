@@ -989,15 +989,16 @@ SaveStateLANSync::SyncResult SaveStateLANSync::DoSync(const PeerInfo &peer, Save
 	};
 
 	auto uploadSave = [&](const std::string &gid, int sl, const std::string &data, const char *ext = "ppst") -> bool {
-		std::string body = StringFromFormat(
+		// Build headers separately from body (body may contain null bytes)
+		std::string header = StringFromFormat(
 			"POST /api/v1/saves/%s_%d.%s HTTP/1.1\r\n"
 			"Host: %s:%d\r\n"
 			"Authorization: Bearer %s\r\n"
 			"Content-Type: application/octet-stream\r\n"
 			"Content-Length: %d\r\n"
-			"Connection: close\r\n\r\n%s",
+			"Connection: close\r\n\r\n",
 			gid.c_str(), sl, ext, peer.host.c_str(), peer.port, peer.token.c_str(),
-			(int)data.size(), data.c_str());
+			(int)data.size());
 		int sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 		if (sock < 0) return false;
 		struct sockaddr_in addr;
@@ -1007,7 +1008,10 @@ SaveStateLANSync::SyncResult SaveStateLANSync::DoSync(const PeerInfo &peer, Save
 		inet_pton(AF_INET, peer.host.c_str(), &addr.sin_addr);
 		bool ok = false;
 		if (connect(sock, (struct sockaddr *)&addr, sizeof(addr)) >= 0) {
-			send(sock, body.c_str(), body.size(), 0);
+			// Send headers first, then binary body separately (to preserve null bytes)
+			send(sock, header.c_str(), header.size(), 0);
+			send(sock, data.data(), data.size(), 0);
+			// Read response
 			char resp[256];
 			int n = recv(sock, resp, sizeof(resp) - 1, 0);
 			if (n > 0) { resp[n] = '\0'; ok = (strstr(resp, "201") != nullptr); }
@@ -1152,6 +1156,9 @@ SaveStateLANSync::SyncResult SaveStateLANSync::DoSync(const PeerInfo &peer, Save
 		pos = end;
 	}
 
+	INFO_LOG(Log::System, "LANSync DoSync: %d local games, %d remote entries",
+		(int)localGames.size(), syncedCount);
+
 	// Upload local saves that don't exist on remote
 	for (const auto &lg : localGames) {
 		for (int slot : lg.second) {
@@ -1159,15 +1166,22 @@ SaveStateLANSync::SyncResult SaveStateLANSync::DoSync(const PeerInfo &peer, Save
 				Path localPath = saveDir / StringFromFormat("%s_%d.ppst", lg.first.c_str(), slot);
 				std::string localData;
 				if (File::ReadBinaryFileToString(localPath, &localData)) {
-					if (uploadSave(lg.first, slot, localData))
+					INFO_LOG(Log::System, "LANSync DoSync: uploading %s_%d.ppst (%d bytes)",
+						lg.first.c_str(), slot, (int)localData.size());
+					if (uploadSave(lg.first, slot, localData)) {
 						result.uploaded++;
-					else
+						INFO_LOG(Log::System, "LANSync DoSync: upload OK");
+					} else {
 						result.failed++;
+						INFO_LOG(Log::System, "LANSync DoSync: upload FAILED");
+					}
 				}
 			}
 		}
 	}
 
+	INFO_LOG(Log::System, "LANSync DoSync: result: %d up, %d down, %d failed, %d skipped",
+		result.uploaded, result.downloaded, result.failed, result.skipped);
 	result.success = true;
 	return result;
 }
@@ -1618,7 +1632,9 @@ std::vector<SaveStateLANSync::PendingPairRequest> SaveStateLANSync::GetPendingRe
 	double now = time_now_d();
 	pendingRequests_.erase(
 		std::remove_if(pendingRequests_.begin(), pendingRequests_.end(),
-			[now](const PendingPairRequest &r) { return (now - r.timestamp) > 60.0 && !r.accepted; }),
+			[now](const PendingPairRequest &r) {
+				return r.accepted || r.rejected || ((now - r.timestamp) > 60.0);
+			}),
 		pendingRequests_.end());
 	return pendingRequests_;
 }
