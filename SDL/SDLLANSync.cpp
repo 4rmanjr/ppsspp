@@ -167,41 +167,89 @@ void SDLLANSyncUI::DrawSettingsWindow(bool *open) {
 	ImGui::BeginChild("Peers", ImVec2(0, 100), true);
 
 	auto peers = core.GetDiscoveredPeers();
-	bool hasPeers = false;
+	bool hasPaired = false;
 	for (const auto &peer : peers) {
 		if (!peer.paired) continue;
-		hasPeers = true;
+		hasPaired = true;
 
-		const char *status = peer.online ? "Online" : "Offline";
-		ImVec4 color = peer.online ? ImVec4(0.3f, 1.0f, 0.3f, 1.0f) : ImVec4(0.6f, 0.6f, 0.6f, 1.0f);
-		ImGui::TextColored(color, "%s %s (%s)", peer.online ? "O" : "X", peer.name.c_str(), status);
+		const char *icon = peer.device == "Android" ? "\xf3\xcf" : "\xf1\x90";  // FontAwesome phone/laptop
+		const char *statusIcon = peer.online ? "\xe2\x9c\x93" : "\xe2\x9c\x97";  // checkmark/cross
+		ImVec4 statusColor = peer.online ? ImVec4(0.3f, 1.0f, 0.3f, 1.0f) : ImVec4(1.0f, 0.4f, 0.4f, 1.0f);
+		ImVec4 nameColor = peer.online ? ImVec4(1.0f, 1.0f, 1.0f, 1.0f) : ImVec4(0.5f, 0.5f, 0.5f, 1.0f);
+
+		ImGui::TextColored(statusColor, " %s", statusIcon);
+		ImGui::SameLine();
+		ImGui::TextColored(nameColor, "%s", peer.name.c_str());
+		ImGui::SameLine();
+		ImGui::TextDisabled("(%s)", peer.device.c_str());
+		ImGui::SameLine();
+		ImGui::TextColored(statusColor, "%s", peer.online ? "Online" : "Offline");
 		ImGui::SameLine();
 		if (ImGui::SmallButton(StringFromFormat("Unpair##%s", peer.id.c_str()).c_str())) {
 			core.UnpairPeer(peer.id);
 		}
+		if (peer.online) {
+			ImGui::SameLine();
+			if (ImGui::SmallButton(StringFromFormat("Sync##%s", peer.id.c_str()).c_str())) {
+				StartSync(peer.id);
+			}
+		}
 	}
-	if (!hasPeers) {
+	if (!hasPaired) {
 		ImGui::TextDisabled("No paired devices");
 	}
 
 	ImGui::EndChild();
 
+	ImGui::Separator();
+
+	// Discovered (unpaired) devices
+	ImGui::Text("Discovered Devices:");
+	ImGui::BeginChild("DiscoveredPeers", ImVec2(0, 80), true);
+
+	bool hasUnpaired = false;
+	for (const auto &peer : peers) {
+		if (peer.paired) continue;
+		hasUnpaired = true;
+
+		const char *icon = peer.device == "Android" ? "\xf3\xcf" : "\xf1\x90";
+		ImGui::TextColored(ImVec4(0.5f, 0.7f, 1.0f, 1.0f), " %s", "\xe2\x97\x8b");  // empty circle
+		ImGui::SameLine();
+		ImGui::Text("%s", peer.name.c_str());
+		ImGui::SameLine();
+		ImGui::TextDisabled("(%s) %s:%d", peer.device.c_str(), peer.host.c_str(), peer.port);
+		ImGui::SameLine();
+		if (ImGui::SmallButton(StringFromFormat("Pair##%s", peer.id.c_str()).c_str())) {
+			SaveStateLANSync::Instance().AutoPairWithPeer(peer.host, peer.port,
+				[](bool success, const std::string &error) {
+					if (success)
+						INFO_LOG(Log::System, "ImGui: Pair request sent to peer");
+					else
+						INFO_LOG(Log::System, "ImGui: Pair failed: %s", error.c_str());
+				});
+		}
+	}
+	if (!hasUnpaired) {
+		ImGui::TextDisabled("No new devices found");
+	}
+
+	ImGui::EndChild();
+
 	// Action buttons
-	if (ImGui::Button("Pair New Device", ImVec2(150, 30))) {
+	if (ImGui::Button("Pair Manually", ImVec2(150, 30))) {
 		OpenPairing();
 	}
 	ImGui::SameLine();
-	if (ImGui::Button("Sync Now", ImVec2(120, 30))) {
-		// Start sync - will show warning if large saves detected
-		if (!cachedPeers_.empty()) {
-			for (const auto &p : cachedPeers_) {
-				if (p.paired && p.online) {
-					StartSync(p.id);
-					break;
-				}
+	if (ImGui::Button("Sync All", ImVec2(120, 30))) {
+		for (const auto &p : cachedPeers_) {
+			if (p.paired && p.online) {
+				StartSync(p.id);
 			}
 		}
 	}
+
+	// Pending requests section (shown inline in settings)
+	DrawPendingRequestsSection();
 
 	// Show large save warning if triggered
 	if (showLargeSaveWarning_) {
@@ -213,24 +261,17 @@ void SDLLANSyncUI::DrawSettingsWindow(bool *open) {
 	ImGui::End();
 }
 
-// ==================== Pairing Dialog ====================
+// ==================== Pairing Dialog (manual entry only) ====================
 
 void SDLLANSyncUI::DrawPairingDialog(bool *open) {
 	if (!*open) return;
 
-	ImGui::SetNextWindowSize(ImVec2(420, 420), ImGuiCond_FirstUseEver);
-	if (!ImGui::Begin("Pair New Device", open, ImGuiWindowFlags_NoCollapse)) {
+	ImGui::SetNextWindowSize(ImVec2(420, 200), ImGuiCond_FirstUseEver);
+	if (!ImGui::Begin("Manual Pair", open, ImGuiWindowFlags_NoCollapse)) {
 		ImGui::End();
 		return;
 	}
 
-	// Pending requests (Accept/Reject for incoming pair requests)
-	DrawPendingRequestsSection();
-
-	DrawAutoDiscoverSection();
-
-	ImGui::Separator();
-	ImGui::Text("Or enter manually:");
 	DrawManualEntrySection();
 
 	if (awaitingPIN_) {
