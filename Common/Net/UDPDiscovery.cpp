@@ -82,6 +82,10 @@ bool Announcer::Start(const PeerInfo &info, ErrorCallback onError) {
 	if (running_) return false;
 
 	peerId_ = info.id;
+	peerName_ = info.name;
+	peerDevice_ = info.device;
+	peerFingerprint_ = info.certFingerprint;
+	peerPort_ = info.port;
 	onError_ = std::move(onError);
 
 	// Try ports BASE_DISCOVERY_PORT through MAX_DISCOVERY_PORT
@@ -132,7 +136,10 @@ void Announcer::Stop() {
 void Announcer::AnnounceLoop() {
 	PeerInfo payloadInfo;
 	payloadInfo.id = peerId_;
-	// Note: selfInfo_ would be set externally in full implementation
+	payloadInfo.name = peerName_;
+	payloadInfo.device = peerDevice_;
+	payloadInfo.port = peerPort_;
+	payloadInfo.certFingerprint = peerFingerprint_;
 
 	int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
 	if (sock < 0) return;

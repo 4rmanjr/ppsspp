@@ -145,6 +145,8 @@
 #if PPSSPP_PLATFORM(ANDROID)
 #include "android/jni/app-android.h"
 #include "android/jni/AndroidLANSync.h"
+#elif !defined(MOBILE_DEVICE)
+#include "SDL/LinuxLANSync.h"
 #endif
 
 #if PPSSPP_ARCH(ARM) && defined(__ANDROID__)
@@ -560,6 +562,9 @@ void NativeInit(int argc, const char *argv[], const char *savegame_dir, const ch
 		// Though it's not many platforms that'll land us here.
 		g_Config.currentDirectory = Path(".");
 	}
+
+	// Initialize LAN sync (desktop SDL/Qt)
+	GetLinuxLANSync().Init();
 #endif
 
 	if (g_Config.currentDirectory.empty()) {
@@ -1609,6 +1614,9 @@ void NativeShutdown() {
 
 #if PPSSPP_PLATFORM(ANDROID)
 	AndroidLANSync::Instance().Shutdown();
+#endif
+#if (PPSSPP_PLATFORM(LINUX) || PPSSPP_PLATFORM(MAC)) && !PPSSPP_PLATFORM(ANDROID)
+	GetLinuxLANSync().Shutdown();
 #endif
 	INFO_LOG(Log::System, "NativeShutdown end");
 }

@@ -59,6 +59,10 @@ private:
 	void AnnounceLoop();
 
 	std::string peerId_;
+	std::string peerName_;
+	std::string peerDevice_;
+	std::string peerFingerprint_;
+	int peerPort_ = 0;
 	int listenPort_ = 0;
 	bool running_ = false;
 	ErrorCallback onError_;

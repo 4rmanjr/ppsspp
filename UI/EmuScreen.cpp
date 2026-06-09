@@ -1884,9 +1884,7 @@ void EmuScreen::runImDebugger() {
 
 #if !defined(MOBILE_DEVICE)
 			// Initialize LAN Sync UI (desktop SDL only)
-			if (g_Config.lanSync.bEnabled) {
-				new SDLLANSyncUI();
-			}
+			new SDLLANSyncUI();
 #endif
 
 			// Read the TTF font
@@ -1957,7 +1955,7 @@ void EmuScreen::renderImDebugger() {
 
 #if !defined(MOBILE_DEVICE)
 	// Render LAN Sync UI if enabled (desktop SDL only)
-	if (g_Config.lanSync.bEnabled && g_LANSyncUI) {
+	if (g_LANSyncUI) {
 		Draw::DrawContext *draw = screenManager()->getDrawContext();
 		if (PSP_IsInited()) {
 			g_LANSyncUI->DrawSettingsWindow(&g_LANSyncUI->settingsOpen_);
