@@ -34,5 +34,6 @@ public:
 
 private:
 	AndroidLANSync() = default;
+	bool enabled_ = false;
 	std::string deviceName_;
 };

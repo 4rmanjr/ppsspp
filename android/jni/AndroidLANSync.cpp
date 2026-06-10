@@ -154,6 +154,12 @@ static void CallJavaRegisterService(const std::string &name, int port,
 	scope.env->DeleteLocalRef(mapClass);
 }
 
+static void CallJavaUnregisterService() {
+	JNIScope scope;
+	if (!scope || !g_lanSyncClass || !g_method_unregisterService) return;
+	scope.env->CallStaticVoidMethod(g_lanSyncClass, g_method_unregisterService);
+}
+
 static void CallJavaDiscoverServices() {
 	JNIScope scope;
 	if (!scope || !g_lanSyncClass || !g_method_discoverServices) return;
@@ -327,6 +333,8 @@ void AndroidLANSync::Shutdown() {
 }
 
 bool AndroidLANSync::Enable(const std::string &deviceName) {
+	if (enabled_) return true;  // Already enabled, don't double-register
+
 	deviceName_ = deviceName;
 
 	auto &core = SaveStateLANSync::Instance();
@@ -352,6 +360,7 @@ bool AndroidLANSync::Enable(const std::string &deviceName) {
 	CallJavaStartForeground("PPSSPP LAN Sync", 100);
 
 	INFO_LOG(Log::System, "AndroidLANSync: enabled (Phase 3 full)");
+	enabled_ = true;
 	return true;
 }
 
@@ -359,9 +368,11 @@ void AndroidLANSync::Disable() {
 	auto &core = SaveStateLANSync::Instance();
 
 	CallJavaStopDiscovery();
+	CallJavaUnregisterService();  // Clean up mDNS registration
 	CallJavaStopForeground();
 	core.StopServer();
 	core.StopDiscovery();
+	enabled_ = false;
 }
 
 void AndroidLANSync::StartQRScan(std::function<void(const std::string &result)> callback) {
