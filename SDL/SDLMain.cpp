@@ -234,7 +234,7 @@ void System_Toast(std::string_view text) {
 	std::wstring str = ConvertUTF8ToWString(text);
 	MessageBox(0, str.c_str(), L"Toast!", MB_ICONINFORMATION);
 #else
-	fprintf(stderr, "%*.s\n", (int)text.length(), text.data());
+	fprintf(stderr, "%.*s\n", (int)text.length(), text.data());
 #endif
 }
 
@@ -1418,6 +1418,9 @@ static int printUsage(const char *progname)
 #undef main
 #endif
 int main(int argc, char *argv[]) {
+	// Enable log output as early as possible so startup errors are visible.
+	g_logManager.EnableOutput(LogOutput::Stdio);
+
 	for (int i = 1; i < argc; i++) {
 		if (!strcmp(argv[i], "--help") || !strcmp(argv[i], "-h"))
 			return printUsage(argv[0]);
@@ -1428,8 +1431,6 @@ int main(int argc, char *argv[]) {
 	}
 
 	TimeInit();
-
-	g_logManager.EnableOutput(LogOutput::Stdio);
 
 #ifdef HAVE_LIBNX
 	socketInitializeDefault();

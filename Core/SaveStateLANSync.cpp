@@ -1006,10 +1006,12 @@ void SaveStateLANSync::SyncWithPeer(const std::string &peerId, SyncDirection dir
 		for (auto &p : pairedPeers_) { if (p.id == peerId && p.online) { target = p; break; } }
 	}
 	if (target.id.empty()) {
+		fprintf(stderr, "SyncWithPeer: peer not found or offline (id=%s)\n", peerId.c_str());
 		if (onDone) { SyncResult r; r.success = false; onDone(r); }
 		return;
 	}
 
+	fprintf(stderr, "SyncWithPeer: starting sync with %s (%s:%d)\n", target.id.c_str(), target.host.c_str(), target.port);
 	syncStatus_ = SyncStatus::SYNCING;
 	syncCancelled_ = false;
 
@@ -1039,11 +1041,12 @@ void SaveStateLANSync::SyncWithPeer(const std::string &peerId, SyncDirection dir
 }
 
 SaveStateLANSync::SyncResult SaveStateLANSync::DoSync(const PeerInfo &peer, SaveStateLANSync::ProgressCallback onProgress) {
+	fprintf(stderr, "DoSync: START peer=%s:%d\n", peer.host.c_str(), peer.port);
 	SyncResult result;
 
 	// Connect to peer
 	int sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-	if (sock < 0) { result.success = false; return result; }
+	if (sock < 0) { fprintf(stderr, "DoSync: socket() failed\n"); result.success = false; return result; }
 
 	struct sockaddr_in addr;
 	memset(&addr, 0, sizeof(addr));
@@ -1052,13 +1055,17 @@ SaveStateLANSync::SyncResult SaveStateLANSync::DoSync(const PeerInfo &peer, Save
 	inet_pton(AF_INET, peer.host.c_str(), &addr.sin_addr);
 
 	if (connect(sock, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
+		fprintf(stderr, "DoSync: connect() failed\n");
 		closesocket(sock); result.success = false; return result;
 	}
+	fprintf(stderr, "DoSync: connected OK, scanning local dir...\n");
 
 	// Scan local savestate directory for all games
 	Path saveDir = GetSysDirectory(DIRECTORY_SAVESTATE);
 	std::vector<File::FileInfo> files;
-	File::GetFilesInDir(saveDir, &files, ".ppst");
+	File::GetFilesInDir(saveDir, &files, "ppst");
+
+	fprintf(stderr, "DoSync: found %d local .ppst files in %s\n", (int)files.size(), saveDir.c_str());
 
 	// Group by game prefix
 	std::map<std::string, std::vector<int>> localGames;
@@ -1076,12 +1083,19 @@ SaveStateLANSync::SyncResult SaveStateLANSync::DoSync(const PeerInfo &peer, Save
 		// Create/update metadata
 		Path ppstPath = saveDir / name;
 		std::string fileData;
-		if (File::ReadBinaryFileToString(ppstPath, &fileData)) {					SaveStateSyncMetadata meta;
-					if (!SaveStateSyncMetadata::ReadFromFile(ppstPath, meta)) {
-						meta.hash = ComputeSHA256(fileData.data(), fileData.size());
+		if (File::ReadBinaryFileToString(ppstPath, &fileData)) {
+					SaveStateSyncMetadata meta;
+					std::string currentHash = ComputeSHA256(fileData.data(), fileData.size());
+					bool hadMeta = SaveStateSyncMetadata::ReadFromFile(ppstPath, meta);
+					bool hashChanged = !hadMeta || meta.hash != currentHash;
+					if (!hadMeta || hashChanged) {
+						// New file or file changed: recompute metadata
+						if (hashChanged) {
+							fprintf(stderr, "DoSync: hash changed for %s, updating metadata\n", name.c_str());
+						}
+						meta.hash = currentHash;
 						meta.lastSyncTime = time(nullptr);
 						meta.deviceId = deviceId_;
-						// Initialize HLC so DetectConflict can compare meaningfully (fix for zero-HLC skip)
 						meta.hlc = meta.hlc.Increment(deviceId_);
 						meta.parentHlc = meta.hlc;
 						meta.fileSize = (int64_t)f.size;
@@ -1131,12 +1145,13 @@ SaveStateLANSync::SyncResult SaveStateLANSync::DoSync(const PeerInfo &peer, Save
 	}
 	closesocket(sock);
 
-	if (response.empty()) { result.success = false; return result; }
+	if (response.empty()) { fprintf(stderr, "DoSync: empty response from peer\n"); result.success = false; return result; }
 
 	// Parse response: extract body after \r\n\r\n
 	size_t bodyStart = response.find("\r\n\r\n");
-	if (bodyStart == std::string::npos) { result.success = false; return result; }
+	if (bodyStart == std::string::npos) { fprintf(stderr, "DoSync: no header/body separator\n"); result.success = false; return result; }
 	std::string jsonBody = response.substr(bodyStart + 4);
+	fprintf(stderr, "DoSync: remote save list body (%d bytes): %.200s\n", (int)jsonBody.size(), jsonBody.c_str());
 
 	// Helper lambdas for single save transfer (defined outside while loop for scope)
 	auto downloadSave = [&](const Path &path, const std::string &gid, int sl, const char *ext = "ppst") -> bool {
@@ -1964,7 +1979,7 @@ std::vector<SaveStateLANSync::PendingPairRequest> SaveStateLANSync::GetPendingRe
 void SaveStateLANSync::HandleSaveList(const std::string &gameId, std::string &response) {
 	Path saveDir = GetSysDirectory(DIRECTORY_SAVESTATE);
 	std::vector<File::FileInfo> files;
-	File::GetFilesInDir(saveDir, &files, ".ppst");
+	File::GetFilesInDir(saveDir, &files, "ppst");
 
 	response = "[";
 	bool first = true;

@@ -27,7 +27,7 @@
 #include <avahi-common/simple-watch.h>
 #include <avahi-common/error.h>
 #include <avahi-common/malloc.h>
-#include <avahi-common/strlist.h>
+#include <avahi-common/strlst.h>
 
 #define MDNS_USE_AVAHI 1
 #elif PPSSPP_PLATFORM(MAC)
