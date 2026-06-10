@@ -1249,6 +1249,44 @@ SaveStateLANSync::SyncResult SaveStateLANSync::DoSync(const PeerInfo &peer, Save
 		return HLC::FromJSON(jsonBody.substr(p, end - p));
 	};
 
+	// Count remote entries for progress — first pass: collect game/slot pairs
+	std::set<std::pair<std::string,int>> remoteSet;
+	size_t tmpPos = 0;
+	int remoteCount = 0;
+	while ((tmpPos = jsonBody.find("\"gameId\":\"", tmpPos)) != std::string::npos) {
+		tmpPos += 10;
+		size_t gEnd = jsonBody.find('"', tmpPos);
+		if (gEnd == std::string::npos) { remoteCount++; break; }
+		std::string gid = jsonBody.substr(tmpPos, gEnd - tmpPos);
+		// Find slot
+		size_t slPos = jsonBody.find("\"slot\":", gEnd);
+		if (slPos == std::string::npos) { remoteCount++; continue; }
+		slPos += 7;
+		int sl = atoi(jsonBody.c_str() + slPos);
+		remoteSet.insert({gid, sl});
+		remoteCount++;
+	}
+
+	// Count local entries NOT in remote (accurate count for progress)
+	int localUploadCount = 0;
+	for (const auto &lg : localGames) {
+		for (int slot : lg.second) {
+			if (remoteSet.find({lg.first, slot}) == remoteSet.end()) {
+				localUploadCount++;
+			}
+		}
+	}
+
+	int totalItems = remoteCount + localUploadCount;
+	int completedItems = 0;
+	if (onProgress) {
+		SyncProgress sp;
+		sp.totalSlots = totalItems;
+		sp.completedSlots = 0;
+		sp.currentPeer = peer.id;
+		onProgress(sp);
+	}
+
 	// Simple JSON array parse: [{slot, size, hash, hlc, parentHlc, ppssppVersion, saveFormatVersion}]
 	std::set<std::pair<std::string,int>> remoteEntriesSeen;
 	size_t pos = 0;
@@ -1366,6 +1404,14 @@ SaveStateLANSync::SyncResult SaveStateLANSync::DoSync(const PeerInfo &peer, Save
 		}
 
 		syncedCount++;
+		completedItems++;
+		if (onProgress) {
+			SyncProgress sp;
+			sp.totalSlots = totalItems;
+			sp.completedSlots = completedItems;
+			sp.currentPeer = peer.id;
+			onProgress(sp);
+		}
 		pos = end;
 	}
 
@@ -1387,6 +1433,14 @@ SaveStateLANSync::SyncResult SaveStateLANSync::DoSync(const PeerInfo &peer, Save
 					} else {
 						result.failed++;
 						INFO_LOG(Log::System, "LANSync DoSync: upload FAILED");
+					}
+					completedItems++;
+					if (onProgress) {
+						SyncProgress sp;
+						sp.totalSlots = totalItems;
+						sp.completedSlots = completedItems;
+						sp.currentPeer = peer.id;
+						onProgress(sp);
 					}
 				}
 			}

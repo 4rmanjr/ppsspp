@@ -29,5 +29,7 @@ private:
 
 	std::vector<SaveStateLANSync::PeerInfo> peers_;
 	std::vector<SaveStateLANSync::PendingPairRequest> pending_;
+	std::string pairingPeerId_;  // Track which peer is being paired (disable button)
+	std::atomic<bool> pendingRefresh_{false};  // Set by bg thread callback, checked in update()
 	double lastRefresh_ = 0;
 };

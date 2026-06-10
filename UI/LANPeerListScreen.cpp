@@ -1,5 +1,8 @@
 #include "ppsspp_config.h"
 
+#include <set>
+#include <atomic>
+
 #include "UI/LANPeerListScreen.h"
 #include "Common/UI/Context.h"
 #include "Common/UI/PopupScreens.h"
@@ -18,6 +21,12 @@ void LANPeerListScreen::update() {
 	// Auto-refresh every 1 second (responsive to incoming pair requests)
 	double now = time_now_d();
 	if (now - lastRefresh_ > 1.0) {
+		RefreshPeers();
+		RecreateViews();
+	}
+	// Handle background-thread refresh requests (pair callback, etc.)
+	if (pendingRefresh_.exchange(false)) {
+		pairingPeerId_.clear();
 		RefreshPeers();
 		RecreateViews();
 	}
@@ -50,9 +59,11 @@ void LANPeerListScreen::CreatePopupContents(UI::ViewGroup *parent) {
 
 	// Pending Requests section
 	pending_ = SaveStateLANSync::Instance().GetPendingRequests();
+	std::set<std::string> pendingPeerIds;  // To deduplicate with discovered peers
 	if (!pending_.empty()) {
 		content->Add(new ItemHeader(n->T("Pending Requests")));
 		for (const auto &req : pending_) {
+			pendingPeerIds.insert(req.peerId);
 			auto *item = new LinearLayout(ORIENT_VERTICAL, new LinearLayoutParams(FILL_PARENT, WRAP_CONTENT, Margins(0, 4)));
 			std::string label = req.peerName + " wants to pair";
 			if (!req.verificationCode.empty()) {
@@ -81,12 +92,17 @@ void LANPeerListScreen::CreatePopupContents(UI::ViewGroup *parent) {
 	// Discovered Peers section
 	content->Add(new ItemHeader(n->T("Discovered Peers")));
 
+	// Collect pending peer IDs to avoid showing them twice
 	peers_ = SaveStateLANSync::Instance().GetDiscoveredPeers();
 	bool hasPeers = false;
 	for (const auto &peer : peers_) {
 		if (peer.paired) continue;
 		if (peer.id.empty()) continue;
+		// Skip peers already shown in Pending Requests section
+		if (pendingPeerIds.find(peer.id) != pendingPeerIds.end()) continue;
 		hasPeers = true;
+
+		bool isPairing = (peer.id == pairingPeerId_);
 
 		auto *item = new LinearLayout(ORIENT_VERTICAL, new LinearLayoutParams(FILL_PARENT, WRAP_CONTENT, Margins(0, 4)));
 		std::string label = StringFromFormat("%s (%s)  %s:%d",
@@ -96,10 +112,15 @@ void LANPeerListScreen::CreatePopupContents(UI::ViewGroup *parent) {
 		text->SetWordWrap();
 
 		auto *buttonRow = item->Add(new LinearLayout(ORIENT_HORIZONTAL, new LinearLayoutParams(FILL_PARENT, WRAP_CONTENT)));
-		Choice *pairBtn = buttonRow->Add(new Choice(n->T("Pair"), new LinearLayoutParams(1.0f)));
-		pairBtn->OnClick.Add([this, peer](UI::EventParams &) {
-			SendPairRequest(peer);
-		});
+		Choice *pairBtn = buttonRow->Add(new Choice(isPairing ? n->T("Pairing...") : n->T("Pair"), new LinearLayoutParams(1.0f)));
+		if (isPairing) {
+			pairBtn->SetEnabled(false);
+		} else {
+			pairBtn->OnClick.Add([this, peer](UI::EventParams &) {
+				pairingPeerId_ = peer.id;
+				SendPairRequest(peer);
+			});
+		}
 
 		content->Add(item);
 	}
@@ -131,7 +152,8 @@ void LANPeerListScreen::RefreshPeers() {
 void LANPeerListScreen::SendPairRequest(const SaveStateLANSync::PeerInfo &peer) {
 	auto &core = SaveStateLANSync::Instance();
 	core.AutoPairWithPeer(peer.host, peer.port,
-		[](bool success, const std::string &error) {
+		[this](bool success, const std::string &error) {
+			pendingRefresh_ = true;  // Safe: main thread reads in update()
 			if (success) {
 				System_Toast("Pairing successful!");
 			} else {

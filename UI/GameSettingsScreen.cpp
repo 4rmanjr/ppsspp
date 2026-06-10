@@ -1205,7 +1205,11 @@ void GameSettingsScreen::CreateNetworkingSettings(UI::ViewGroup *networkingSetti
 			if (p.paired && p.online) {
 			found = true;
 			core.SyncWithPeer(p.id, SaveStateLANSync::SyncDirection::BIDIRECTIONAL,
-				nullptr,
+				[](const SaveStateLANSync::SyncProgress &p) {
+					if (p.totalSlots > 0) {
+						System_Toast(StringFromFormat("Syncing: %d/%d", p.completedSlots, p.totalSlots));
+					}
+				},
 				[](const SaveStateLANSync::SyncResult &result) {
 					if (result.success) {
 						System_Toast(StringFromFormat("Sync OK: %d up, %d down", result.uploaded, result.downloaded));
