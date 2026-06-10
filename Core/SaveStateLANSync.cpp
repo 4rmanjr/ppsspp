@@ -1430,6 +1430,12 @@ SaveStateLANSync::SyncResult SaveStateLANSync::DoSync(const PeerInfo &peer, Save
 					if (uploadSave(lg.first, slot, localData)) {
 						result.uploaded++;
 						INFO_LOG(Log::System, "LANSync DoSync: upload OK");
+						// Also upload thumbnail if available
+						Path thumbPath = saveDir / StringFromFormat("%s_%d.jpg", lg.first.c_str(), slot);
+						std::string localThumbData;
+						if (File::ReadBinaryFileToString(thumbPath, &localThumbData)) {
+							uploadSave(lg.first, slot, localThumbData, "jpg");
+						}
 					} else {
 						result.failed++;
 						INFO_LOG(Log::System, "LANSync DoSync: upload FAILED");
