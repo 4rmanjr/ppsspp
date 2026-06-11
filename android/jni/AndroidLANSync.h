@@ -28,6 +28,10 @@ public:
 
 	SaveStateLANSync &Core() { return SaveStateLANSync::Instance(); }
 
+	// Sync progress notification (called from sync worker thread)
+	void UpdateSyncProgress(const SaveStateLANSync::SyncProgress &progress);
+	void CompleteSync(int uploaded, int downloaded);
+
 	// QR code scanning (ML Kit / ZXing)
 	void StartQRScan(std::function<void(const std::string &result)> callback);
 	void StopQRScan();

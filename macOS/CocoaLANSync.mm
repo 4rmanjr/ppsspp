@@ -25,6 +25,7 @@
 #include "macOS/MacLANSync.h"
 #include "Core/SaveStateLANSync.h"
 #include "Common/Log.h"
+#include "Common/StringUtils.h"
 
 // ==================== Helpers ====================
 
@@ -293,7 +294,9 @@ static NSImage *GenerateQRCode(const std::string &payload) {
 @property (nonatomic, strong) NSProgressIndicator *progressBar;
 @property (nonatomic, strong) NSTextField *statusLabel;
 @property (nonatomic, strong) NSTextField *summaryLabel;
+@property (nonatomic, strong) NSTextField *byteLabel;
 @property (nonatomic, strong) NSTimer *refreshTimer;
+- (NSString *)formatBytes:(int64_t)bytes;
 @end
 
 @implementation CocoaLANSyncProgressPanel
@@ -309,10 +312,10 @@ static NSImage *GenerateQRCode(const std::string &payload) {
 	NSView *contentView = self.contentView;
 
 	self.statusLabel = [NSTextField labelWithString:@"Preparing..."];
-	self.statusLabel.frame = NSMakeRect(20, 230, 360, 20);
+	self.statusLabel.frame = NSMakeRect(20, 250, 380, 20);
 	[contentView addSubview:self.statusLabel];
 
-	self.progressBar = [[NSProgressIndicator alloc] initWithFrame:NSMakeRect(20, 200, 360, 20)];
+	self.progressBar = [[NSProgressIndicator alloc] initWithFrame:NSMakeRect(20, 215, 380, 20)];
 	self.progressBar.style = NSProgressIndicatorStyleBar;
 	self.progressBar.indeterminate = NO;
 	self.progressBar.minValue = 0;
@@ -321,12 +324,18 @@ static NSImage *GenerateQRCode(const std::string &payload) {
 	[contentView addSubview:self.progressBar];
 
 	self.summaryLabel = [NSTextField labelWithString:@"0 / 0 slots"];
-	self.summaryLabel.frame = NSMakeRect(20, 175, 360, 20);
+	self.summaryLabel.frame = NSMakeRect(20, 190, 380, 20);
 	[contentView addSubview:self.summaryLabel];
+
+	self.byteLabel = [NSTextField labelWithString:@""];
+	self.byteLabel.frame = NSMakeRect(20, 170, 380, 16);
+	self.byteLabel.font = [NSFont systemFontOfSize:11];
+	self.byteLabel.textColor = [NSColor secondaryLabelColor];
+	[contentView addSubview:self.byteLabel];
 
 	NSButton *cancelBtn = [NSButton buttonWithTitle:@"Cancel"
 	                                         target:self action:@selector(cancelSync:)];
-	cancelBtn.frame = NSMakeRect(290, 20, 90, 28);
+	cancelBtn.frame = NSMakeRect(310, 20, 90, 28);
 	[contentView addSubview:cancelBtn];
 
 	self.refreshTimer = [NSTimer scheduledTimerWithTimeInterval:0.5 repeats:YES block:^(NSTimer *timer) {
@@ -334,8 +343,17 @@ static NSImage *GenerateQRCode(const std::string &payload) {
 		self.progressBar.doubleValue = progress.totalSlots > 0 ?
 			(progress.completedSlots * 100.0 / progress.totalSlots) : 0;
 		self.statusLabel.stringValue = ToNSString(progress.currentFile);
-		self.summaryLabel.stringValue = [NSString stringWithFormat:@"%d / %d slots",
-		                                  progress.completedSlots, progress.totalSlots];
+		NSString *summary = [NSString stringWithFormat:@"%d / %d slots",
+		                      progress.completedSlots, progress.totalSlots];
+		if (progress.totalBytes > 0) {
+			[self.byteLabel setHidden:NO];
+			self.byteLabel.stringValue = [NSString stringWithFormat:@"%s / %s",
+			                              FormatBytes(progress.completedBytes).c_str(),
+			                              FormatBytes(progress.totalBytes).c_str()];
+		} else {
+			[self.byteLabel setHidden:YES];
+		}
+		self.summaryLabel.stringValue = summary;
 	}];
 
 	return self;

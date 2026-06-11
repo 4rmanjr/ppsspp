@@ -1054,6 +1054,100 @@ void SaveStateLANSync::UnpairPeer(const std::string &peerId) {
 	SaveConfig();
 }
 
+// ==================== Transfer Helpers ====================
+
+bool SaveStateLANSync::DownloadSave(const PeerInfo &peer, const Path &localPath,
+                                     const std::string &gameId, int slot,
+                                     const std::string &ext) {
+	std::string dlReq = StringFromFormat(
+		"GET /api/v1/saves/%s_%d.%s HTTP/1.1\r\n"
+		"Host: %s:%d\r\n"
+		"Authorization: Bearer %s\r\n"
+		"Connection: close\r\n\r\n",
+		gameId.c_str(), slot, ext.c_str(),
+		peer.host.c_str(), peer.port, peer.token.c_str());
+	int sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+	if (sock < 0) return false;
+	struct timeval tv;
+	tv.tv_sec = 30; tv.tv_usec = 0;
+	setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+	struct sockaddr_in addr;
+	memset(&addr, 0, sizeof(addr));
+	addr.sin_family = AF_INET;
+	addr.sin_port = htons(peer.port);
+	inet_pton(AF_INET, peer.host.c_str(), &addr.sin_addr);
+	bool ok = false;
+	if (connect(sock, (struct sockaddr *)&addr, sizeof(addr)) >= 0) {
+		send(sock, dlReq.c_str(), dlReq.size(), 0);
+		std::vector<uint8_t> buf(65536);
+		int total = 0, n;
+		while ((n = recv(sock, (char *)buf.data() + total, buf.size() - total - 1, 0)) > 0) {
+			total += n;
+			if (total >= (int)buf.size() - 1024) buf.resize(buf.size() * 2);
+		}
+		if (total > 0) {
+			std::string resp((char *)buf.data(), total);
+			if (resp.find("200 OK") != std::string::npos) {
+				size_t bStart = resp.find("\r\n\r\n");
+				if (bStart != std::string::npos) {
+					bStart += 4;
+					std::vector<uint8_t> fd(buf.begin() + bStart, buf.begin() + total);
+					Path tmp = localPath.WithExtraExtension(".tmp");
+					if (File::WriteDataToFile(false, fd.data(), fd.size(), tmp)) {
+						File::Rename(tmp, localPath);
+						ok = true;
+					} else { File::Delete(tmp); }
+				}
+			}
+		}
+	} else {
+		WARN_LOG(Log::System, "LANSync: DownloadSave connect failed %s_%d.%s -> %s:%d: %s",
+		         gameId.c_str(), slot, ext.c_str(),
+		         peer.host.c_str(), peer.port, strerror(errno));
+	}
+	closesocket(sock);
+	return ok;
+}
+
+bool SaveStateLANSync::UploadSave(const PeerInfo &peer, const std::string &gameId, int slot,
+                                   const std::string &data, const std::string &ext) {
+	std::string header = StringFromFormat(
+		"POST /api/v1/saves/%s_%d.%s HTTP/1.1\r\n"
+		"Host: %s:%d\r\n"
+		"Authorization: Bearer %s\r\n"
+		"Content-Type: application/octet-stream\r\n"
+		"Content-Length: %d\r\n"
+		"Connection: close\r\n\r\n",
+		gameId.c_str(), slot, ext.c_str(),
+		peer.host.c_str(), peer.port, peer.token.c_str(),
+		(int)data.size());
+	int sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+	if (sock < 0) return false;
+	struct timeval tv;
+	tv.tv_sec = 30; tv.tv_usec = 0;
+	setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char *)&tv, sizeof(tv));
+	setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, (const char *)&tv, sizeof(tv));
+	struct sockaddr_in addr;
+	memset(&addr, 0, sizeof(addr));
+	addr.sin_family = AF_INET;
+	addr.sin_port = htons(peer.port);
+	inet_pton(AF_INET, peer.host.c_str(), &addr.sin_addr);
+	bool ok = false;
+	if (connect(sock, (struct sockaddr *)&addr, sizeof(addr)) >= 0) {
+		send(sock, header.c_str(), header.size(), 0);
+		send(sock, data.data(), data.size(), 0);
+		char resp[256];
+		int n = recv(sock, resp, sizeof(resp) - 1, 0);
+		if (n > 0) { resp[n] = '\0'; ok = (strstr(resp, "201") != nullptr); }
+	} else {
+		WARN_LOG(Log::System, "LANSync: UploadSave connect failed %s_%d.%s -> %s:%d: %s",
+		         gameId.c_str(), slot, ext.c_str(),
+		         peer.host.c_str(), peer.port, strerror(errno));
+	}
+	closesocket(sock);
+	return ok;
+}
+
 // ==================== Sync ====================
 
 void SaveStateLANSync::SyncWithPeer(const std::string &peerId, SyncDirection direction,
@@ -1072,6 +1166,14 @@ void SaveStateLANSync::SyncWithPeer(const std::string &peerId, SyncDirection dir
 	fprintf(stderr, "SyncWithPeer: starting sync with %s (%s:%d)\n", target.id.c_str(), target.host.c_str(), target.port);
 	syncStatus_ = SyncStatus::SYNCING;
 	syncCancelled_ = false;
+
+	// Initialize syncProgress_ for GetProgress() callers
+	{
+		std::lock_guard<std::mutex> lock(syncMutex_);
+		syncProgress_ = SyncProgress{};
+		syncProgress_.status = SyncStatus::SYNCING;
+		syncProgress_.currentPeer = target.id;
+	}
 
 	AddBackgroundThread(std::thread([this, target, onProgress, onDone]() {
 #if PPSSPP_PLATFORM(ANDROID)
@@ -1094,6 +1196,12 @@ void SaveStateLANSync::SyncWithPeer(const std::string &peerId, SyncDirection dir
 #endif
 		SaveStateLANSync::SyncResult result = DoSync(target, onProgress);
 		syncStatus_ = result.success ? SyncStatus::DONE : SyncStatus::ERROR;
+		// Finalize syncProgress_ for GetProgress() callers
+		{
+			std::lock_guard<std::mutex> lock(syncMutex_);
+			syncProgress_.status = result.success ? SyncStatus::DONE : SyncStatus::ERROR;
+			if (!result.success) syncProgress_.error = "Sync failed";
+		}
 		if (onDone) onDone(result);
 	}));
 }
@@ -1132,6 +1240,7 @@ SaveStateLANSync::SyncResult SaveStateLANSync::DoSync(const PeerInfo &peer, Save
 
 	// Group by game prefix
 	std::map<std::string, std::vector<int>> localGames;
+	std::map<std::pair<std::string,int>, int64_t> localSizes;
 	for (const auto &f : files) {
 		std::string name = f.name;
 		// Extract gamePrefix and slot from filename: PREFIX_N.ppst
@@ -1142,6 +1251,7 @@ SaveStateLANSync::SyncResult SaveStateLANSync::DoSync(const PeerInfo &peer, Save
 		std::string prefix = name.substr(0, lastUnderscore);
 		int slot = atoi(name.substr(lastUnderscore + 1, dot - lastUnderscore - 1).c_str());
 		localGames[prefix].push_back(slot);
+		localSizes[{prefix, slot}] = (int64_t)f.size;
 
 		// Create/update metadata
 		Path ppstPath = saveDir / name;
@@ -1216,96 +1326,6 @@ SaveStateLANSync::SyncResult SaveStateLANSync::DoSync(const PeerInfo &peer, Save
 	std::string jsonBody = response.substr(bodyStart + 4);
 	fprintf(stderr, "DoSync: remote save list body (%d bytes): %.200s\n", (int)jsonBody.size(), jsonBody.c_str());
 
-	// Helper lambdas for single save transfer (defined outside while loop for scope)
-	auto downloadSave = [&](const Path &path, const std::string &gid, int sl, const char *ext = "ppst") -> bool {
-		std::string dlReq = StringFromFormat(
-			"GET /api/v1/saves/%s_%d.%s HTTP/1.1\r\n"
-			"Host: %s:%d\r\n"
-			"Authorization: Bearer %s\r\n"
-			"Connection: close\r\n\r\n",
-			gid.c_str(), sl, ext, peer.host.c_str(), peer.port, peer.token.c_str());
-		int sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-		if (sock < 0) return false;
-		struct timeval tv;
-		tv.tv_sec = 30; tv.tv_usec = 0;
-		setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
-		struct sockaddr_in addr;
-		memset(&addr, 0, sizeof(addr));
-		addr.sin_family = AF_INET;
-		addr.sin_port = htons(peer.port);
-		inet_pton(AF_INET, peer.host.c_str(), &addr.sin_addr);
-		bool ok = false;
-		if (connect(sock, (struct sockaddr *)&addr, sizeof(addr)) >= 0) {
-			send(sock, dlReq.c_str(), dlReq.size(), 0);
-			std::vector<uint8_t> buf(65536);
-			int total = 0, n;
-			while ((n = recv(sock, (char *)buf.data() + total, buf.size() - total - 1, 0)) > 0) {
-				total += n;
-				if (total >= (int)buf.size() - 1024) buf.resize(buf.size() * 2);
-			}
-			if (total > 0) {
-				std::string resp((char *)buf.data(), total);
-				// Check HTTP status before saving
-				if (resp.find("200 OK") != std::string::npos) {
-					size_t bStart = resp.find("\r\n\r\n");
-					if (bStart != std::string::npos) {
-						bStart += 4;
-						std::vector<uint8_t> fd(buf.begin() + bStart, buf.begin() + total);
-						Path tmp = path.WithExtraExtension(".tmp");
-						if (File::WriteDataToFile(false, fd.data(), fd.size(), tmp)) {
-							File::Rename(tmp, path);
-							ok = true;
-						} else { File::Delete(tmp); }
-					}
-				}
-			}
-		} else {
-			WARN_LOG(Log::System, "LANSync: downloadSave connect failed %s_%d.%s -> %s:%d: %s",
-			         gid.c_str(), sl, ext, peer.host.c_str(), peer.port, strerror(errno));
-		}
-		closesocket(sock);
-		return ok;
-	};
-
-	auto uploadSave = [&](const std::string &gid, int sl, const std::string &data, const char *ext = "ppst") -> bool {
-		// Build headers separately from body (body may contain null bytes)
-		std::string header = StringFromFormat(
-			"POST /api/v1/saves/%s_%d.%s HTTP/1.1\r\n"
-			"Host: %s:%d\r\n"
-			"Authorization: Bearer %s\r\n"
-			"Content-Type: application/octet-stream\r\n"
-			"Content-Length: %d\r\n"
-			"Connection: close\r\n\r\n",
-			gid.c_str(), sl, ext, peer.host.c_str(), peer.port, peer.token.c_str(),
-			(int)data.size());
-		int sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-		if (sock < 0) return false;
-		struct timeval tv;
-		tv.tv_sec = 30; tv.tv_usec = 0;
-		setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char *)&tv, sizeof(tv));
-		setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, (const char *)&tv, sizeof(tv));
-		struct sockaddr_in addr;
-		memset(&addr, 0, sizeof(addr));
-		addr.sin_family = AF_INET;
-		addr.sin_port = htons(peer.port);
-		inet_pton(AF_INET, peer.host.c_str(), &addr.sin_addr);
-		bool ok = false;
-		if (connect(sock, (struct sockaddr *)&addr, sizeof(addr)) >= 0) {
-			// Send headers first, then binary body separately (to preserve null bytes)
-			send(sock, header.c_str(), header.size(), 0);
-			send(sock, data.data(), data.size(), 0);
-			// Read response
-			char resp[256];
-			int n = recv(sock, resp, sizeof(resp) - 1, 0);
-			if (n > 0) { resp[n] = '\0'; ok = (strstr(resp, "201") != nullptr); }
-		} else {
-			WARN_LOG(Log::System, "LANSync: uploadSave connect failed %s_%d.%s -> %s:%d: %s",
-			         gid.c_str(), sl, ext, peer.host.c_str(), peer.port, strerror(errno));
-		}
-		closesocket(sock);
-		return ok;
-	};
-
 	// Extract HLC from JSON field
 	auto extractHLC = [&](size_t searchStart, const std::string &field) -> HLC {
 		std::string search = "\"" + field + "\":{";
@@ -1322,8 +1342,9 @@ SaveStateLANSync::SyncResult SaveStateLANSync::DoSync(const PeerInfo &peer, Save
 		return HLC::FromJSON(jsonBody.substr(p, end - p));
 	};
 
-	// Count remote entries for progress — first pass: collect game/slot pairs
+	// Count remote entries for progress — first pass: collect game/slot pairs and sizes
 	std::set<std::pair<std::string,int>> remoteSet;
+	std::map<std::pair<std::string,int>, int64_t> remoteSizes;
 	size_t tmpPos = 0;
 	int remoteCount = 0;
 	while ((tmpPos = jsonBody.find("\"gameId\":\"", tmpPos)) != std::string::npos) {
@@ -1337,6 +1358,13 @@ SaveStateLANSync::SyncResult SaveStateLANSync::DoSync(const PeerInfo &peer, Save
 		slPos += 7;
 		int sl = atoi(jsonBody.c_str() + slPos);
 		remoteSet.insert({gid, sl});
+		// Extract size for byte-level progress
+		size_t szPos = jsonBody.find("\"size\":", slPos);
+		if (szPos != std::string::npos) {
+			szPos += 7;
+			int64_t sz = atoll(jsonBody.c_str() + szPos);
+			remoteSizes[{gid, sl}] = sz;
+		}
 		remoteCount++;
 	}
 
@@ -1352,13 +1380,70 @@ SaveStateLANSync::SyncResult SaveStateLANSync::DoSync(const PeerInfo &peer, Save
 
 	int totalItems = remoteCount + localUploadCount;
 	int completedItems = 0;
+
+	// Calculate total bytes for byte-level progress
+	int64_t totalBytes = 0;
+	for (const auto &rs : remoteSizes) {
+		totalBytes += rs.second;
+	}
+	for (const auto &lg : localGames) {
+		for (int slot : lg.second) {
+			if (remoteSet.find({lg.first, slot}) == remoteSet.end()) {
+				auto it = localSizes.find({lg.first, slot});
+				if (it != localSizes.end()) totalBytes += it->second;
+			}
+		}
+	}
+	int64_t completedBytes = 0;
+
 	if (onProgress) {
 		SyncProgress sp;
 		sp.totalSlots = totalItems;
 		sp.completedSlots = 0;
+		sp.totalBytes = totalBytes;
+		sp.completedBytes = 0;
 		sp.currentPeer = peer.id;
 		onProgress(sp);
 	}
+
+	// Initialize syncProgress_ for GetProgress() callers
+	{
+		std::lock_guard<std::mutex> lock(syncMutex_);
+		syncProgress_.status = SyncStatus::SYNCING;
+		syncProgress_.totalSlots = totalItems;
+		syncProgress_.completedSlots = 0;
+		syncProgress_.totalBytes = totalBytes;
+		syncProgress_.completedBytes = 0;
+		syncProgress_.currentPeer = peer.id;
+	syncProgress_.currentFile.clear();
+	syncProgress_.currentGame.clear();
+}
+
+	// Local lambda to centralize progress reporting (both onProgress callback + syncProgress_ update)
+	auto reportProgress = [&](const std::string &gid, int sl, int64_t byteInc) {
+		completedItems++;
+		completedBytes += byteInc;
+		if (onProgress) {
+			SyncProgress sp;
+			sp.totalSlots = totalItems;
+			sp.completedSlots = completedItems;
+			sp.totalBytes = totalBytes;
+			sp.completedBytes = completedBytes;
+			sp.currentFile = StringFromFormat("%s_%d.ppst", gid.c_str(), sl);
+			sp.currentGame = gid;
+			sp.currentPeer = peer.id;
+			onProgress(sp);
+		}
+		{
+			std::lock_guard<std::mutex> lock(syncMutex_);
+			syncProgress_.totalSlots = totalItems;
+			syncProgress_.completedSlots = completedItems;
+			syncProgress_.totalBytes = totalBytes;
+			syncProgress_.completedBytes = completedBytes;
+			syncProgress_.currentFile = StringFromFormat("%s_%d.ppst", gid.c_str(), sl);
+			syncProgress_.currentGame = gid;
+		}
+	};
 
 	// Simple JSON array parse: [{slot, size, hash, hlc, parentHlc, ppssppVersion, saveFormatVersion}]
 	std::set<std::pair<std::string,int>> remoteEntriesSeen;
@@ -1413,21 +1498,21 @@ SaveStateLANSync::SyncResult SaveStateLANSync::DoSync(const PeerInfo &peer, Save
 		auto cr = DetectConflict(localHlc, localParentHlc, remoteHlc, remoteParentHlc);
 		switch (cr.action) {
 		case ConflictResult::KEEP_REMOTE:
-			if (downloadSave(localPath, gameId, slot)) {
+			if (DownloadSave(peer, localPath, gameId, slot, "ppst")) {
 				result.downloaded++;
 				if (remoteHasThumb) {
 					Path thumbPath = saveDir / StringFromFormat("%s_%d.jpg", gameId.c_str(), slot);
-					downloadSave(thumbPath, gameId, slot, "jpg");
+					DownloadSave(peer, thumbPath, gameId, slot, "jpg");
 				}
 			} else result.failed++;
 			break;
 		case ConflictResult::KEEP_LOCAL:
-			if (hasLocal && uploadSave(gameId, slot, localData)) {
+			if (hasLocal && UploadSave(peer, gameId, slot, localData, "ppst")) {
 				result.uploaded++;
 				Path thumbPath = saveDir / StringFromFormat("%s_%d.jpg", gameId.c_str(), slot);
 				std::string localThumbData;
 				if (File::ReadBinaryFileToString(thumbPath, &localThumbData))
-					uploadSave(gameId, slot, localThumbData, "jpg");
+					UploadSave(peer, gameId, slot, localThumbData, "jpg");
 			} else result.skipped++;
 			break;
 		case ConflictResult::SKIP:
@@ -1436,22 +1521,22 @@ SaveStateLANSync::SyncResult SaveStateLANSync::DoSync(const PeerInfo &peer, Save
 		case ConflictResult::MERGE: {
 			ConflictResolution autoResolve = (ConflictResolution)g_Config.lanSync.iConflictResolution;
 			if (autoResolve == ConflictResolution::KEEP_REMOTE) {
-				if (downloadSave(localPath, gameId, slot)) {
+				if (DownloadSave(peer, localPath, gameId, slot, "ppst")) {
 					result.downloaded++;
 					if (remoteHasThumb) {
 						Path thumbPath = saveDir / StringFromFormat("%s_%d.jpg", gameId.c_str(), slot);
-						downloadSave(thumbPath, gameId, slot, "jpg");
+						DownloadSave(peer, thumbPath, gameId, slot, "jpg");
 					}
 				} else result.failed++;
 			} else if (autoResolve == ConflictResolution::KEEP_LOCAL) {
 				result.skipped++;
 			} else if (autoResolve == ConflictResolution::NEWEST_WINS) {
 				if (remoteHlc.IsAfter(localHlc)) {
-					if (downloadSave(localPath, gameId, slot)) {
+					if (DownloadSave(peer, localPath, gameId, slot, "ppst")) {
 						result.downloaded++;
 						if (remoteHasThumb) {
 							Path thumbPath = saveDir / StringFromFormat("%s_%d.jpg", gameId.c_str(), slot);
-							downloadSave(thumbPath, gameId, slot, "jpg");
+							DownloadSave(peer, thumbPath, gameId, slot, "jpg");
 						}
 					} else result.failed++;
 				} else {
@@ -1477,13 +1562,11 @@ SaveStateLANSync::SyncResult SaveStateLANSync::DoSync(const PeerInfo &peer, Save
 		}
 
 		syncedCount++;
-		completedItems++;
-		if (onProgress) {
-			SyncProgress sp;
-			sp.totalSlots = totalItems;
-			sp.completedSlots = completedItems;
-			sp.currentPeer = peer.id;
-			onProgress(sp);
+		// Update byte progress: add remote entry's size to completed bytes
+		{
+			auto rsIt = remoteSizes.find({gameId, slot});
+			int64_t byteInc = (rsIt != remoteSizes.end()) ? rsIt->second : 0;
+			reportProgress(gameId, slot, byteInc);
 		}
 		pos = end;
 	}
@@ -1500,26 +1583,23 @@ SaveStateLANSync::SyncResult SaveStateLANSync::DoSync(const PeerInfo &peer, Save
 				if (File::ReadBinaryFileToString(localPath, &localData)) {
 					INFO_LOG(Log::System, "LANSync DoSync: uploading %s_%d.ppst (%d bytes)",
 						lg.first.c_str(), slot, (int)localData.size());
-					if (uploadSave(lg.first, slot, localData)) {
+					if (UploadSave(peer, lg.first, slot, localData, "ppst")) {
 						result.uploaded++;
 						INFO_LOG(Log::System, "LANSync DoSync: upload OK");
 						// Also upload thumbnail if available
 						Path thumbPath = saveDir / StringFromFormat("%s_%d.jpg", lg.first.c_str(), slot);
 						std::string localThumbData;
 						if (File::ReadBinaryFileToString(thumbPath, &localThumbData)) {
-							uploadSave(lg.first, slot, localThumbData, "jpg");
+							UploadSave(peer, lg.first, slot, localThumbData, "jpg");
 						}
 					} else {
 						result.failed++;
 						INFO_LOG(Log::System, "LANSync DoSync: upload FAILED");
 					}
-					completedItems++;
-					if (onProgress) {
-						SyncProgress sp;
-						sp.totalSlots = totalItems;
-						sp.completedSlots = completedItems;
-						sp.currentPeer = peer.id;
-						onProgress(sp);
+					{
+						auto lsIt = localSizes.find({lg.first, slot});
+						int64_t byteInc = (lsIt != localSizes.end()) ? lsIt->second : 0;
+						reportProgress(lg.first, slot, byteInc);
 					}
 				}
 			}
@@ -1552,96 +1632,12 @@ void SaveStateLANSync::ResolveConflict(const ConflictInfo &conflict, ConflictRes
 	Path localPath = GetSysDirectory(DIRECTORY_SAVESTATE) /
 		StringFromFormat("%s_%d.ppst", conflict.gameId.c_str(), conflict.slot);
 
-	// Download from peer
-	std::string dlReq = StringFromFormat(
-		"GET /api/v1/saves/%s_%d.ppst HTTP/1.1\r\n"
-		"Host: %s:%d\r\n"
-		"Authorization: Bearer %s\r\n"
-		"Connection: close\r\n\r\n",
-		conflict.gameId.c_str(), conflict.slot,
-		peer.host.c_str(), peer.port, peer.token.c_str());
-
-	int sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-	if (sock < 0) return;
-
-	struct timeval tv;
-	tv.tv_sec = 30; tv.tv_usec = 0;
-	setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
-
-	struct sockaddr_in addr;
-	memset(&addr, 0, sizeof(addr));
-	addr.sin_family = AF_INET;
-	addr.sin_port = htons(peer.port);
-	inet_pton(AF_INET, peer.host.c_str(), &addr.sin_addr);
-
-	if (connect(sock, (struct sockaddr *)&addr, sizeof(addr)) >= 0) {
-		send(sock, dlReq.c_str(), dlReq.size(), 0);
-		std::vector<uint8_t> buf(65536);
-		int total = 0, n;
-		while ((n = recv(sock, (char *)buf.data() + total, buf.size() - total - 1, 0)) > 0) {
-			total += n;
-			if (total >= (int)buf.size() - 1024) buf.resize(buf.size() * 2);
-		}
-		if (total > 0) {
-			std::string resp((char *)buf.data(), total);
-			size_t bStart = resp.find("\r\n\r\n");
-			if (bStart != std::string::npos) {
-				bStart += 4;
-				std::vector<uint8_t> fd(buf.begin() + bStart, buf.begin() + total);
-				Path tmp = localPath.WithExtraExtension(".tmp");
-				if (File::WriteDataToFile(false, fd.data(), fd.size(), tmp)) {
-					File::Rename(tmp, localPath);
-				} else {
-					File::Delete(tmp);
-				}
-			}
-		}
-	}
-	closesocket(sock);
+	DownloadSave(peer, localPath, conflict.gameId, conflict.slot, "ppst");
 
 	// Also download thumbnail
 	Path thumbPath = GetSysDirectory(DIRECTORY_SAVESTATE) /
 		StringFromFormat("%s_%d.jpg", conflict.gameId.c_str(), conflict.slot);
-	std::string thumbReq = StringFromFormat(
-		"GET /api/v1/saves/%s_%d.jpg HTTP/1.1\r\n"
-		"Host: %s:%d\r\n"
-		"Authorization: Bearer %s\r\n"
-		"Connection: close\r\n\r\n",
-		conflict.gameId.c_str(), conflict.slot,
-		peer.host.c_str(), peer.port, peer.token.c_str());
-
-	int thumbSock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-	if (thumbSock >= 0) {
-		setsockopt(thumbSock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
-		struct sockaddr_in thumbAddr;
-		memset(&thumbAddr, 0, sizeof(thumbAddr));
-		thumbAddr.sin_family = AF_INET;
-		thumbAddr.sin_port = htons(peer.port);
-		inet_pton(AF_INET, peer.host.c_str(), &thumbAddr.sin_addr);
-		if (connect(thumbSock, (struct sockaddr *)&thumbAddr, sizeof(thumbAddr)) >= 0) {
-			send(thumbSock, thumbReq.c_str(), thumbReq.size(), 0);
-			std::vector<uint8_t> buf(65536);
-			int total = 0, n;
-			while ((n = recv(thumbSock, (char *)buf.data() + total, buf.size() - total - 1, 0)) > 0) {
-				total += n;
-				if (total >= (int)buf.size() - 1024) buf.resize(buf.size() * 2);
-			}
-			if (total > 0) {
-				std::string resp((char *)buf.data(), total);
-				size_t bStart = resp.find("\r\n\r\n");
-				if (bStart != std::string::npos && resp.find("200 OK") != std::string::npos) {
-					bStart += 4;
-					std::vector<uint8_t> fd(buf.begin() + bStart, buf.begin() + total);
-					Path tmp = thumbPath.WithExtraExtension(".tmp");
-					if (File::WriteDataToFile(false, fd.data(), fd.size(), tmp))
-						File::Rename(tmp, thumbPath);
-					else
-						File::Delete(tmp);
-				}
-			}
-		}
-		closesocket(thumbSock);
-	}
+	DownloadSave(peer, thumbPath, conflict.gameId, conflict.slot, "jpg");
 }
 
 void SaveStateLANSync::ResolveAllConflicts(ConflictResolution resolution) {

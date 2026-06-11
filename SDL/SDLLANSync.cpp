@@ -102,6 +102,10 @@ void SDLLANSyncUI::DoStartSync(const std::string &peerId) {
 			total_ = p.totalSlots;
 			if (total_ > 0) progress_ = (float)completed_ / (float)total_;
 			currentPeer_ = p.currentPeer;
+			currentFile_ = p.currentFile;
+			currentGame_ = p.currentGame;
+			totalBytes_ = p.totalBytes;
+			completedBytes_ = p.completedBytes;
 		},
 		[this](const SaveStateLANSync::SyncResult &r) {
 			if (r.success) {
@@ -465,7 +469,7 @@ void SDLLANSyncUI::DrawServerPairingScreen(bool *open) {
 void SDLLANSyncUI::DrawProgressDialog(bool *open) {
 	if (!*open) return;
 
-	ImGui::SetNextWindowSize(ImVec2(450, 300), ImGuiCond_FirstUseEver);
+	ImGui::SetNextWindowSize(ImVec2(480, 340), ImGuiCond_FirstUseEver);
 	if (!ImGui::Begin("Syncing##sync", open, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize)) {
 		ImGui::End();
 		return;
@@ -476,7 +480,15 @@ void SDLLANSyncUI::DrawProgressDialog(bool *open) {
 	DrawProgressBar();
 
 	ImGui::Separator();
-	ImGui::Text(" %d / %d slots", completed_, total_);
+	ImGui::Text(" %d / %d slots", completed_.load(), total_.load());
+	if (totalBytes_ > 0) {
+		ImGui::Text(" %s / %s", FormatBytes(completedBytes_).c_str(), FormatBytes(totalBytes_).c_str());
+	}
+
+	// Show current file being transferred
+	if (!currentFile_.empty()) {
+		ImGui::TextColored(ImVec4(0.7f, 0.9f, 1.0f, 1.0f), "File: %s", currentFile_.c_str());
+	}
 
 	DrawSlotList();
 
@@ -526,7 +538,7 @@ void SDLLANSyncUI::DrawProgressBar() {
 		IM_COL32(60, 60, 60, 255));
 
 	// Progress
-	float barWidth = ImGui::GetContentRegionAvail().x * progress_;
+	float barWidth = ImGui::GetContentRegionAvail().x * progress_.load();
 	if (barWidth > 0) {
 		ImGui::GetWindowDrawList()->AddRectFilled(barPos,
 			ImVec2(barPos.x + barWidth, barPos.y + barSize.y),

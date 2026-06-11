@@ -176,4 +176,18 @@ public class LANSyncManager {
             instance.stopDiscovery();
         }
     }
+
+    // Called from C++ via JNI to update sync progress notification
+    public static void updateSyncProgress(int completed, int total, long completedBytes, long totalBytes) {
+        if (instance != null && instance.syncService != null) {
+            instance.syncService.updateSyncProgress(completed, total, completedBytes, totalBytes);
+        }
+    }
+
+    // Called from C++ via JNI when sync completes
+    public static void completeSync(int uploaded, int downloaded) {
+        if (instance != null && instance.syncService != null) {
+            instance.syncService.completeSync(uploaded, downloaded);
+        }
+    }
 }

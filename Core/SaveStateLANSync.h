@@ -86,6 +86,8 @@ public:
 		int completedGames = 0;
 		int totalSlots = 0;
 		int completedSlots = 0;
+		int64_t totalBytes = 0;
+		int64_t completedBytes = 0;
 		std::string currentGame;
 		std::string currentFile;
 		std::string currentPeer;
@@ -225,6 +227,11 @@ private:
 	void DiscoveryLoop();
 	void AcceptConnectionsLoop();
 	SyncResult DoSync(const PeerInfo &peer, ProgressCallback onProgress);
+
+	// Download a save file from a peer (opens socket, sends GET, reads response, saves atomically)
+	bool DownloadSave(const PeerInfo &peer, const Path &localPath, const std::string &gameId, int slot, const std::string &ext);
+	// Upload a save file to a peer (opens socket, sends POST with binary data, checks response)
+	bool UploadSave(const PeerInfo &peer, const std::string &gameId, int slot, const std::string &data, const std::string &ext);
 
 	bool LoadConfig();
 	bool SaveConfig();

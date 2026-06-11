@@ -36,6 +36,7 @@
 #include "Core/SaveStateLANSync.h"
 #include "Core/LANSyncConfig.h"
 #include "Common/Log.h"
+#include "Common/StringUtils.h"
 
 // ==================== Internal Helpers ====================
 
@@ -361,9 +362,15 @@ private:
 			SaveStateLANSync::SyncDirection::BIDIRECTIONAL,
 			[this](const SaveStateLANSync::SyncProgress &p) {
 				QMetaObject::invokeMethod(this, [this, p]() {
-					progressBar_->setValue(p.totalSlots > 0 ?
-						(p.completedSlots * 100 / p.totalSlots) : 0);
-					statusLabel_->setText(QString::fromStdString(p.currentFile));
+					int pct = p.totalSlots > 0 ? (p.completedSlots * 100 / p.totalSlots) : 0;
+					progressBar_->setValue(pct);
+					QString text = QString::fromStdString(p.currentFile);
+					if (p.totalBytes > 0) {
+						text += QString(" - %1 / %2")
+							.arg(QString::fromStdString(FormatBytes(p.completedBytes)))
+							.arg(QString::fromStdString(FormatBytes(p.totalBytes)));
+					}
+					statusLabel_->setText(text);
 				}, Qt::QueuedConnection);
 			},
 			[this](const SaveStateLANSync::SyncResult &r) {
@@ -381,12 +388,20 @@ private:
 	void refresh() {
 		if (!running_) return;
 		auto progress = SaveStateLANSync::Instance().GetProgress();
-		statusLabel_->setText(QString("%1/%2 - %3")
+		int pct = progress.totalSlots > 0 ? (progress.completedSlots * 100 / progress.totalSlots) : 0;
+		progressBar_->setValue(pct);
+		QString text = QString("%1/%2")
 			.arg(progress.completedSlots)
-			.arg(progress.totalSlots)
-			.arg(QString::fromStdString(progress.currentFile)));
-		progressBar_->setValue(progress.totalSlots > 0 ?
-			(progress.completedSlots * 100 / progress.totalSlots) : 0);
+			.arg(progress.totalSlots);
+		if (!progress.currentFile.empty()) {
+			text += QString(" - %1").arg(QString::fromStdString(progress.currentFile));
+		}
+		if (progress.totalBytes > 0) {
+			text += QString(" (%1 / %2)")
+				.arg(QString::fromStdString(FormatBytes(progress.completedBytes)))
+				.arg(QString::fromStdString(FormatBytes(progress.totalBytes)));
+		}
+		statusLabel_->setText(text);
 	}
 };
 
