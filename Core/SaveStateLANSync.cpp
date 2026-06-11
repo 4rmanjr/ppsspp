@@ -491,6 +491,34 @@ bool SaveStateLANSync::StartServer() {
 					body = request.substr(headerEnd + 4);
 				}
 
+				// Validate Bearer token on protected endpoints
+				{
+					bool isProtected = (path == "/api/v1/saves/list" ||
+					                    path.find("/api/v1/saves/") == 0);
+					if (isProtected) {
+						std::string authToken = ExtractBearerToken(request);
+						bool authorized = false;
+						{
+							std::lock_guard<std::mutex> lock(peerMutex_);
+							for (const auto &p : pairedPeers_) {
+								if (p.token == authToken && !authToken.empty()) {
+									authorized = true;
+									break;
+								}
+							}
+						}
+						if (!authorized) {
+							WARN_LOG(Log::System, "LANSync: unauthorized %s %s (token=%s...)",
+							         method.c_str(), path.c_str(),
+							         authToken.empty() ? "none" : authToken.substr(0, 8).c_str());
+							WriteHTTPResponse(clientFd, 401,
+							                  "{\"error\":\"unauthorized\"}");
+							closesocket(clientFd);
+							return;
+						}
+					}
+				}
+
 				// Route requests
 				if (path == "/api/v1/pair" && method == "POST") {
 					std::string response;
