@@ -11,6 +11,7 @@
 #include <random>
 #include <cstdint>
 #include <cstring>
+#include <cerrno>
 #include <chrono>
 #include <algorithm>
 #include <set>
