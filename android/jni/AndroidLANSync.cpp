@@ -75,6 +75,8 @@ static jmethodID g_method_stopForeground = nullptr;
 static jmethodID g_method_scanQR = nullptr;
 static jmethodID g_method_storeKey = nullptr;
 static jmethodID g_method_loadKey = nullptr;
+static jmethodID g_method_updateSyncProgress = nullptr;
+static jmethodID g_method_completeSync = nullptr;
 
 // ==================== Android Keystore (via JNI) ====================
 
@@ -198,6 +200,25 @@ static void CallJavaStartQRScan() {
 	scope.env->CallStaticVoidMethod(g_lanSyncClass, g_method_scanQR);
 }
 
+// ==================== Android Sync Progress (via JNI) ====================
+
+static void CallJavaUpdateSyncProgress(int completed, int total, int64_t totalBytes, int64_t completedBytes) {
+	JNIScope scope;
+	if (!scope || !g_lanSyncClass || !g_method_updateSyncProgress) return;
+
+	scope.env->CallStaticVoidMethod(g_lanSyncClass, g_method_updateSyncProgress,
+	                                completed, total,
+	                                (jlong)completedBytes, (jlong)totalBytes);
+}
+
+static void CallJavaCompleteSync(int uploaded, int downloaded) {
+	JNIScope scope;
+	if (!scope || !g_lanSyncClass || !g_method_completeSync) return;
+
+	scope.env->CallStaticVoidMethod(g_lanSyncClass, g_method_completeSync,
+	                                uploaded, downloaded);
+}
+
 // ==================== JNI Callbacks (called from Java) ====================
 
 static std::mutex g_peerMutex;
@@ -299,6 +320,10 @@ Java_org_ppsspp_ppsspp_LANSyncActivity_registerNatives(JNIEnv *env, jclass clz) 
 		"(Ljava/lang/String;[B)Ljava/lang/String;");
 	g_method_loadKey = env->GetStaticMethodID(clz, "keystoreLoad",
 		"(Ljava/lang/String;)[B");
+	g_method_updateSyncProgress = env->GetStaticMethodID(clz, "updateSyncProgress",
+		"(IIJJ)V");
+	g_method_completeSync = env->GetStaticMethodID(clz, "completeSync",
+		"(II)V");
 
 	INFO_LOG(Log::System, "AndroidLANSync: JNI registered, methods cached");
 	return JNI_VERSION_1_6;
@@ -373,6 +398,15 @@ void AndroidLANSync::Disable() {
 	core.StopServer();
 	core.StopDiscovery();
 	enabled_ = false;
+}
+
+void AndroidLANSync::UpdateSyncProgress(const SaveStateLANSync::SyncProgress &progress) {
+	CallJavaUpdateSyncProgress(progress.completedSlots, progress.totalSlots,
+	                           progress.totalBytes, progress.completedBytes);
+}
+
+void AndroidLANSync::CompleteSync(int uploaded, int downloaded) {
+	CallJavaCompleteSync(uploaded, downloaded);
 }
 
 void AndroidLANSync::StartQRScan(std::function<void(const std::string &result)> callback) {

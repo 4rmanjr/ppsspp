@@ -1205,11 +1205,17 @@ void GameSettingsScreen::CreateNetworkingSettings(UI::ViewGroup *networkingSetti
 					if (p.totalSlots > 0) {
 						System_Toast(StringFromFormat("Syncing: %d/%d", p.completedSlots, p.totalSlots));
 					}
+#if PPSSPP_PLATFORM(ANDROID)
+					AndroidLANSync::Instance().UpdateSyncProgress(p);
+#endif
 				},
 				[](const SaveStateLANSync::SyncResult &result) {
 					if (result.success) {
 						System_Toast(StringFromFormat("Sync OK: %d up, %d down", result.uploaded, result.downloaded));
 						INFO_LOG(Log::System, "Sync OK: %d up, %d down", result.uploaded, result.downloaded);
+#if PPSSPP_PLATFORM(ANDROID)
+						AndroidLANSync::Instance().CompleteSync(result.uploaded, result.downloaded);
+#endif
 					} else {
 						System_Toast("Sync failed");
 						INFO_LOG(Log::System, "Sync failed");

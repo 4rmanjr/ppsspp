@@ -103,43 +103,43 @@ tabHolder_->EnsureAllCreated();  // visibilitas set berdasarkan currentTab_ = 3 
 
 ### #4: Server Hanya Baca 4KB Request
 
-**Status**: ❌ Open
+**Status**: ✅ Not a bug (2026-06-11)
 
-**Lokasi**: `Core/SaveStateLANSync.cpp:293-296`
+**Lokasi**: `Core/SaveStateLANSync.cpp:450-479` (general handler), `Core/SaveStateLANSync.cpp:560-590` (POST handler)
 
-**Deskripsi**: `recv(clientFd, buf, sizeof(buf) - 1, 0)` dengan `buf[4096]`. Upload body > 3.5KB terpotong.
+**Deskripsi**: Dianalisa ulang. General handler baca sampai 200 iterasi × 16KB = 3.2MB buffer awal. POST upload handler punya `while (bytesRead < contentLength)` loop sendiri yang membaca sisa bytes dari socket stream. Upload besar bekerja dengan benar.
 
-**Impact**: Semua upload save state > 3.5KB rusak.
+**Impact**: N/A — bukan bug fungsional. Optimisasi memory (hindari double-buffer 3.2MB) deferred sebagai low-priority.
 
-**Fix needed**: Loop read sampai Content-Length terpenuhi.
+**Fix**: Tidak diperlukan.
 
 ---
 
 ### #5: Conflict Resolution Stubbed
 
-**Status**: ❌ Open
+**Status**: ✅ Fixed (pre-2026-06-11, BUGS.md was stale)
 
-**Lokasi**: `Core/SaveStateLANSync.cpp:758-773`
+**Lokasi**: `Core/SaveStateLANSync.cpp:1466-1578`
 
-**Deskripsi**: `ResolveConflict()` punya `break` kosong untuk `KEEP_LOCAL`/`KEEP_REMOTE`. `ResolveAllConflicts()` clear queue tanpa apply resolusi.
+**Deskripsi**: `ResolveConflict()` mendownload .ppst + .jpg thumbnail dari peer, simpan ke disk lokal dengan atomic .tmp → rename. `ResolveAllConflicts()` iterasi semua pending conflicts, panggil `ResolveConflict()`, lalu clear queue. `KEEP_LOCAL` return early. Implementasi lengkap.
 
-**Impact**: Konflik terdeteksi tapi tidak di-resolve.
+**Impact**: N/A — sudah bekerja.
 
-**Fix needed**: Implementasi download/upload di `ResolveConflict()`.
+**Fix**: Update BUGS.md.
 
 ---
 
 ### #6: Server Tidak Validasi Token
 
-**Status**: ❌ Open
+**Status**: ✅ Fixed (2026-06-11)
 
-**Lokasi**: `Core/SaveStateLANSync.cpp:318-413`
+**Lokasi**: `Core/SaveStateLANSync.cpp:493-516`
 
 **Deskripsi**: API endpoint tidak validasi `Authorization: Bearer`. Device mana pun bisa download/overwrite tanpa pairing.
 
 **Impact**: Security hole.
 
-**Fix needed**: Validasi token di setiap handler.
+**Fix**: Tambah `ExtractBearerToken()` helper dan pre-route auth check. Semua `/api/v1/saves/*` endpoint sekarang validasi token terhadap paired peer tokens. Return 401 untuk request tidak terautentikasi. Pairing endpoints tetap tanpa auth (PIN-based).
 
 ---
 
@@ -463,9 +463,9 @@ Thread dari `std::thread` TIDAK ter-attach ke JVM → `getEnv()` panggil `Handle
 | 1 | Hardcoded `"current_game"` | Critical | ✅ Fixed |
 | 2 | Token mismatch pairing | Critical | ✅ Fixed |
 | 3 | HandleSaveList missing `gameId` | Critical | ✅ Fixed |
-| 4 | 4KB request limit | High | ❌ Open |
-| 5 | Conflict resolution stub | High | ❌ Open |
-| 6 | No server auth | Medium | ❌ Open |
+| 4 | 4KB request limit | High | ✅ Not a bug |
+| 5 | Conflict resolution stub | High | ✅ Fixed (stale BUGS.md) |
+| 6 | No server auth | Medium | ✅ Fixed |
 | 7 | Detached thread lifecycle | Medium | ✅ Fixed |
 | 8 | GetPeers() empty | Low | ❌ Open |
 | 9 | TLS not wired | Low | ❌ Open |

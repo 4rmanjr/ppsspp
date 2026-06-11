@@ -97,6 +97,14 @@ void DataToHexString(int indent, uint32_t startAddr, const uint8_t* data, size_t
 std::string StringFromFormat(const char* format, ...);
 std::string StringFromInt(int value);
 
+// Format bytes as human-readable string (e.g., "12.5 MB", "1.2 GB")
+inline std::string FormatBytes(int64_t bytes) {
+	if (bytes < 1024) return StringFromFormat("%lld B", (long long)bytes);
+	if (bytes < 1024 * 1024) return StringFromFormat("%.1f KB", (double)bytes / 1024.0);
+	if (bytes < 1024 * 1024 * 1024) return StringFromFormat("%.1f MB", (double)bytes / (1024.0 * 1024.0));
+	return StringFromFormat("%.2f GB", (double)bytes / (1024.0 * 1024.0 * 1024.0));
+}
+
 std::string_view KeepAfterLast(std::string_view s, char c);
 std::string_view KeepIncludingLast(std::string_view s, char c);
 

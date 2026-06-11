@@ -125,12 +125,20 @@ public class LANSyncService extends Service {
         }
     }
 
-    public void updateSyncProgress(int completed, int total) {
+    public void updateSyncProgress(int completed, int total, long completedBytes, long totalBytes) {
         this.syncProgress = completed;
         this.syncTotal = total;
         this.isSyncing = true;
 
-        String status = String.format("Syncing: %d/%d slots", completed, total);
+        String status;
+        if (totalBytes > 0) {
+            String progressBytes = formatBytes(completedBytes);
+            String totalBytesStr = formatBytes(totalBytes);
+            status = String.format("Syncing: %d/%d slots (%s/%s)", completed, total, progressBytes, totalBytesStr);
+        } else {
+            status = String.format("Syncing: %d/%d slots", completed, total);
+        }
+
         Notification notification = new NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.stat_notify_sync)
             .setContentTitle("PPSSPP LAN Sync")
@@ -143,6 +151,18 @@ public class LANSyncService extends Service {
         NotificationManager manager = getSystemService(NotificationManager.class);
         if (manager != null) {
             manager.notify(NOTIFICATION_ID, notification);
+        }
+    }
+
+    private String formatBytes(long bytes) {
+        if (bytes < 1024) {
+            return bytes + " B";
+        } else if (bytes < 1024 * 1024) {
+            return String.format("%.1f KB", bytes / 1024.0);
+        } else if (bytes < 1024L * 1024 * 1024) {
+            return String.format("%.1f MB", bytes / (1024.0 * 1024.0));
+        } else {
+            return String.format("%.2f GB", bytes / (1024.0 * 1024.0 * 1024.0));
         }
     }
 

@@ -15,7 +15,9 @@
 
 #include <string>
 #include <vector>
+#include <atomic>
 #include <functional>
+#include <cstdint>
 
 #include "SDL/LinuxLANSync.h"
 
@@ -89,10 +91,14 @@ private:
 	std::string pairingPin_;
 
 	// Sync progress
-	float progress_ = 0.0f;
-	int completed_ = 0;
-	int total_ = 0;
+	std::atomic<float> progress_{0.0f};
+	std::atomic<int> completed_{0};
+	std::atomic<int> total_{0};
 	std::string currentPeer_;
+	std::string currentFile_;
+	std::string currentGame_;
+	std::atomic<int64_t> totalBytes_{0};
+	std::atomic<int64_t> completedBytes_{0};
 	std::vector<std::string> slotLog_;
 
 	// Large save warning
