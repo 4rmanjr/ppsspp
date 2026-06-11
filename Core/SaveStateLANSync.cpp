@@ -148,6 +148,20 @@ static void WriteHTTPResponse(int fd, int status, const std::string &body,
 	(void)sent;  // Best effort
 }
 
+// Extracts Bearer token from HTTP Authorization header.
+// Returns empty string if header missing or malformed.
+static std::string ExtractBearerToken(const std::string &request) {
+	const char *prefix = "Authorization: Bearer ";
+	size_t pos = request.find(prefix);
+	if (pos == std::string::npos)
+		return "";
+	pos += strlen(prefix);
+	size_t end = request.find("\r\n", pos);
+	if (end == std::string::npos)
+		end = request.size();
+	return request.substr(pos, end - pos);
+}
+
 // ==================== SaveStateLANSync ====================
 
 SaveStateLANSync &SaveStateLANSync::Instance() {
