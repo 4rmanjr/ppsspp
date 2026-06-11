@@ -723,6 +723,8 @@ void SaveStateLANSync::PairWithPeer(const std::string &peerId, const std::string
 		inet_pton(AF_INET, host.c_str(), &addr.sin_addr);
 
 		if (connect(sock, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
+			WARN_LOG(Log::System, "LANSync: PairWithPeer connect failed %s:%d: %s",
+			         host.c_str(), port, strerror(errno));
 			closesocket(sock);
 			if (callback) callback(false, "Connection refused");
 			return;
@@ -837,6 +839,8 @@ void SaveStateLANSync::AutoPairWithPeer(const std::string &host, int port,
 		inet_pton(AF_INET, host.c_str(), &addr.sin_addr);
 
 		if (connect(sock, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
+			WARN_LOG(Log::System, "LANSync: AutoPairWithPeer connect failed %s:%d: %s",
+			         host.c_str(), port, strerror(errno));
 			closesocket(sock);
 			if (callback) callback(false, "Connection refused");
 			return;
@@ -1098,7 +1102,8 @@ SaveStateLANSync::SyncResult SaveStateLANSync::DoSync(const PeerInfo &peer, Save
 	inet_pton(AF_INET, peer.host.c_str(), &addr.sin_addr);
 
 	if (connect(sock, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
-		fprintf(stderr, "DoSync: connect() failed\n");
+		WARN_LOG(Log::System, "LANSync: DoSync connect failed %s:%d: %s",
+		         peer.host.c_str(), peer.port, strerror(errno));
 		closesocket(sock); result.success = false; return result;
 	}
 	fprintf(stderr, "DoSync: connected OK, scanning local dir...\n");
@@ -1239,6 +1244,9 @@ SaveStateLANSync::SyncResult SaveStateLANSync::DoSync(const PeerInfo &peer, Save
 					}
 				}
 			}
+		} else {
+			WARN_LOG(Log::System, "LANSync: downloadSave connect failed %s_%d.%s -> %s:%d: %s",
+			         gid.c_str(), sl, ext, peer.host.c_str(), peer.port, strerror(errno));
 		}
 		closesocket(sock);
 		return ok;
@@ -1275,6 +1283,9 @@ SaveStateLANSync::SyncResult SaveStateLANSync::DoSync(const PeerInfo &peer, Save
 			char resp[256];
 			int n = recv(sock, resp, sizeof(resp) - 1, 0);
 			if (n > 0) { resp[n] = '\0'; ok = (strstr(resp, "201") != nullptr); }
+		} else {
+			WARN_LOG(Log::System, "LANSync: uploadSave connect failed %s_%d.%s -> %s:%d: %s",
+			         gid.c_str(), sl, ext, peer.host.c_str(), peer.port, strerror(errno));
 		}
 		closesocket(sock);
 		return ok;
