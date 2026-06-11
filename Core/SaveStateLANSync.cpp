@@ -711,6 +711,10 @@ void SaveStateLANSync::PairWithPeer(const std::string &peerId, const std::string
 			if (callback) callback(false, "Socket error");
 			return;
 		}
+		struct timeval tv;
+		tv.tv_sec = 30; tv.tv_usec = 0;
+		setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char *)&tv, sizeof(tv));
+		setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, (const char *)&tv, sizeof(tv));
 
 		struct sockaddr_in addr;
 		memset(&addr, 0, sizeof(addr));
@@ -821,6 +825,10 @@ void SaveStateLANSync::AutoPairWithPeer(const std::string &host, int port,
 		// POST /api/v1/pair-request
 		int sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 		if (sock < 0) { if (callback) callback(false, "Socket error"); return; }
+		struct timeval tv;
+		tv.tv_sec = 15; tv.tv_usec = 0;
+		setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char *)&tv, sizeof(tv));
+		setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, (const char *)&tv, sizeof(tv));
 
 		struct sockaddr_in addr;
 		memset(&addr, 0, sizeof(addr));
@@ -904,6 +912,9 @@ void SaveStateLANSync::AutoPairWithPeer(const std::string &host, int port,
 
 			int pollSock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 			if (pollSock < 0) continue;
+			struct timeval pollTv;
+			pollTv.tv_sec = 5; pollTv.tv_usec = 0;
+			setsockopt(pollSock, SOL_SOCKET, SO_RCVTIMEO, (const char *)&pollTv, sizeof(pollTv));
 
 			memset(&addr, 0, sizeof(addr));
 			addr.sin_family = AF_INET;
@@ -1075,6 +1086,10 @@ SaveStateLANSync::SyncResult SaveStateLANSync::DoSync(const PeerInfo &peer, Save
 	// Connect to peer
 	int sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 	if (sock < 0) { fprintf(stderr, "DoSync: socket() failed\n"); result.success = false; return result; }
+	struct timeval tv;
+	tv.tv_sec = 30; tv.tv_usec = 0;
+	setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char *)&tv, sizeof(tv));
+	setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, (const char *)&tv, sizeof(tv));
 
 	struct sockaddr_in addr;
 	memset(&addr, 0, sizeof(addr));
@@ -1242,6 +1257,10 @@ SaveStateLANSync::SyncResult SaveStateLANSync::DoSync(const PeerInfo &peer, Save
 			(int)data.size());
 		int sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 		if (sock < 0) return false;
+		struct timeval tv;
+		tv.tv_sec = 30; tv.tv_usec = 0;
+		setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char *)&tv, sizeof(tv));
+		setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, (const char *)&tv, sizeof(tv));
 		struct sockaddr_in addr;
 		memset(&addr, 0, sizeof(addr));
 		addr.sin_family = AF_INET;
