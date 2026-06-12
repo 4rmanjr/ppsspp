@@ -54,7 +54,6 @@
 #include "Core/RetroAchievements.h"
 #include "Core/SaveStateLANSync.h"
 #include "HW/MemoryStick.h"
-#include "Core/SaveStateLANSync.h"
 
 #ifndef MOBILE_DEVICE
 #include "Core/AVIDump.h"
