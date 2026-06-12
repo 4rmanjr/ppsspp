@@ -16,5 +16,16 @@ for dir in "$HOME/.gradle/wrapper/dists/"*; do
   fi
 done
 
-# Fallback: try system gradle
+# Fallback: try cached gradle distribution
+for dir in "$HOME/.gradle/wrapper/dists/"*; do
+  if [ -d "$dir" ]; then
+    for dist in "$dir"/*/gradle-*/bin/gradle; do
+      if [ -x "$dist" ]; then
+        exec "$dist" "$@"
+      fi
+    done
+  fi
+done
+
+# Last fallback: try system gradle
 exec gradle "$@"
