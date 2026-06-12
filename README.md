@@ -27,6 +27,32 @@ To download fresh development builds for Android, Windows and Mac, [go to the /d
 
 For game compatibility, see [community compatibility feedback](https://report.ppsspp.org/games).
 
+---
+
+Fork feature: LAN Save State Sync
+----------------------------------
+
+This fork adds **LAN Save State Sync** — sync save states and save data across PPSSPP instances on the same local network.
+
+### Features
+- Real-time save state sync over HTTP with TLS support
+- Zero-config auto-discovery via mDNS (Bonjour/Avahi)
+- Sync savestates, savedata, and screenshot metadata
+- Pairing system for trusted devices
+- Works on Android, Linux, Windows, macOS, and iOS
+
+### Quick Start
+1. Open Settings → LAN Save State Sync
+2. Enable LAN Sync, set a device name
+3. Other devices on the same network will auto-discover
+4. Save states are automatically synced to paired devices
+
+### Requirements
+- All devices must be on the same local network
+- Port 1069 (HTTP) or 10690 (HTTPS) must be open between devices
+
+---
+
 What's new in 1.20.4
 --------------------
 1.20.4 is an unusually big followup release, but given the new multiplayer developments, we need something to cover the longer gap to 1.21.
