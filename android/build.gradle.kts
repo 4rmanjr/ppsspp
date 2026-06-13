@@ -148,6 +148,7 @@ android {
 	}
 	buildTypes {
 		getByName("debug") {
+			isDefault = true
 			isMinifyEnabled = false
 			isJniDebuggable = true
 			signingConfig = signingConfigs.getByName("debug")
@@ -199,6 +200,7 @@ android {
 	}
 	productFlavors {
 		create("normal") {
+			isDefault = true
 			applicationId = "org.ppsspp.ppsspp"
 			dimension = "variant"
 			externalNativeBuild {
