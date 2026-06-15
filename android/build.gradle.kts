@@ -1,7 +1,3 @@
-import com.google.protobuf.gradle.*
-import org.gradle.process.ExecOperations
-import java.io.ByteArrayOutputStream
-
 plugins {
 	id("com.android.application")
 	id("com.google.protobuf")
@@ -73,7 +69,7 @@ dependencies {
 	implementation("androidx.appcompat:appcompat:1.7.1")
 	implementation("androidx.documentfile:documentfile:1.1.0")
 	implementation("androidx.security:security-crypto:1.1.0-alpha06")
-	implementation("com.google.protobuf:protobuf-javalite:4.33.5")
+	implementation("com.google.protobuf:protobuf-javalite:4.35.1")
 	// ML Kit for QR code scanning (LAN sync pairing)
 	implementation("com.google.mlkit:barcode-scanning:17.3.0")
 }
@@ -118,8 +114,8 @@ android {
 	ndkVersion = "29.0.14206865"
 
 	compileOptions {
-		sourceCompatibility = JavaVersion.VERSION_11
-		targetCompatibility = JavaVersion.VERSION_11
+		sourceCompatibility = JavaVersion.VERSION_17
+		targetCompatibility = JavaVersion.VERSION_17
 	}
 
 	lint {
