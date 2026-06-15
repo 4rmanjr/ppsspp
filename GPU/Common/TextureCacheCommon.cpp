@@ -92,7 +92,7 @@ static bool GetBestFramebufferCandidate(FramebufferManagerCommon *fbManager, con
 // These are Data::Format:: B4G4R4A4_PACK16, B5G6R6_PACK16, B5G5R5A1_PACK16, R8G8B8A8
 
 TextureCacheCommon::TextureCacheCommon(Draw::DrawContext *draw, Draw2D *draw2D)
-	: draw_(draw), draw2D_(draw2D), replacer_(draw), textureShaderCache_(draw, draw2D_) {
+	: draw_(draw), draw2D_(draw2D), replacer_(draw), textureShaderCache_(draw, draw2D_), clutTextureCache_(draw) {
 	decimationCounter_ = TEXCACHE_DECIMATION_INTERVAL;
 
 	// It's only possible to have 1KB of palette entries, although we allow 2KB in a hack.
@@ -2234,7 +2234,9 @@ void TextureCacheCommon::ApplyTexture(bool doBind, bool flatZ) {
 	if (entry->status & TexStatus::CLUT_GPU) {
 		_dbg_assert_(entry->status & TexStatus::CLUT8_INDEXED);
 		// Special process.
-		ApplyTextureDepalFramebufferCLUT(entry);
+		if (doBind) {
+			ApplyTextureDepalFramebufferCLUT(entry);
+		}
 		gstate_c.SetTextureSolidAlpha(false);
 		gstate_c.SetTextureIs3D(false);
 		gstate_c.SetTextureIsArray(false);
@@ -2496,6 +2498,7 @@ void TextureCacheCommon::ApplyTextureFramebuffer(VirtualFramebuffer *framebuffer
 }
 
 // Applies depal to a normal (non-framebuffer) texture, pre-decoded to CLUT8 format.
+// TODO: Merge this function with the above.
 void TextureCacheCommon::ApplyTextureDepalFramebufferCLUT(TexCacheEntry *entry) {
 	uint32_t clutMode = gstate.clutformat & 0xFFFFFF;
 
@@ -2542,6 +2545,14 @@ void TextureCacheCommon::ApplyTextureDepalFramebufferCLUT(TexCacheEntry *entry) 
 		v2 = bounds.maxV + gstate_c.curTextureYOffset + 1.0f;
 		// We need to reapply the texture next time since we cropped UV.
 		gstate_c.Dirty(DIRTY_TEXTURE_PARAMS);
+	}
+
+	// If it nearly covers, just make it cover. This fixes Ridge Racer where the UVs are slightly off and it causes a bright line on the lens flare.
+	if (u1 > 0 && u1 < 3) {
+		u1 = 0;
+	}
+	if (v1 > 0 && v1 < 3) {
+		v1 = 0;
 	}
 
 	Draw::Framebuffer *depalFBO = framebufferManager_->GetTempFBO(TempFBO::DEPAL, texWidth, texHeight);
