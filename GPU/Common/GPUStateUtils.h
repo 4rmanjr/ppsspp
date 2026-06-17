@@ -14,10 +14,10 @@ enum StencilValueType {
 	STENCIL_VALUE_ONE,
 	STENCIL_VALUE_KEEP,
 	STENCIL_VALUE_INVERT,
-	STENCIL_VALUE_INCR_4,
-	STENCIL_VALUE_INCR_8,
-	STENCIL_VALUE_DECR_4,
-	STENCIL_VALUE_DECR_8,
+	STENCIL_VALUE_INCR_4BIT,
+	STENCIL_VALUE_INCR_8BIT,
+	STENCIL_VALUE_DECR_4BIT,
+	STENCIL_VALUE_DECR_8BIT,
 };
 
 enum ReplaceAlphaType {
@@ -58,6 +58,10 @@ bool IsAlphaTestAgainstZero();
 bool NeedsTestDiscard();
 bool IsDepthTestEffectivelyDisabled();
 bool IsStencilTestOutputDisabled();
+
+inline bool CanForceBilinear(const GPUgstate &gstate) {
+	return ((!gstate.isColorTestEnabled() || IsColorTestTriviallyTrue()) && (!gstate.isAlphaTestEnabled() || IsAlphaTestTriviallyTrue()));
+}
 
 StencilValueType ReplaceAlphaWithStencilType();
 ReplaceAlphaType ReplaceAlphaWithStencil(ReplaceBlendType replaceBlend);

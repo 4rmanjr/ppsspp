@@ -378,9 +378,8 @@ GamePauseScreen::~GamePauseScreen() {
 
 bool GamePauseScreen::UnsyncKey(const KeyInput &key) {
 	bool retval = UIScreen::UnsyncKey(key);
-	bool pauseTrigger = false;
-	retval = g_controlMapper.Key(key, &pauseTrigger) || retval;
-	if (pauseTrigger) {
+	retval = g_controlMapper.Key(key) || retval;
+	if (g_controlMapper.PollPauseTrigger()) {
 		TriggerFinish(DR_BACK);
 	}
 	return retval;
@@ -760,7 +759,7 @@ void GamePauseScreen::CreateViews() {
 			screenManager()->push(new GameScreen(gamePath_, true));
 		});
 
-		if (System_GetPropertyInt(SYSPROP_DEVICE_TYPE) == DEVICE_TYPE_MOBILE) {
+		if (System_GetPropertyBool(SYSPROP_CAN_RESTRICT_ORIENTATION)) {
 			AddRotationPicker(screenManager(), middleColumn, false);
 		}
 

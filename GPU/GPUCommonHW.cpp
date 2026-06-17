@@ -1328,15 +1328,7 @@ void GPUCommonHW::Execute_Bezier(u32 op, u32 diff) {
 
 	// We need to dirty UVSCALEOFFSET here because we look at the submit type when setting that uniform.
 	gstate_c.Dirty(DIRTY_RASTER_STATE | DIRTY_VERTEXSHADER_STATE | DIRTY_UVSCALEOFFSET);
-	if (drawEngineCommon_->CanUseHardwareTessellation(surface.primType)) {
-		gstate_c.submitType = SubmitType::HW_BEZIER;
-		if (gstate_c.spline_num_points_u != surface.num_points_u) {
-			gstate_c.Dirty(DIRTY_BEZIERSPLINE);
-			gstate_c.spline_num_points_u = surface.num_points_u;
-		}
-	} else {
-		gstate_c.submitType = SubmitType::BEZIER;
-	}
+	gstate_c.submitType = SubmitType::BEZIER;
 
 	int bytesRead = 0;
 	gstate_c.UpdateUVScaleOffset();
@@ -1408,15 +1400,7 @@ void GPUCommonHW::Execute_Spline(u32 op, u32 diff) {
 
 	// We need to dirty UVSCALEOFFSET here because we look at the submit type when setting that uniform.
 	gstate_c.Dirty(DIRTY_RASTER_STATE | DIRTY_VERTEXSHADER_STATE | DIRTY_UVSCALEOFFSET);
-	if (drawEngineCommon_->CanUseHardwareTessellation(surface.primType)) {
-		gstate_c.submitType = SubmitType::HW_SPLINE;
-		if (gstate_c.spline_num_points_u != surface.num_points_u) {
-			gstate_c.Dirty(DIRTY_BEZIERSPLINE);
-			gstate_c.spline_num_points_u = surface.num_points_u;
-		}
-	} else {
-		gstate_c.submitType = SubmitType::SPLINE;
-	}
+	gstate_c.submitType = SubmitType::SPLINE;
 
 	int bytesRead = 0;
 	gstate_c.UpdateUVScaleOffset();
@@ -1797,7 +1781,7 @@ void GPUCommonHW::FormatGPUStatsCommon(StringWriter &w) {
 		"Draw: %d (%d dec, %d culled), flushes %d, clears %d, bbox jumps %d\n"
 		"%d soft. Vertices: %d dec: %d drawn: %d clipped tris: %d\n"
 		"FBOs active: %d (evaluations: %d, created %d)\n"
-		"Textures: %d, dec: %d, invalidated: %d, changed %d, hashed: %d kB, clut %d\n"
+		"Textures: %d (s: %d), dec: %d, invalidated: %d, changed %d, hashed: %d kB, clut %d\n"
 		"readbacks %d (%d non-block), upload %d (cached %d), depal %d\n"
 		"block transfers: %d\n"
 		"replacer: tracks %d references, %d unique textures\n"
@@ -1819,12 +1803,13 @@ void GPUCommonHW::FormatGPUStatsCommon(StringWriter &w) {
 		gpuStats.perFrame.numSoftTransformedDraws,
 		gpuStats.perFrame.numVertsSubmitted,
 		gpuStats.perFrame.numVertsDecoded,
-		gpuStats.perFrame.numUncachedVertsDrawn,
+		gpuStats.perFrame.numVertsDrawn,
 		gpuStats.perFrame.numSoftClippedTriangles,
 		(int)framebufferManager_->NumVFBs(),
 		gpuStats.perFrame.numFramebufferEvaluations,
 		gpuStats.perFrame.numFBOsCreated,
 		(int)textureCache_->NumLoadedTextures(),
+		(int)textureCache_->NumSecondaryTextures(),
 		gpuStats.perFrame.numTexturesDecoded,
 		gpuStats.perFrame.numTextureInvalidations,
 		gpuStats.perFrame.numTexturesChanged,

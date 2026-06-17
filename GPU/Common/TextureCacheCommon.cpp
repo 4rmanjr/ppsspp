@@ -92,7 +92,7 @@ static bool GetBestFramebufferCandidate(FramebufferManagerCommon *fbManager, con
 // These are Data::Format:: B4G4R4A4_PACK16, B5G6R6_PACK16, B5G5R5A1_PACK16, R8G8B8A8
 
 TextureCacheCommon::TextureCacheCommon(Draw::DrawContext *draw, Draw2D *draw2D)
-	: draw_(draw), draw2D_(draw2D), replacer_(draw), textureShaderCache_(draw, draw2D_) {
+	: draw_(draw), draw2D_(draw2D), replacer_(draw), textureShaderCache_(draw, draw2D_), clutTextureCache_(draw) {
 	decimationCounter_ = TEXCACHE_DECIMATION_INTERVAL;
 
 	// It's only possible to have 1KB of palette entries, although we allow 2KB in a hack.
@@ -282,8 +282,7 @@ SamplerCacheKey TextureCacheCommon::GetSamplingParams(int maxLevel, const TexCac
 			break;
 		case TEX_FILTER_FORCE_LINEAR:
 			// Override to linear filtering if there's no alpha or color testing going on.
-			if ((!gstate.isColorTestEnabled() || IsColorTestTriviallyTrue()) &&
-				(!gstate.isAlphaTestEnabled() || IsAlphaTestTriviallyTrue())) {
+			if (CanForceBilinear(gstate)) {
 				forceFiltering = TEX_FILTER_FORCE_LINEAR;
 			}
 			break;
@@ -481,9 +480,19 @@ TexCacheEntry *TextureCacheCommon::SetTexture() {
 
 	bool hasClut = gstate.isTextureFormatIndexed();
 	bool hasClutGPU = false;
+	bool clutInShader = false;
 	u32 cluthash;
 	if (hasClut) {
-		if (clutRenderAddress_ != 0xFFFFFFFF) {
+		if (PSP_CoreParameter().compat.flags().TextureCLUTInShader && !replacer_.Enabled() && (texFormat == GE_TFMT_CLUT8 || texFormat == GE_TFMT_CLUT4)) {
+			if (clutLastFormat_ != gstate.clutformat) {
+				// We update here because the clut format can be specified after the load.
+				// TODO: Unify this as far as possible (I think only GLES backend really needs its own implementation due to different component order).
+				UpdateCurrentClut(gstate.getClutPaletteFormat(), gstate.getClutIndexStartPos(), gstate.isClutIndexSimple());
+			}
+			// We computed clutHash_ (with underscore) above. But cluthash we set to 0, so the cache will collapse all the textures with various palettes.
+			cluthash = 0;
+			clutInShader = true;
+		} else if (clutRenderAddress_ != 0xFFFFFFFF) {
 			gstate_c.curTextureXOffset = 0.0f;
 			gstate_c.curTextureYOffset = 0.0f;
 			hasClutGPU = true;
@@ -706,13 +715,9 @@ TexCacheEntry *TextureCacheCommon::SetTexture() {
 
 	entry->cluthash = cluthash;
 
-	/*
-	if (entry->maxLevel == 0 && (entry->format == GE_TFMT_CLUT8 || entry->format == GE_TFMT_CLUT4) &&
-		!(entry->status & TexStatus::TO_REPLACE) && !(entry->status & TexStatus::TO_SCALE) && !(entry->status & TexStatus::RELIABLE)) {
-		// Experiment with CLUT8 decoding for regular textures.
+	if (clutInShader) {
 		entry->status |= TexStatus::CLUT8_INDEXED;
 	}
-	*/
 
 	gstate_c.curTextureWidth = w;
 	gstate_c.curTextureHeight = h;
@@ -867,12 +872,12 @@ void TextureCacheCommon::Decimate(TexCacheEntry *exceptThisOne, bool forcePressu
 			}
 		}
 
-		VERBOSE_LOG(Log::G3D, "Decimated texture cache, saved %d estimated bytes - now %d bytes", had - cacheSizeEstimate, cacheSizeEstimate);
+		VERBOSE_LOG(Log::G3D, "Decimated texture cache, saved %d estimated bytes - now %d bytes", (int)(had - cacheSizeEstimate), (int)cacheSizeEstimate);
 	}
 
 	s64 secondCacheSizeEstimate = SecondCacheSizeEstimate();
 	// If enabled, we also need to clear the secondary cache.
-	if (PSP_CoreParameter().compat.flags().SecondaryTextureCache && (forcePressure || secondCacheSizeEstimate >= TEXCACHE_SECOND_MIN_PRESSURE)) {
+	if (forcePressure || secondCacheSizeEstimate >= TEXCACHE_SECOND_MIN_PRESSURE) {
 		const u32 had = secondCacheSizeEstimate;
 
 		for (TexCache::iterator iter = secondCache_.begin(); iter != secondCache_.end(); ) {
@@ -890,7 +895,7 @@ void TextureCacheCommon::Decimate(TexCacheEntry *exceptThisOne, bool forcePressu
 			}
 		}
 
-		VERBOSE_LOG(Log::G3D, "Decimated second texture cache, saved %d estimated bytes - now %d bytes", had - secondCacheSizeEstimate, secondCacheSizeEstimate);
+		VERBOSE_LOG(Log::G3D, "Decimated second texture cache, saved %d estimated bytes - now %d bytes", (int)(had - secondCacheSizeEstimate), (int)secondCacheSizeEstimate);
 	}
 
 	// Decimate known videos.
@@ -2229,7 +2234,9 @@ void TextureCacheCommon::ApplyTexture(bool doBind, bool flatZ) {
 	if (entry->status & TexStatus::CLUT_GPU) {
 		_dbg_assert_(entry->status & TexStatus::CLUT8_INDEXED);
 		// Special process.
-		ApplyTextureDepalFramebufferCLUT(entry);
+		if (doBind) {
+			ApplyTextureDepalFramebufferCLUT(entry);
+		}
 		gstate_c.SetTextureSolidAlpha(false);
 		gstate_c.SetTextureIs3D(false);
 		gstate_c.SetTextureIsArray(false);
@@ -2491,6 +2498,7 @@ void TextureCacheCommon::ApplyTextureFramebuffer(VirtualFramebuffer *framebuffer
 }
 
 // Applies depal to a normal (non-framebuffer) texture, pre-decoded to CLUT8 format.
+// TODO: Merge this function with the above.
 void TextureCacheCommon::ApplyTextureDepalFramebufferCLUT(TexCacheEntry *entry) {
 	uint32_t clutMode = gstate.clutformat & 0xFFFFFF;
 
@@ -2537,6 +2545,14 @@ void TextureCacheCommon::ApplyTextureDepalFramebufferCLUT(TexCacheEntry *entry) 
 		v2 = bounds.maxV + gstate_c.curTextureYOffset + 1.0f;
 		// We need to reapply the texture next time since we cropped UV.
 		gstate_c.Dirty(DIRTY_TEXTURE_PARAMS);
+	}
+
+	// If it nearly covers, just make it cover. This fixes Ridge Racer where the UVs are slightly off and it causes a bright line on the lens flare.
+	if (u1 > 0 && u1 < 3) {
+		u1 = 0;
+	}
+	if (v1 > 0 && v1 < 3) {
+		v1 = 0;
 	}
 
 	Draw::Framebuffer *depalFBO = framebufferManager_->GetTempFBO(TempFBO::DEPAL, texWidth, texHeight);
@@ -2646,8 +2662,8 @@ bool TextureCacheCommon::CheckFullHash(TexCacheEntry *entry, bool &doDelete) {
 	}
 
 	// Don't give up just yet.
-	// Let's try the secondary cache if it's been invalidated before.
-	if (PSP_CoreParameter().compat.flags().SecondaryTextureCache) {
+	// Let's try the secondary cache if it's been invalidated before (and we're not dealing with detected video).
+	if (!isVideo) {
 		// If it's failed a bunch of times, then the second cache is just wasting time and VRAM.
 		// In that case, skip.
 		if (entry->numInvalidated > 2 && entry->numInvalidated < 128 && !lowMemoryMode_) {

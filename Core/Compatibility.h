@@ -89,7 +89,6 @@ struct CompatFlags {
 	bool ForceLowerResolutionForEffectsOff;
 	bool AllowDownloadCLUT;
 	bool NearestFilteringOnFramebufferCreate;
-	bool SecondaryTextureCache;
 	bool EnglishOrJapaneseOnly;
 	bool OldAdrenoPixelDepthRoundingGL;
 	bool ForceCircleButtonConfirm;
@@ -123,6 +122,7 @@ struct CompatFlags {
 	bool FastEmulatedGPU;
 	bool CorrectCullAfterClip;
 	float SpriteBorderFix;
+	bool TextureCLUTInShader;
 };
 
 struct VRCompat {
