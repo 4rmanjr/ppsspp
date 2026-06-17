@@ -3,6 +3,8 @@
 #include <cstdint>
 
 #include "ShaderCommon.h"
+#include "Common/Math/math_util.h"
+#include "GPU/GPUState.h"
 
 // Used by the "modern" backends that use uniform buffers. They can share this without issue.
 
@@ -11,7 +13,7 @@ enum : uint64_t {
 	DIRTY_WORLDMATRIX | DIRTY_PROJTHROUGHMATRIX | DIRTY_VIEWMATRIX | DIRTY_TEXMATRIX | DIRTY_ALPHACOLORREF |
 	DIRTY_PROJMATRIX | DIRTY_FOGCOLOR | DIRTY_FOGCOEF | DIRTY_TEXENV | DIRTY_TEX_ALPHA_MUL | DIRTY_STENCILREPLACEVALUE |
 	DIRTY_ALPHACOLORMASK | DIRTY_SHADERBLEND | DIRTY_COLORWRITEMASK | DIRTY_UVSCALEOFFSET | DIRTY_TEXCLAMP | DIRTY_MATAMBIENTALPHA |
-	DIRTY_BEZIERSPLINE | DIRTY_DEPAL | DIRTY_VIEWPORT_UNIFORMS | DIRTY_RASTER_OFFSET,
+	DIRTY_DEPAL | DIRTY_VIEWPORT_UNIFORMS | DIRTY_RASTER_OFFSET,
 	DIRTY_LIGHT_UNIFORMS =
 	DIRTY_LIGHT_CONTROL | DIRTY_LIGHT0 | DIRTY_LIGHT1 | DIRTY_LIGHT2 | DIRTY_LIGHT3 |
 	DIRTY_MATDIFFUSE | DIRTY_MATSPECULAR | DIRTY_MATEMISSIVE | DIRTY_AMBIENT,
@@ -30,7 +32,7 @@ struct alignas(16) UB_VS_FS_Base {
 	float rasterOffset[2]; float minZmaxZ[2];
 	float uvScaleOffset[4];
 	float matAmbient[4];
-	uint32_t spline_counts; uint32_t depal_mask_shift_off_fmt;  // 4 params packed into one.
+	uint32_t padding3; uint32_t depal_mask_shift_off_fmt;  // 4 params packed into one.
 	uint32_t colorWriteMask; float mipBias;
 	// Fragment data
 	float texNoAlpha; float texMul; float padding4[2];  // this vec4 will hold ubershader stuff. We won't use integer flags in the fragment shader.
@@ -119,3 +121,32 @@ void LightUpdateUniforms(UB_VS_Lights *ub, uint64_t dirtyUniforms);
 void BoneUpdateUniforms(UB_VS_Bones *ub, uint64_t dirtyUniforms);
 
 uint32_t PackLightControlBits();
+uint32_t PackDepalBits();
+
+void UpdateFogCoef(const GPUgstate &state, float fogCoef[2]);
+
+// This happens so much that I want it inline.
+inline void UpdateUVScaleOff(const GPUgstate &state, float uvScaleOff[4]) {
+	float widthFactor;
+	float heightFactor;
+	if (gstate_c.textureIsFramebuffer) {
+		widthFactor = (float)gstate.getTextureWidth(0) / (float)gstate_c.curTextureWidth;
+		heightFactor = (float)gstate.getTextureHeight(0) / (float)gstate_c.curTextureHeight;
+	} else {
+		widthFactor = 1.0f;
+		heightFactor = 1.0f;
+	}
+	if (gstate_c.submitType == SubmitType::HW_BEZIER || gstate_c.submitType == SubmitType::HW_SPLINE) {
+		// When we are generating UV coordinates through the bezier/spline, we need to apply the scaling.
+		// However, this is missing a check that we're not getting our UV:s supplied for us in the vertices.
+		uvScaleOff[0] = gstate_c.uv.uScale * widthFactor;
+		uvScaleOff[1] = gstate_c.uv.vScale * heightFactor;
+		uvScaleOff[2] = gstate_c.uv.uOff * widthFactor;
+		uvScaleOff[3] = gstate_c.uv.vOff * heightFactor;
+	} else {
+		uvScaleOff[0] = widthFactor;
+		uvScaleOff[1] = heightFactor;
+		uvScaleOff[2] = 0.0f;
+		uvScaleOff[3] = 0.0f;
+	}
+}

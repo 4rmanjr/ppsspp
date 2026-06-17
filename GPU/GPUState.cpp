@@ -20,6 +20,7 @@
 #include "Common/Math/SIMDHeaders.h"
 #include "Common/Serialize/Serializer.h"
 #include "Common/Serialize/SerializeFuncs.h"
+#include "Common/Math/CrossSIMD.h"
 #include "Core/MemMap.h"
 #include "GPU/ge_constants.h"
 #include "GPU/GPUCommon.h"
@@ -168,7 +169,7 @@ void GPUgstate::Save(u32_le *ptr) {
 }
 
 void GPUgstate::FastLoadBoneMatrix(u32 addr) {
-	const u32_le *src = (const u32_le *)Memory::GetPointerUnchecked(addr);
+	const u32 *src = (const u32 *)Memory::GetPointerUnchecked(addr);
 	u32 num = boneMatrixNumber;
 	u32 *dst = (u32 *)(boneMatrix + (num & 0x7F));
 
@@ -186,6 +187,13 @@ void GPUgstate::FastLoadBoneMatrix(u32 addr) {
 	vst1q_u32(dst, row1);
 	vst1q_u32(dst + 4, row2);
 	vst1q_u32(dst + 8, row3);
+#elif !CROSSSIMD_SLOW
+	Vec4F32 row1 = Vec4F32::LoadF24x4(src);
+	Vec4F32 row2 = Vec4F32::LoadF24x4(src + 4);
+	Vec4F32 row3 = Vec4F32::LoadF24x4(src + 8);
+	row1.Store((float *)dst);
+	row2.Store((float *)(dst + 4));
+	row3.Store((float *)(dst + 8));
 #else
 	for (int i = 0; i < 12; i++) {
 		dst[i] = src[i] << 8;
@@ -367,29 +375,29 @@ static constexpr const char * g_gpuUseFlagNames[32] = {
 	"GPU_USE_VS_RANGE_CULLING",
 	"GPU_USE_BLEND_MINMAX",
 	"GPU_USE_LOGIC_OP",
-	"GPU_USE_FRAGMENT_UBERSHADER",
-	"GPU_USE_TEXTURE_NPOT",
+	"N/A",
+	"N/A",
 	"GPU_USE_ANISOTROPY",
 	"GPU_USE_CLEAR_RAM_HACK",
-	"GPU_USE_INSTANCE_RENDERING",
-	"GPU_USE_VERTEX_TEXTURE_FETCH",
+	"N/A",
+	"N/A",
 	"GPU_USE_TEXTURE_FLOAT",
 	"GPU_USE_16BIT_FORMATS",
 	"GPU_USE_DEPTH_CLAMP",
 	"GPU_USE_TEXTURE_LOD_CONTROL",
 	"GPU_USE_DEPTH_TEXTURE",
-	"GPU_USE_ACCURATE_DEPTH",
-	"GPU_USE_GS_CULLING",
 	"N/A",
+	"N/A",
+	"GPU_USE_FRAMEBUFFER_ARRAYS",
 	"GPU_USE_FRAMEBUFFER_FETCH",
-	"GPU_SCALE_DEPTH_FROM_24BIT_TO_16BIT",
+	"N/A",
 	"GPU_ROUND_FRAGMENT_DEPTH_TO_16BIT",
 	"GPU_ROUND_DEPTH_TO_16BIT",
 	"GPU_USE_CLIP_DISTANCE",
 	"GPU_USE_CULL_DISTANCE",
-	"N/A", // bit 26
-	"N/A", // bit 27
-	"N/A", // bit 28
+	"GPU_USE_SHADER_BLENDING", // bit 26
+	"GPU_USE_NONBUFFERED_FLIP", // bit 27
+	"GPU_USE_PRE_ROTATION", // bit 28
 	"GPU_USE_VIRTUAL_REALITY",
 	"GPU_USE_SINGLE_PASS_STEREO",
 	"GPU_USE_SIMPLE_STEREO_PERSPECTIVE",
