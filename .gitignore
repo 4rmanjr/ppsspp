@@ -151,3 +151,9 @@ RAPrefs_PPSSPP.cfg
 cmake-build-*/
 
 /.vscode/
+
+# Build artifacts
+*.apk
+*.apk.idsig
+*.keystore
+build-sdl/
