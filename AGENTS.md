@@ -17,12 +17,27 @@ Semua aturan detail ada di `docs/agents/`:
 |------|-----|
 | [fork-maintenance.md](docs/agents/fork-maintenance.md) | Strategi merge upstream, cara handle konflik |
 | [lansync-development.md](docs/agents/lansync-development.md) | Aturan khusus LAN sync & fitur kustom |
+| [multi-core-development.md](docs/agents/multi-core-development.md) | Aturan khusus multi-emulator (GBA, future cores) |
 | [code-standards.md](docs/agents/code-standards.md) | Standar kode C++, platform, dsb |
 | [feature-template.md](docs/agents/feature-template.md) | Panduan menambah fitur baru |
 
 ## Aturan Global
 
-- Boleh **menambah** kode ke file upstream, tapi **tidak boleh menghapus atau mengubah** kode asli.
-- Semua kode kustom harus dibungkus `#ifdef PPSSPP_CUSTOM_FEATURES` (atau flag spesifik fitur).
-- File baru diletakkan di direktori sesuai fungsinya (misal `SDL/LANSync.cpp`, `Common/Net/MDNS.cpp`), bukan di `Core/`, `GPU/`, atau direktori inti emulator.
-- Saat conflict merge dengan upstream, kode upstream yang menang — kode kustom dipindah/diadjust.
+### 🔴 HARAM (Tidak Boleh Dilakukan)
+- ❌ Menghapus, mengubah, atau merestruktur kode upstream yang sudah ada.
+- ❌ Meletakkan file kustom di direktori inti emulator (`Core/`, `GPU/`, `HLE/`, `MIPS/`).
+- ❌ Mengubah alur logika kode upstream via `#else` atau `#endif` di luar blok kustom.
+- ❌ Refactor kode upstream untuk mengakomodasi kode kustom.
+
+### 🟢 WAJIB (Harus Dilakukan)
+- ✅ Kode kustom WAJIB di **file terpisah** di direktori non-inti.
+- ✅ Setiap tambahan ke file upstream WAJIB:
+   1. Dibungkus `#ifdef PPSSPP_<FITUR>` (flag spesifik fitur)
+   2. Ditandai komentar `// [PPSSPP-FORK] NamaFitur: deskripsi`
+   3. Hanya **menambah** baris baru (zero deletion)
+- ✅ Build WAJIB diverifikasi dalam **DUA kondisi**:
+   1. `-DPPSSPP_<FITUR>=ON` — fitur aktif, build sukses
+   2. `-DPPSSPP_<FITUR>=OFF` — fitur nonaktif, build tetap sukses
+- ✅ Saat conflict merge dengan upstream: **kode upstream yang menang** — kode kustom dipindah/diadjust, bukan sebaliknya.
+- ✅ Setiap fitur baru WAJIB punya feature flag sendiri (`PPSSPP_<NAMA>`).
+- ✅ Semua pengaturan per-fitur WAJIB terisolasi di section config terpisah, jangan campur dengan config PSP.

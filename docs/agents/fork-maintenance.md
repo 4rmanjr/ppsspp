@@ -15,13 +15,24 @@ git merge upstream/master
 2. Kode kustom yang conflict dipindahkan atau disesuaikan, bukan kode upstream.
 3. Jika conflict terjadi di area yang sulit, file kustom bisa dinonaktifkan sementara dengan `#ifdef` dan diff disimpan sebagai patch terpisah.
 
-## Isolasi File
+## Isolasi File — Aturan Ketat
 
-- Semua fitur kustom harus berada di **file terpisah**.
-- Minimalisir sentuhan ke file upstream. Jika harus menyentuh:
-  - Hanya **tambah** kode (baris baru), jangan hapus/ubah baris existing.
-  - Gunakan `#ifdef PPSSPP_<FITUR>` (atau flag sesuai fitur) untuk membungkus tambahan.
-  - Tambahkan komentar `// [PPSSPP-FORK] NamaFitur: penjelasan` pada setiap blok tambahan agar mudah dilacak.
+- Semua fitur kustom WAJIB berada di **file terpisah** di direktori non-inti.
+- File kustom **DILARANG** ditaruh di `Core/`, `GPU/`, `HLE/`, `MIPS/`, atau direktori inti emulator lainnya.
+
+### Jika Terpaksa Menyentuh File Upstream
+
+Ini hanya diperbolehkan untuk **hook minimal** (1-5 baris). Jika lebih dari itu, desain ulang pendekatannya.
+
+**WAJIB:**
+1. Hanya **tambah** baris baru — **jangan hapus, ubah, atau pindahkan** baris existing.
+2. Kode tambahan WAJIB dibungkus `#ifdef PPSSPP_<FITUR>`.
+3. WAJIB ada komentar `// [PPSSPP-FORK] NamaFitur: deskripsi` di setiap blok.
+4. Blok kustom WAJIB berada di **lokasi yang jelas** (dekat dengan kode yang relevan), bukan terselip di tengah logika.
+
+**Build verification setelah touching upstream:**
+- `cmake -DPPSSPP_<FITUR>=ON .. && make -j$(nproc)` ✅
+- `cmake -DPPSSPP_<FITUR>=OFF .. && make -j$(nproc)` ✅
 
 ## Update Periodik
 
@@ -40,5 +51,6 @@ Setiap fitur kustom punya flag preprocessor sendiri:
 | `PPSSPP_UDP_DISCOVERY` | UDP peer discovery |
 | `PPSSPP_QR` | QR code pairing |
 | `PPSSPP_PLATFORM_KEYSTORE` | Platform key store |
+| `PPSSPP_MULTICORE` | Multi-emulator (GBA, future cores) |
 
 Kode upstream boleh menggunakan `#ifdef PPSSPP_*` untuk blok tambahan, tapi tidak boleh ada `#else` atau `#endif` yang mengubah alur kode upstream.
