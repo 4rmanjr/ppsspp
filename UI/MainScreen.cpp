@@ -42,6 +42,10 @@
 #include "UI/EmuScreen.h"
 #include "UI/MainScreen.h"
 #include "UI/GameScreen.h"
+
+#ifdef PPSSPP_MULTICORE
+#include "EmuCore/EmuCore.h"
+#endif
 #include "UI/GameInfoCache.h"
 #include "UI/GameSettingsScreen.h"
 #include "UI/IAPScreen.h"
@@ -88,6 +92,16 @@ static void LaunchFile(ScreenManager *screenManager, Screen *currentScreen, cons
 			screenManager->cancelScreensAbove(currentScreen);
 		}
 		// Otherwise let the EmuScreen take care of it, including error handling.
+
+#ifdef PPSSPP_MULTICORE
+		// [PPSSPP-FORK] MultiCore: detect file type and switch to appropriate core
+		EmuCore::Type coreType = EmuCore::DetectType(path);
+		if (coreType == EmuCore::Type::GBA) {
+			screenManager->switchScreen(new EmuScreen(path, EmuCore::Type::GBA));
+			return;
+		}
+#endif
+
 		screenManager->switchScreen(new EmuScreen(path));
 	}
 }
