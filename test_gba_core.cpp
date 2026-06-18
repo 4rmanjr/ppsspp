@@ -2,6 +2,7 @@
 #include "EmuCore/GBACore.h"
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <signal.h>
 
 void handler(int sig) {
@@ -42,6 +43,18 @@ int main(int argc, char *argv[]) {
 	}
 
 	printf("ROM loaded OK!\n");
+	fflush(stdout);
+
+	printf("Testing input mapping...\n");
+	fflush(stdout);
+	// Test PSP→GBA key conversion
+	uint32_t pspTestKeys = 0x4000 | 0x0008 | 0x0010; // Cross + Start + Up
+	uint32_t gbaKeys = EmuCore::GBACore::PSPSKeysToGBA(pspTestKeys);
+	printf("  PSP keys 0x%04X → GBA keys 0x%04X\n", pspTestKeys, gbaKeys);
+	fflush(stdout);
+
+	core->SetKeys(pspTestKeys);
+	printf("  SetKeys OK\n");
 	fflush(stdout);
 
 	printf("Running 3 frames...\n");

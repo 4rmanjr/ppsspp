@@ -37,6 +37,9 @@ public:
 
 	void GetGameInfo(std::string &title, std::string &id) const override;
 
+	// Convert PSP key bitmask to GBA key bitmask
+	static uint32_t PSPSKeysToGBA(uint32_t pspKeys);
+
 	// Get the raw video buffer for rendering (RGBA8888, 240x160)
 	const uint32_t *GetVideoBuffer() const { return videoBuffer_; }
 

@@ -186,6 +186,7 @@ private:
 	// [PPSSPP-FORK] MultiCore: multi-emulator members
 	EmuCore::Type coreType_ = EmuCore::Type::PSP;
 	std::unique_ptr<EmuCore::Core> activeCore_;
+	void AddGBATouchButtons(const Bounds &bounds, DeviceOrientation orientation);
 #endif
 };
 

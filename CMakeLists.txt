@@ -1711,6 +1711,8 @@ list(APPEND NativeAppSource
 	UI/TouchControlVisibilityScreen.cpp
 	UI/GamepadEmu.h
 	UI/GamepadEmu.cpp
+	UI/TouchLayoutGBA.h
+	UI/TouchLayoutGBA.cpp
 	UI/JoystickHistoryView.h
 	UI/JoystickHistoryView.cpp
 	UI/LoadStateConfirmScreen.h
@@ -3235,6 +3237,14 @@ if(PPSSPP_MULTICORE)
 		UI/EmuScreen.cpp UI/NativeApp.cpp UI/MainScreen.cpp
 		PROPERTIES COMPILE_DEFINITIONS "PPSSPP_MULTICORE"
 	)
+endif()
+
+# [PPSSPP-FORK] MultiCore: test target for GBA core
+if(PPSSPP_MULTICORE)
+	add_executable(test_gba_core test_gba_core.cpp)
+	target_link_libraries(test_gba_core PRIVATE EmuCore ${LinkCommon} Common)
+	target_compile_definitions(test_gba_core PRIVATE PPSSPP_MULTICORE)
+	target_include_directories(test_gba_core PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 endif()
 endif()
 

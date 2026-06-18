@@ -17,6 +17,49 @@
 
 namespace EmuCore {
 
+// PSP CTRL bitmask values (from Core/HLE/sceCtrl.h)
+static constexpr uint32_t PSP_CTRL_CROSS     = 0x4000;
+static constexpr uint32_t PSP_CTRL_CIRCLE    = 0x2000;
+static constexpr uint32_t PSP_CTRL_SQUARE    = 0x8000;
+static constexpr uint32_t PSP_CTRL_TRIANGLE  = 0x1000;
+static constexpr uint32_t PSP_CTRL_START     = 0x0008;
+static constexpr uint32_t PSP_CTRL_SELECT    = 0x0001;
+static constexpr uint32_t PSP_CTRL_UP        = 0x0010;
+static constexpr uint32_t PSP_CTRL_DOWN      = 0x0040;
+static constexpr uint32_t PSP_CTRL_LEFT      = 0x0080;
+static constexpr uint32_t PSP_CTRL_RIGHT     = 0x0020;
+static constexpr uint32_t PSP_CTRL_LTRIGGER  = 0x0100;
+static constexpr uint32_t PSP_CTRL_RTRIGGER  = 0x0200;
+
+// GBA key bit indices (from mgba/internal/gba/input.h)
+static constexpr uint32_t GBA_BIT_A      = 1 << 0;
+static constexpr uint32_t GBA_BIT_B      = 1 << 1;
+static constexpr uint32_t GBA_BIT_SELECT = 1 << 2;
+static constexpr uint32_t GBA_BIT_START  = 1 << 3;
+static constexpr uint32_t GBA_BIT_RIGHT  = 1 << 4;
+static constexpr uint32_t GBA_BIT_LEFT   = 1 << 5;
+static constexpr uint32_t GBA_BIT_UP     = 1 << 6;
+static constexpr uint32_t GBA_BIT_DOWN   = 1 << 7;
+static constexpr uint32_t GBA_BIT_R      = 1 << 8;
+static constexpr uint32_t GBA_BIT_L      = 1 << 9;
+
+uint32_t GBACore::PSPSKeysToGBA(uint32_t pspKeys) {
+	uint32_t gbaKeys = 0;
+	if (pspKeys & PSP_CTRL_CROSS)    gbaKeys |= GBA_BIT_A;
+	if (pspKeys & PSP_CTRL_CIRCLE)   gbaKeys |= GBA_BIT_B;
+	if (pspKeys & PSP_CTRL_TRIANGLE) gbaKeys |= GBA_BIT_A;   // alt: Triangle → A
+	if (pspKeys & PSP_CTRL_SQUARE)   gbaKeys |= GBA_BIT_B;   // alt: Square → B
+	if (pspKeys & PSP_CTRL_START)    gbaKeys |= GBA_BIT_START;
+	if (pspKeys & PSP_CTRL_SELECT)   gbaKeys |= GBA_BIT_SELECT;
+	if (pspKeys & PSP_CTRL_UP)       gbaKeys |= GBA_BIT_UP;
+	if (pspKeys & PSP_CTRL_DOWN)     gbaKeys |= GBA_BIT_DOWN;
+	if (pspKeys & PSP_CTRL_LEFT)     gbaKeys |= GBA_BIT_LEFT;
+	if (pspKeys & PSP_CTRL_RIGHT)    gbaKeys |= GBA_BIT_RIGHT;
+	if (pspKeys & PSP_CTRL_LTRIGGER) gbaKeys |= GBA_BIT_L;
+	if (pspKeys & PSP_CTRL_RTRIGGER) gbaKeys |= GBA_BIT_R;
+	return gbaKeys;
+}
+
 GBACore::GBACore() {
 	core_ = GBACoreCreate();
 	if (core_) {
@@ -123,12 +166,15 @@ void GBACore::GetAudioSamples(int16_t *buffer, size_t *samples) {
 
 void GBACore::SetKeys(uint32_t keys) {
 	if (core_) {
-		core_->setKeys(core_, keys);
+		// Convert PSP key bitmask to GBA key bitmask transparently
+		uint32_t gbaKeys = PSPSKeysToGBA(keys);
+		core_->setKeys(core_, gbaKeys);
 	}
 }
 
 uint32_t GBACore::GetKeys() const {
 	if (core_) {
+		// Return raw GBA keys (no reverse conversion needed)
 		return core_->getKeys(core_);
 	}
 	return 0;

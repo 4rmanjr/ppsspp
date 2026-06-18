@@ -91,6 +91,7 @@ using namespace std::placeholders;
 #ifdef PPSSPP_MULTICORE
 #include "EmuCore/EmuCore.h"
 #include "Common/System/System.h"
+#include "UI/TouchLayoutGBA.h"
 #endif
 
 #include "UI/DevScreens.h"
@@ -1318,6 +1319,39 @@ static UI::AnchorLayoutParams *AnchorInCorner(const Bounds &bounds, int corner, 
 	}
 }
 
+#ifdef PPSSPP_MULTICORE
+// [PPSSPP-FORK] MultiCore: Add GBA-specific touch buttons to root_
+void EmuScreen::AddGBATouchButtons(const Bounds &bounds, DeviceOrientation orientation) {
+	using namespace UI;
+	bool portrait = (orientation == DeviceOrientation::Portrait);
+	const auto &gbaBtns = TouchLayoutGBA::GetLayout(portrait);
+	const ImageID roundImg = ImageID("I_ROUND");
+	for (const auto &btn : gbaBtns) {
+		ImageID icon;
+		switch (btn.pspButton) {
+			case CTRL_CROSS:   icon = ImageID("I_CROSS");   break;
+			case CTRL_CIRCLE:  icon = ImageID("I_CIRCLE");  break;
+			case CTRL_START:   icon = ImageID("I_START");   break;
+			case CTRL_SELECT:  icon = ImageID("I_SELECT");  break;
+			case CTRL_LTRIGGER:
+			case CTRL_RTRIGGER: icon = ImageID("I_L");     break;
+			default:           icon = ImageID("I_CROSS");   break;
+		}
+		float cx = btn.x * bounds.w;
+		float cy = btn.y * bounds.h;
+		root_->Add(new PSPButton(
+			btn.pspButton,
+			std::string("GBA_") + btn.label,
+			roundImg,
+			ImageID("I_ROUND"),
+			icon,
+			0.8f,
+			new AnchorLayoutParams(cx, cy, UI::NONE, UI::NONE, Centering::Both)
+		));
+	}
+}
+#endif
+
 void EmuScreen::CreateViews() {
 	using namespace UI;
 
@@ -1333,7 +1367,19 @@ void EmuScreen::CreateViews() {
 
 	InitPadLayout(&touch, deviceOrientation, bounds.w, bounds.h);
 
+#ifdef PPSSPP_MULTICORE
+	// [PPSSPP-FORK] MultiCore: GBA mode — use GBA touch layout instead of PSP
+	if (coreType_ != EmuCore::Type::PSP) {
+		root_ = new UI::AnchorLayout(new UI::LayoutParams(UI::FILL_PARENT, UI::FILL_PARENT));
+		if (g_Config.bShowTouchControls) {
+			AddGBATouchButtons(bounds, deviceOrientation);
+		}
+	} else {
+		root_ = CreatePadLayout(touch, bounds.w, bounds.h, &pauseTrigger_, &g_controlMapper);
+	}
+#else
 	root_ = CreatePadLayout(touch, bounds.w, bounds.h, &pauseTrigger_, &g_controlMapper);
+#endif
 	if (g_Config.bShowDeveloperMenu) {
 		root_->Add(new Button(dev->T("DevMenu")))->OnClick.Handle(this, &EmuScreen::OnDevTools);
 	}
