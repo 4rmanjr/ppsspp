@@ -87,6 +87,12 @@ using namespace std::placeholders;
 #include "UI/MainScreen.h"
 #include "UI/Background.h"
 #include "UI/EmuScreen.h"
+
+#ifdef PPSSPP_MULTICORE
+#include "EmuCore/EmuCore.h"
+#include "Common/System/System.h"
+#endif
+
 #include "UI/DevScreens.h"
 #include "UI/GameInfoCache.h"
 #include "UI/BaseScreens.h"
@@ -167,8 +173,26 @@ void EmuScreen::SetPSPAnalog(int iInternalScreenRotation, int stick, float x, fl
 	__CtrlSetAnalogXY(stick, x, y);
 }
 
-EmuScreen::EmuScreen(const Path &filename)
-	: gamePath_(filename) {
+EmuScreen::EmuScreen(const Path &filename
+#ifdef PPSSPP_MULTICORE
+	, EmuCore::Type coreType
+#endif
+	)
+	: gamePath_(filename)
+#ifdef PPSSPP_MULTICORE
+	, coreType_(coreType)
+#endif
+{
+#ifdef PPSSPP_MULTICORE
+	// [PPSSPP-FORK] MultiCore: initialize appropriate core
+	if (coreType_ != EmuCore::Type::PSP) {
+		activeCore_ = EmuCore::Create(filename);
+		if (activeCore_) {
+			activeCore_->LoadROM(filename);
+		}
+		bootPending_ = true;
+	}
+#endif
 	saveStateSlot_ = SaveState::GetCurrentSlot();
 	g_controlMapper.AddListener(this);
 
@@ -1478,6 +1502,39 @@ ViewLayoutMode EmuScreen::LayoutMode() const {
 void EmuScreen::update() {
 	using namespace UI;
 
+#ifdef PPSSPP_MULTICORE
+	// [PPSSPP-FORK] MultiCore: GBA emulation path
+	if (coreType_ != EmuCore::Type::PSP && activeCore_) {
+		// Handle boot process for non-PSP cores
+		if (bootPending_) {
+			bootPending_ = false;
+			readyToFinishBoot_ = false;
+		}
+
+		// Run one frame of GBA emulation
+		activeCore_->RunFrame();
+
+		// Push audio to PPSSPP audio system
+		int16_t audioBuf[2048];
+		size_t samples = 2048;
+		activeCore_->GetAudioSamples(audioBuf, &samples);
+		if (samples > 0) {
+			System_AudioPushSamples(audioBuf, samples / 2);
+		}
+
+		// Forward input from PSP system to GBA core
+		uint32_t pspButtons = __CtrlPeekButtons();
+		activeCore_->SetKeys(pspButtons);
+
+		// Minimal UI update for GBA mode
+		UIScreen::update();
+		resumeButton_->SetVisibility(V_GONE);
+		resetButton_->SetVisibility(V_GONE);
+		backButton_->SetVisibility(V_GONE);
+		return;
+	}
+#endif
+
 	// This is where views are recreated.
 	UIScreen::update();
 
@@ -2040,6 +2097,21 @@ void EmuScreen::renderUI() {
 	ctx->BeginFrame();
 	// This sets up some important states but not the viewport.
 	ctx->Begin();
+
+#ifdef PPSSPP_MULTICORE
+	// [PPSSPP-FORK] MultiCore: GBA rendering — framebuffer drawn via UI
+	// Full framebuffer texture rendering will be implemented in a follow-up task.
+	if (coreType_ != EmuCore::Type::PSP) {
+		if (root_) {
+			UI::LayoutViewHierarchy(*ctx, RootMargins(), root_, LayoutMode(), UseImmersiveMode());
+			root_->Draw(*ctx);
+		}
+		if (g_Config.iShowStatusFlags) {
+			DrawFPS(ctx, GetLayoutBounds(*ctx));
+		}
+		return;
+	}
+#endif
 
 	if (root_) {
 		UI::LayoutViewHierarchy(*ctx, RootMargins(), root_, LayoutMode(), UseImmersiveMode());

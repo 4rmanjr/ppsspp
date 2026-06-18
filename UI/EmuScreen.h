@@ -32,6 +32,11 @@
 
 struct AxisInput;
 
+#ifdef PPSSPP_MULTICORE
+#include <memory>
+#include "EmuCore/EmuCore.h"
+#endif
+
 class AsyncImageFileView;
 class ChatMenu;
 class ImDebugger;
@@ -40,7 +45,12 @@ struct ImGuiContext;
 
 class EmuScreen : public UIScreen, protected ControlListener {
 public:
+#ifdef PPSSPP_MULTICORE
+	// [PPSSPP-FORK] MultiCore: optional core type parameter
+	EmuScreen(const Path &filename, EmuCore::Type coreType = EmuCore::Type::PSP);
+#else
 	EmuScreen(const Path &filename);
+#endif
 	~EmuScreen();
 
 	const char *tag() const override { return "Emu"; }
@@ -171,6 +181,12 @@ private:
 	bool skipBufferEffects_ = false;  // cached state, fetched once per frame.
 
 	uint32_t clearColor_ = 0;
+
+#ifdef PPSSPP_MULTICORE
+	// [PPSSPP-FORK] MultiCore: multi-emulator members
+	EmuCore::Type coreType_ = EmuCore::Type::PSP;
+	std::unique_ptr<EmuCore::Core> activeCore_;
+#endif
 };
 
 bool MustRunBehind();
