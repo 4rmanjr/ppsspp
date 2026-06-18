@@ -2728,6 +2728,12 @@ endif()
 target_link_libraries(${CoreLibName} Common native chdr kirk cityhash sfmt19937 xbrz xxhash rcheevos minimp3 at3_standalone lua ${GlslangLibs}
 	${CoreExtraLibs} ${OPENGL_LIBRARIES} ${X11_LIBRARIES} ${CMAKE_DL_LIBS})
 
+# [PPSSPP-FORK] MultiCore: emulator core abstraction layer
+add_subdirectory(EmuCore)
+if(TARGET EmuCore)
+	target_link_libraries(${CoreLibName} EmuCore)
+endif()
+
 # Winsock
 if(WIN32)
 	target_link_libraries(${CoreLibName} ws2_32)
