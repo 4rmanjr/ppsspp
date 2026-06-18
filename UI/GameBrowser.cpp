@@ -858,7 +858,8 @@ void GameBrowser::Refresh() {
 		}
 	} else if (!listingPending_) {
 		std::vector<File::FileInfo> fileInfo;
-		path_.GetListing(fileInfo, "iso:cso:chd:pbp:elf:prx:ppdmp:");
+			// [PPSSPP-FORK] MultiCore: added GBA/GB extensions
+		path_.GetListing(fileInfo, "iso:cso:chd:pbp:elf:prx:ppdmp:gba:gb:gbc:");
 		for (size_t i = 0; i < fileInfo.size(); i++) {
 			bool isGame = !fileInfo[i].isDirectory;
 			bool isSaveData = false;
