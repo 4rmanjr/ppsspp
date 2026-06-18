@@ -23,6 +23,7 @@ if(PPSSPP_MULTICORE)
         EmuCore.cpp
         PSPCore.cpp
         GBACore.cpp
+        Config.cpp
     )
 
     target_include_directories(EmuCore PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
