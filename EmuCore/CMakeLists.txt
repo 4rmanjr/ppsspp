@@ -2,7 +2,7 @@
 option(PPSSPP_MULTICORE "Enable multi-emulator support (GBA, future cores)" ON)
 
 if(PPSSPP_MULTICORE)
-    # NOTE: PPSSPP_MULTICORE is defined globally in root CMakeLists.txt
+    add_definitions(-DPPSSPP_MULTICORE)
 
     # Build libmgba as static library (core only, no frontends)
     set(LIBMGBA_ONLY ON CACHE BOOL "Build mGBA as static library only" FORCE)
@@ -31,8 +31,8 @@ if(PPSSPP_MULTICORE)
     target_link_libraries(EmuCore PRIVATE mgba)
 
     # mGBA include paths for EmuCore compilation
-    # mGBA needs ENABLE_VFS for VFile/VFileOpen
-    target_compile_definitions(EmuCore PRIVATE ENABLE_VFS)
+    # Must match mGBA library's compile definitions for ABI compatibility
+    target_compile_definitions(EmuCore PRIVATE ENABLE_VFS ENABLE_DIRECTORIES)
     target_include_directories(EmuCore PRIVATE ${CMAKE_SOURCE_DIR}/ext/libmgba/include)
 
 endif()

@@ -6,7 +6,6 @@
 
 #ifdef PPSSPP_MULTICORE
 
-#include <cstdio>
 #include <cstring>
 #include <fcntl.h>
 
@@ -19,24 +18,11 @@
 namespace EmuCore {
 
 GBACore::GBACore() {
-	fprintf(stderr, "DEBUG: GBACoreCreate...\n");
 	core_ = GBACoreCreate();
-	fprintf(stderr, "DEBUG: core_=%p\n", (void*)core_);
 	if (core_) {
-		fprintf(stderr, "DEBUG: core_->init=%p\n", (void*)core_->init);
-		fprintf(stderr, "DEBUG: core_->deinit=%p\n", (void*)core_->deinit);
-		fprintf(stderr, "DEBUG: calling core_->init...\n");
-		fflush(stderr);
 		core_->init(core_);
-		fprintf(stderr, "DEBUG: init OK\n");
-		fprintf(stderr, "DEBUG: calling setAudioBufferSize...\n");
-		fflush(stderr);
 		core_->setAudioBufferSize(core_, AUDIO_BUF_SIZE);
-		fprintf(stderr, "DEBUG: setAudioBufferSize OK\n");
-		fflush(stderr);
 		core_->setAVStream(core_, nullptr);
-		fprintf(stderr, "DEBUG: ctor done\n");
-		fflush(stderr);
 	}
 }
 

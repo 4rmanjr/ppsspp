@@ -2221,6 +2221,13 @@ if((MACOSX OR IOS) AND NOT LIBRETRO)
 		Core/Util/DarwinFileSystemServices.h)
 endif()
 
+# [PPSSPP-FORK] MultiCore: emulator core abstraction layer
+if(PPSSPP_MULTICORE)
+	# Propagate PPSSPP_MULTICORE globally so ALL targets can use it
+	add_definitions(-DPPSSPP_MULTICORE)
+endif()
+add_subdirectory(EmuCore)
+
 # 'ppsspp_jni' on ANDROID, 'Core' everywhere else
 # SHARED on ANDROID, STATIC everywhere else
 add_library(${CoreLibName} ${CoreLinkType}
@@ -2728,14 +2735,6 @@ endif()
 target_link_libraries(${CoreLibName} Common native chdr kirk cityhash sfmt19937 xbrz xxhash rcheevos minimp3 at3_standalone lua ${GlslangLibs}
 	${CoreExtraLibs} ${OPENGL_LIBRARIES} ${X11_LIBRARIES} ${CMAKE_DL_LIBS})
 
-# [PPSSPP-FORK] MultiCore: emulator core abstraction layer
-add_subdirectory(EmuCore)
-if(PPSSPP_MULTICORE)
-	# Propagate PPSSPP_MULTICORE globally so UI/ files (EmuScreen, NativeApp) can use it
-	add_compile_definitions(PPSSPP_MULTICORE)
-	target_link_libraries(${CoreLibName} EmuCore)
-endif()
-
 # Winsock
 if(WIN32)
 	target_link_libraries(${CoreLibName} ws2_32)
@@ -2743,6 +2742,11 @@ endif()
 
 if(NOT HTTPS_NOT_AVAILABLE)
 	target_link_libraries(${CoreLibName} naett)
+endif()
+
+# [PPSSPP-FORK] MultiCore: link EmuCore to Core
+if(PPSSPP_MULTICORE AND TARGET EmuCore)
+	target_link_libraries(${CoreLibName} EmuCore)
 endif()
 
 target_compile_features(${CoreLibName} PUBLIC cxx_std_17)
@@ -3223,6 +3227,15 @@ if(TargetBin)
 		target_link_options(${TargetBin} PRIVATE "-Wl,-z,max-page-size=16384")
 	endif()
 	target_link_libraries(${TargetBin} ${LinkCommon} Common)
+
+# [PPSSPP-FORK] MultiCore: enable for main executable
+if(PPSSPP_MULTICORE)
+	target_compile_definitions(${TargetBin} PRIVATE PPSSPP_MULTICORE)
+	set_source_files_properties(
+		UI/EmuScreen.cpp UI/NativeApp.cpp UI/MainScreen.cpp
+		PROPERTIES COMPILE_DEFINITIONS "PPSSPP_MULTICORE"
+	)
+endif()
 endif()
 
 # installs
