@@ -1716,8 +1716,15 @@ bool EmuScreen::ShouldRunEmulation(ScreenRenderMode mode) const {
 }
 
 ScreenRenderFlags EmuScreen::PreRender(ScreenRenderMode mode) {
+#ifdef PPSSPP_MULTICORE
+	// [PPSSPP-FORK] MultiCore: skip PSP boot for non-PSP cores
+	if (coreType_ == EmuCore::Type::PSP) {
+		ProcessGameBoot(gamePath_);
+	}
+#else
 	// If a boot is in progress, update it.
 	ProcessGameBoot(gamePath_);
+#endif
 
 	using namespace Draw;
 	skipBufferEffects_ = g_Config.bSkipBufferEffects;
