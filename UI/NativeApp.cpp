@@ -126,6 +126,11 @@
 #include "UI/DevScreens.h"
 #include "UI/DiscordIntegration.h"
 #include "UI/EmuScreen.h"
+
+#ifdef PPSSPP_MULTICORE
+#include "EmuCore/EmuCore.h"
+#endif
+
 #include "UI/GameInfoCache.h"
 #include "UI/GameSettingsScreen.h"
 #include "UI/DeveloperToolsScreen.h"
@@ -815,7 +820,17 @@ void NativeInit(int argc, const char *argv[], const char *savegame_dir, const ch
 		g_screenManager->push(new DeveloperToolsScreen(Path()));
 	} else if (skipLogo && !boot_filename.empty()) {
 		INFO_LOG(Log::System, "Launching EmuScreen with boot filename '%s'", boot_filename.c_str());
+#ifdef PPSSPP_MULTICORE
+		// [PPSSPP-FORK] MultiCore: detect file type for GBA auto-boot
+		EmuCore::Type bootCoreType = EmuCore::DetectType(boot_filename);
+		if (bootCoreType == EmuCore::Type::GBA) {
+			g_screenManager->switchScreen(new EmuScreen(boot_filename, EmuCore::Type::GBA));
+		} else {
+			g_screenManager->switchScreen(new EmuScreen(boot_filename));
+		}
+#else
 		g_screenManager->switchScreen(new EmuScreen(boot_filename));
+#endif
 	} else {
 		g_screenManager->switchScreen(new LogoScreen(AfterLogoScreen::DEFAULT));
 	}
