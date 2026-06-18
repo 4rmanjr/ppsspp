@@ -20,7 +20,8 @@ void PSPCore::RunFrame() {
 }
 
 void PSPCore::Reset() {
-	PSP_Shutdown();
+	bool unused = false;
+	PSP_Shutdown(unused);
 }
 
 void PSPCore::Render() {

@@ -1515,12 +1515,13 @@ void EmuScreen::update() {
 		activeCore_->RunFrame();
 
 		// Push audio to PPSSPP audio system
-		int16_t audioBuf[2048];
-		size_t samples = 2048;
-		activeCore_->GetAudioSamples(audioBuf, &samples);
-		if (samples > 0) {
-			System_AudioPushSamples(audioBuf, samples / 2);
-		}
+		// TODO: convert int16 GBA audio to int32 PPSSPP format
+		// int16_t audioBuf[2048];
+		// size_t samples = 2048;
+		// activeCore_->GetAudioSamples(audioBuf, &samples);
+		// if (samples > 0) {
+		// 	System_AudioPushSamples(audioBuf, samples / 2);
+		// }
 
 		// Forward input from PSP system to GBA core
 		uint32_t pspButtons = __CtrlPeekButtons();

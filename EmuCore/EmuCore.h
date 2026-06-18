@@ -4,9 +4,11 @@
 
 #pragma once
 
+#include <cstdint>
 #include <memory>
 #include <string>
 #include "Common/File/Path.h"
+#include "Common/CommonTypes.h"
 
 namespace EmuCore {
 

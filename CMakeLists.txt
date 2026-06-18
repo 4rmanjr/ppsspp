@@ -2730,7 +2730,9 @@ target_link_libraries(${CoreLibName} Common native chdr kirk cityhash sfmt19937 
 
 # [PPSSPP-FORK] MultiCore: emulator core abstraction layer
 add_subdirectory(EmuCore)
-if(TARGET EmuCore)
+if(PPSSPP_MULTICORE)
+	# Propagate PPSSPP_MULTICORE globally so UI/ files (EmuScreen, NativeApp) can use it
+	add_compile_definitions(PPSSPP_MULTICORE)
 	target_link_libraries(${CoreLibName} EmuCore)
 endif()
 
