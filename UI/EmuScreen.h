@@ -187,6 +187,20 @@ private:
 	EmuCore::Type coreType_ = EmuCore::Type::PSP;
 	std::unique_ptr<EmuCore::Core> activeCore_;
 	void AddGBATouchButtons(const Bounds &bounds, DeviceOrientation orientation);
+
+	// [PPSSPP-FORK] MultiCore: GBA video rendering
+	Draw::Texture *gbaTexture_ = nullptr;
+	Draw::Pipeline *gbaPipeline_ = nullptr;
+	Draw::SamplerState *gbaSampler_ = nullptr;
+	void InitGBARendering();
+	void ShutdownGBARendering();
+	void DrawGBAVideo();
+
+	// [PPSSPP-FORK] MultiCore: GBA save state (raw buffer I/O)
+	enum GBAStateAction { GBASAVEACTION_SAVE, GBASAVEACTION_LOAD };
+	void DoGBAState(GBAStateAction action);
+	std::string GetGBASavePrefix();
+	Path GetGBASaveStatePath(int slot);
 #endif
 };
 

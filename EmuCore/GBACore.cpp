@@ -9,9 +9,13 @@
 #include <cstring>
 #include <fcntl.h>
 
+#include "Common/Log.h"
+
 #include <mgba/core/core.h>
 #include <mgba/gba/core.h>
 #include <mgba/core/interface.h>
+#include <mgba/core/directories.h>
+#include <mgba/core/config.h>
 #include <mgba-util/vfs.h>
 #include <mgba-util/audio-buffer.h>
 
@@ -63,15 +67,28 @@ uint32_t GBACore::PSPSKeysToGBA(uint32_t pspKeys) {
 GBACore::GBACore() {
 	core_ = GBACoreCreate();
 	if (core_) {
+		// [PPSSPP-FORK] MultiCore: init mGBA config subsystem (required before reset/loadROM)
+		mCoreConfigInit(&core_->config, "gba");
+
 		core_->init(core_);
 		core_->setAudioBufferSize(core_, AUDIO_BUF_SIZE);
 		core_->setAVStream(core_, nullptr);
+		// [PPSSPP-FORK] MultiCore: set video buffer so mGBA renders into our buffer
+		core_->setVideoBuffer(core_, (mColor *)rawVideoBuffer_, GBA_WIDTH);
+		// [PPSSPP-FORK] MultiCore: init directory set for save memory
+		mDirectorySetInit(&core_->dirs);
+		INFO_LOG(Log::System, "[GBA] Core initialized");
+	} else {
+		ERROR_LOG(Log::System, "[GBA] Failed to create core");
 	}
 }
 
 GBACore::~GBACore() {
 	if (core_) {
+		// [PPSSPP-FORK] MultiCore: flush and close save memory directories
+		mDirectorySetDeinit(&core_->dirs);
 		core_->deinit(core_);
+		INFO_LOG(Log::System, "[GBA] Core deinitialized, save flushed");
 		core_ = nullptr;
 	}
 }
@@ -84,18 +101,62 @@ bool GBACore::LoadROMInternal(const Path &path) {
 	if (!core_)
 		return false;
 
+	INFO_LOG(Log::System, "[GBA] Loading ROM: %s", path.c_str());
+
 	// Open ROM file via mGBA's VFile
 	struct VFile *vf = VFileOpen(path.c_str(), O_RDONLY);
-	if (!vf)
+	if (!vf) {
+		ERROR_LOG(Log::System, "[GBA] Failed to open ROM file: %s", path.c_str());
 		return false;
+	}
 
 	if (!core_->loadROM(core_, vf)) {
+		ERROR_LOG(Log::System, "[GBA] mGBA rejected ROM");
 		vf->close(vf);
 		return false;
 	}
 
 	core_->reset(core_);
+
+	// Log game info
+	struct mGameInfo info;
+	memset(&info, 0, sizeof(info));
+	core_->getGameInfo(core_, &info);
+	INFO_LOG(Log::System, "[GBA] ROM loaded — title: '%s', code: '%s'",
+		info.title[0] ? info.title : "(unknown)",
+		info.code[0] ? info.code : "(none)");
+
+	// [PPSSPP-FORK] MultiCore: auto-load save memory (.sav) if directory configured
+	if (!saveDir_.empty()) {
+		INFO_LOG(Log::System, "[GBA] Save directory: %s", saveDir_.c_str());
+
+		struct VDir *saveDir = VDirOpen(saveDir_.c_str());
+		if (saveDir) {
+			core_->dirs.save = saveDir;
+			strncpy(core_->dirs.baseName, info.title[0] ? info.title : "GBA_ROM", sizeof(core_->dirs.baseName) - 1);
+			core_->dirs.baseName[sizeof(core_->dirs.baseName) - 1] = '\0';
+
+			// Auto-load existing .sav file (mGBA also creates one if it doesn't exist)
+			bool hasSave = mCoreAutoloadSave(core_);
+			INFO_LOG(Log::System, "[GBA] Save memory autoload: %s", hasSave ? "found & loaded" : "no existing save");
+		} else {
+			ERROR_LOG(Log::System, "[GBA] Failed to open save directory: %s", saveDir_.c_str());
+		}
+	}
+
 	return true;
+}
+
+void GBACore::SetSaveDirectory(const std::string &dir) {
+	saveDir_ = dir;
+	INFO_LOG(Log::System, "[GBA] Save directory set: %s", dir.c_str());
+}
+
+void GBACore::CloseSaveMemory() {
+	if (core_ && core_->dirs.save) {
+		core_->dirs.save->close(core_->dirs.save);
+		core_->dirs.save = nullptr;
+	}
 }
 
 void GBACore::RunFrame() {
@@ -104,27 +165,30 @@ void GBACore::RunFrame() {
 
 	core_->runFrame(core_);
 
-	// Capture video
-	const void *pixels = nullptr;
-	size_t stride = 0;
-	core_->getPixels(core_, &pixels, &stride);
+	// Periodic frame counter log (every 3600 frames = ~1 minute)
+	static int frameCount = 0;
+	if (++frameCount % 3600 == 0) {
+		INFO_LOG(Log::System, "[GBA] Frame %d", frameCount);
+	}
 
-	if (pixels) {
-		// mGBA outputs mColor (uint32_t, format XBGR8 on desktop).
-		// Convert to RGBA8888 for PPSSPP rendering.
-		const mColor *src = static_cast<const mColor *>(pixels);
-		size_t srcStride = stride / sizeof(mColor);
-
-		for (int y = 0; y < GBA_HEIGHT && y < (int)srcStride; y++) {
-			for (int x = 0; x < GBA_WIDTH; x++) {
-				mColor c = src[y * srcStride + x];
-				// XBGR8 → RGBA8888
-				uint8_t r = c & 0xFF;
-				uint8_t g = (c >> 8) & 0xFF;
-				uint8_t b = (c >> 16) & 0xFF;
-				videoBuffer_[y * GBA_WIDTH + x] = (0xFF << 24) | (r << 16) | (g << 8) | b;
-			}
+	// Capture video — mGBA rendered into rawVideoBuffer_ via setVideoBuffer
+	// Convert from mColor (XBGR8) to RGBA8888
+	for (int y = 0; y < GBA_HEIGHT; y++) {
+		for (int x = 0; x < GBA_WIDTH; x++) {
+			mColor c = rawVideoBuffer_[y * GBA_WIDTH + x];
+			// XBGR8 → RGBA8888
+			uint8_t r = c & 0xFF;
+			uint8_t g = (c >> 8) & 0xFF;
+			uint8_t b = (c >> 16) & 0xFF;
+			videoBuffer_[y * GBA_WIDTH + x] = (0xFF << 24) | (r << 16) | (g << 8) | b;
 		}
+	}
+
+	// Debug: verify render is working
+	static int vdebugCount = 0;
+	if (++vdebugCount <= 5) {
+		NOTICE_LOG(Log::System, "[GBA] Render frame %d: raw[0]=0x%08X converted[0]=0x%08X",
+			vdebugCount, rawVideoBuffer_[0], videoBuffer_[0]);
 	}
 
 	// Capture audio from mGBA's internal audio buffer
@@ -145,6 +209,7 @@ void GBACore::RunFrame() {
 
 void GBACore::Reset() {
 	if (core_) {
+		INFO_LOG(Log::System, "[GBA] Core reset");
 		core_->reset(core_);
 	}
 }

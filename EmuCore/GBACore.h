@@ -43,7 +43,11 @@ public:
 	// Get the raw video buffer for rendering (RGBA8888, 240x160)
 	const uint32_t *GetVideoBuffer() const { return videoBuffer_; }
 
+	// [PPSSPP-FORK] MultiCore: configure save memory directory for SRAM/Flash
+	void SetSaveDirectory(const std::string &dir);
+
 private:
+	void CloseSaveMemory();
 	static constexpr int GBA_WIDTH = 240;
 	static constexpr int GBA_HEIGHT = 160;
 
@@ -52,12 +56,17 @@ private:
 	// Video buffer (RGBA8888)
 	uint32_t videoBuffer_[GBA_WIDTH * GBA_HEIGHT]{};
 
+	// Raw mGBA output buffer (XBGR8 format, mColor)
+	uint32_t rawVideoBuffer_[GBA_WIDTH * GBA_HEIGHT]{};
+
 	// Temporary audio buffer
 	static constexpr size_t AUDIO_BUF_SIZE = 2048;
 	int16_t audioBuffer_[AUDIO_BUF_SIZE * 2]{};
 	size_t audioAvailable_ = 0;
 
 	bool LoadROMInternal(const Path &path);
+
+	std::string saveDir_;
 };
 
 }  // namespace EmuCore

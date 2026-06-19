@@ -1,6 +1,6 @@
 # GBA Support — Progress Report
 
-**Date:** 2026-06-18
+**Date:** 2026-06-19
 **Branch:** `feature/lan-sync`
 **Build:** `PPSSPP_MULTICORE=ON` (feature flag), 28-core parallel build
 
@@ -51,17 +51,40 @@
 
 ## 🔄 Pending
 
-### 7. Audio Routing
-- **Current state:** GBA produces audio samples (int16, 44100Hz stereo), TODO code is in `EmuScreen::update()` but commented out
-- **Needed:** Convert int16 → int32, then `System_AudioPushSamples(int32, numSamples, volume)`
-- **File:** `UI/EmuScreen.cpp` (~line 1515)
+### 7. GBA Video Rendering
+- [x] thin3d pipeline + texture created via `InitGBARendering()` — `UI/EmuScreen.cpp`
+- [x] Lazy init pattern: pipeline created on first frame (DrawContext not available during construction)
+- [x] `DrawGBAVideo()` — uploads `videoBuffer_[240*160]` RGBA8888, draws fullscreen with aspect ratio (3:2)
+- [x] Uses `VS_TEXTURE_COLOR_2D` + `FS_TEXTURE_COLOR_2D` shader presets (same as UIContext)
+- [x] Letterboxed with black background in `render()` before `renderUI()`
+- [x] Cleanup in destructor + deviceLost, recreate in deviceRestored
+- [x] Build verified: `MULTICORE=ON` (26.6MB) and `MULTICORE=OFF` (25.5MB)
 
-### 8. GBA Video Rendering
-- **Current state:** GBACore produces `videoBuffer_[240*160]` RGBA8888 pixels
-- **Needed:** Upload buffer as OpenGL texture and display in EmuScreen::renderUI()
-- **File:** `UI/EmuScreen.cpp` (~line 2112, already has GBA render stub)
+### 8. Audio Routing
+- [x] Convert int16 GBA audio → int32 PPSSPP format (shift left 16 bits) — `UI/EmuScreen.cpp` ~line 1738
+- [x] `GetAudioSamples()` provides bytes of int16 stereo; converted to int32 then `System_AudioPushSamples()`
+- [x] Buffer: 4096 samples (int16), converted on the fly each frame
+- [x] Build verified: `MULTICORE=ON` (26.6MB) and `MULTICORE=OFF` (25.5MB)
 
-### 9. Test Verification
+### 9. Save Memory (SRAM/Flash/EEPROM)
+- [x] `mDirectorySetInit(&core_->dirs)` called in GBACore constructor
+- [x] `mDirectorySetDeinit(&core_->dirs)` called in GBACore destructor (flushes save data)
+- [x] `SetSaveDirectory()` configures `DIRECTORY_SAVEDATA/GBA/` via PPSSPP's `GetSysDirectory()`
+- [x] `mCoreAutoloadSave()` called after `loadROM()` — auto-loads `.sav` if exists, creates new if not
+- [x] mGBA manages dirty tracking + writeback automatically — no manual flush needed
+- [x] Save memory files: `PSP/SAVEDATA/GBA/<title>.sav`
+
+### 10. Save State (Snapshot)
+- [x] `DoGBAState()` — raw buffer save/load using `GBACore::SaveState()`/`LoadState()`/`GetStateSize()`
+- [x] File format: `PSP/PPSSPP_STATE/GBA/<prefix>_N.gbast` (binary, no PSP chunk format)
+- [x] Prefix from game title + game code for dedup (e.g., `AGB-POKE_Pokemon_Emerald`)
+- [x] Reuses existing hotkeys: F1 (save), F3 (load), F2/F4 (prev/next slot)
+- [x] Reuses existing `iCurrentStateSlot` (0-4) — same config as PSP
+- [x] Reuses existing slot display OSD (`SAVESTATE_DISPLAY_SLOT`)
+- [x] **No new UI** — same pause menu, same hotkeys, same slot indicator
+- [x] Build verified: `MULTICORE=ON` and `MULTICORE=OFF`
+
+### 11. Test Verification
 - [x] `test_gba_core` binary built (2.4MB)
 - [ ] Need a GBA ROM to run actual test
 - [ ] Verify input mapping works end-to-end
@@ -73,11 +96,11 @@
 
 | Target | Size | Status |
 |--------|------|--------|
-| `PPSSPPSDL` (MULTICORE=ON) | 28MB | ✅ |
-| `PPSSPPSDL` (MULTICORE=OFF) | ~28MB | ✅ zero impact |
-| `test_gba_core` | 2.4MB | ✅ |
-| `libmgba.a` | ~1MB | ✅ |
-| `libEmuCore.a` | ~100KB | ✅ |
+| `PPSSPPSDL` (MULTICORE=ON) | 26.6MB | ✅ |
+| `PPSSPPSDL` (MULTICORE=OFF) | 25.5MB | ✅ zero impact |
+| `test_gba_core` | 1.6MB | ✅ |
+| `libmgba.a` | 1.8MB | ✅ |
+| `libEmuCore.a` | 25KB | ✅ |
 
 ---
 

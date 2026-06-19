@@ -569,7 +569,9 @@ void NativeInit(int argc, const char *argv[], const char *savegame_dir, const ch
 	}
 
 	// Initialize LAN sync (desktop SDL/Qt)
+	NOTICE_LOG(Log::System, "[BOOT] Initializing LAN sync...");
 	GetLinuxLANSync().Init();
+	NOTICE_LOG(Log::System, "[BOOT] LAN sync initialized OK");
 #endif
 
 	if (g_Config.currentDirectory.empty()) {
@@ -805,8 +807,10 @@ void NativeInit(int argc, const char *argv[], const char *savegame_dir, const ch
 
 	ApplyAchievementsHostOverride();
 
+	NOTICE_LOG(Log::System, "[BOOT] Creating ScreenManager...");
 	DEBUG_LOG(Log::System, "ScreenManager!");
 	g_screenManager = new ScreenManager();
+	NOTICE_LOG(Log::System, "[BOOT] ScreenManager created");
 	if (g_Config.memStickDirectory.empty()) {
 		INFO_LOG(Log::System, "No memstick directory! Asking for one to be configured.");
 		g_screenManager->switchScreen(new LogoScreen(AfterLogoScreen::MEMSTICK_SCREEN_INITIAL_SETUP));
@@ -819,17 +823,25 @@ void NativeInit(int argc, const char *argv[], const char *savegame_dir, const ch
 		g_screenManager->switchScreen(new MainScreen());
 		g_screenManager->push(new DeveloperToolsScreen(Path()));
 	} else if (skipLogo && !boot_filename.empty()) {
+		NOTICE_LOG(Log::System, "[BOOT] skipLogo=true, launching EmuScreen for: %s", boot_filename.c_str());
 		INFO_LOG(Log::System, "Launching EmuScreen with boot filename '%s'", boot_filename.c_str());
 #ifdef PPSSPP_MULTICORE
 		// [PPSSPP-FORK] MultiCore: detect file type for GBA auto-boot
 		EmuCore::Type bootCoreType = EmuCore::DetectType(boot_filename);
+		NOTICE_LOG(Log::System, "[BOOT] Detected core type: %s", bootCoreType == EmuCore::Type::GBA ? "GBA" : "PSP");
 		if (bootCoreType == EmuCore::Type::GBA) {
+			NOTICE_LOG(Log::System, "[BOOT] Creating EmuScreen for GBA...");
 			g_screenManager->switchScreen(new EmuScreen(boot_filename, EmuCore::Type::GBA));
+			NOTICE_LOG(Log::System, "[BOOT] EmuScreen (GBA) created OK");
 		} else {
+			NOTICE_LOG(Log::System, "[BOOT] Creating EmuScreen for PSP...");
 			g_screenManager->switchScreen(new EmuScreen(boot_filename));
+			NOTICE_LOG(Log::System, "[BOOT] EmuScreen (PSP) created OK");
 		}
 #else
+		NOTICE_LOG(Log::System, "[BOOT] Creating EmuScreen (PSP only)...");
 		g_screenManager->switchScreen(new EmuScreen(boot_filename));
+		NOTICE_LOG(Log::System, "[BOOT] EmuScreen created OK");
 #endif
 	} else {
 		g_screenManager->switchScreen(new LogoScreen(AfterLogoScreen::DEFAULT));
@@ -902,6 +914,7 @@ static void NativeMixWrapper(float *dest, int framesToWrite, int sampleRateHz, v
 }
 
 bool NativeInitGraphics(GraphicsContext *graphicsContext) {
+	NOTICE_LOG(Log::System, "[BOOT] NativeInitGraphics START");
 	INFO_LOG(Log::System, "NativeInitGraphics");
 
 	_assert_msg_(g_screenManager, "No screenmanager, bad init order. Backend = %d", g_Config.iGPUBackend);
@@ -930,6 +943,7 @@ bool NativeInitGraphics(GraphicsContext *graphicsContext) {
 	ui_draw2d.Init(g_draw, texColorPipeline);
 
 	uiContext->Init(g_draw, texColorPipeline, colorPipeline, &ui_draw2d);
+	NOTICE_LOG(Log::System, "[BOOT] UIContext initialized");
 	if (uiContext->Text()) {
 		// This seems unnecessary.
 		// uiContext->Text()->SetOrCreateFont(FontStyle(FontID::invalid(), FontFamily::SansSerif, 20, FontStyleFlags::Default));
@@ -979,6 +993,7 @@ bool NativeInitGraphics(GraphicsContext *graphicsContext) {
 	}
 
 	INFO_LOG(Log::System, "NativeInitGraphics completed");
+	NOTICE_LOG(Log::System, "[BOOT] NativeInitGraphics END — success");
 
 	return true;
 }

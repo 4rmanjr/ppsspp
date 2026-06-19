@@ -28,7 +28,10 @@ if(PPSSPP_MULTICORE)
 
     target_include_directories(EmuCore PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
     target_include_directories(EmuCore PRIVATE ${CMAKE_SOURCE_DIR})
-    target_link_libraries(EmuCore PRIVATE mgba)
+    # [PPSSPP-FORK] MultiCore: --whole-archive prevents linker from stripping
+    # mGBA function pointers (init, deinit, loadROM, etc.) that are only called
+    # indirectly through the mCore vtable.
+    target_link_libraries(EmuCore PRIVATE -Wl,--whole-archive mgba -Wl,--no-whole-archive)
 
     # mGBA include paths for EmuCore compilation
     # Must match mGBA library's compile definitions for ABI compatibility
