@@ -1278,6 +1278,20 @@ bool EmuScreen::UnsyncKey(const KeyInput &key) {
 
 		return UIScreen::UnsyncKey(key);
 	}
+
+#ifdef PPSSPP_MULTICORE
+	// [PPSSPP-FORK] MultiCore: direct ESC handler for GBA mode
+	// ESC normally goes through VIRTKEY_PAUSE → OnVKey → pauseTrigger_,
+	// but the timing/state tracking in ControlMapper can miss it for GBA.
+	if (coreType_ != EmuCore::Type::PSP) {
+		if ((key.flags & KeyInputFlags::DOWN) && UI::IsEscapeKey(key)) {
+			NOTICE_LOG(Log::System, "[GBA] ESC pressed — direct pause trigger");
+			pauseTrigger_ = true;
+			return true;
+		}
+	}
+#endif
+
 	return g_controlMapper.Key(key);
 }
 
