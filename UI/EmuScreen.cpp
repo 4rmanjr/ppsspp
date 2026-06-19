@@ -91,6 +91,7 @@ using namespace std::placeholders;
 #ifdef PPSSPP_MULTICORE
 #include "EmuCore/EmuCore.h"
 #include "EmuCore/GBACore.h"
+#include "EmuCore/Config.h"
 #include "Common/System/System.h"
 #include "Core/Util/PathUtil.h"
 #include "UI/TouchLayoutGBA.h"
@@ -190,6 +191,9 @@ EmuScreen::EmuScreen(const Path &filename
 	// [PPSSPP-FORK] MultiCore: initialize appropriate core
 	if (coreType_ != EmuCore::Type::PSP) {
 		INFO_LOG(Log::System, "[GBA] EmuScreen created for GBA core, file: %s", filename.c_str());
+
+		// [PPSSPP-FORK] MultiCore: switch config to GBA mode
+		EmuCore::LoadConfig(EmuCore::Type::GBA);
 
 		// Ensure GBA save directories exist
 		File::CreateFullPath(GetSysDirectory(DIRECTORY_SAVEDATA) / "GBA");
@@ -496,6 +500,11 @@ void EmuScreen::bootComplete() {
 
 EmuScreen::~EmuScreen() {
 #ifdef PPSSPP_MULTICORE
+	// [PPSSPP-FORK] MultiCore: save config and restore PSP config on exit
+	if (coreType_ != EmuCore::Type::PSP) {
+		EmuCore::SaveConfig(EmuCore::Type::GBA);
+	}
+
 	// [PPSSPP-FORK] MultiCore: release GBA rendering resources
 	ShutdownGBARendering();
 #endif

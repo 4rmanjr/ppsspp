@@ -9,8 +9,20 @@
 
 namespace EmuCore {
 
+// Save current config state (for PSP → GBA switch)
+void SaveCurrentConfig();
+
+// Restore previously saved config state (for GBA → PSP switch)
+void RestoreSavedConfig();
+
+// Apply GBA-specific defaults for first-time setup
+void ApplyGBADefaults();
+
 // Load configuration for the specified core type.
 void LoadConfig(Type coreType);
+
+// Save configuration for the specified core before switch.
+void SaveConfig(Type coreType);
 
 // Get the savestate directory for the specified core type.
 std::string GetSavestateDir(Type coreType);
