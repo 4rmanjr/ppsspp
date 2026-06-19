@@ -41,3 +41,36 @@ Semua aturan detail ada di `docs/agents/`:
 - ✅ Saat conflict merge dengan upstream: **kode upstream yang menang** — kode kustom dipindah/diadjust, bukan sebaliknya.
 - ✅ Setiap fitur baru WAJIB punya feature flag sendiri (`PPSSPP_<NAMA>`).
 - ✅ Semua pengaturan per-fitur WAJIB terisolasi di section config terpisah, jangan campur dengan config PSP.
+
+### 🟢 IsFitur() Pattern — Kurangi #ifdef di Call Site
+Gunakan constexpr helper untuk menggantikan `#ifdef` di call site:
+```cpp
+// Header — di luar #ifdef
+#ifdef PPSSPP_FITUR
+    bool IsFitur() const { return flag_ != Default; }
+#else
+    static constexpr bool IsFitur() { return false; }
+#endif
+
+// Call site — tanpa #ifdef
+if (IsFitur()) {
+    DoFiturStuff();
+}
+```
+Compiler otomatis eliminasi dead branch saat fitur OFF.
+Terbukti: 31 dari 45 `#ifdef` di EmuScreen.cpp berhasil dihilangkan.
+
+### 🟢 Helper Method Extraction — Pisahkan Logic dari File Upstream
+Jika logic fitur kustom >5 baris di file upstream, extract ke helper:
+```cpp
+// Di file upstream (call site minimal)
+#ifdef PPSSPP_FITUR
+    if (IsFitur()) { UpdateFitur(); return; }
+#endif
+
+// Implementasi helper di file terpisah (atau dibungkus #ifdef sekali)
+void EmuScreen::UpdateFitur() {
+    // ... semua logic fitur di sini
+}
+```
+Convention naming: `Init<Fitur>()`, `Shutdown<Fitur>()`, `Update<Fitur>()`, `Render<Fitur>()`.
