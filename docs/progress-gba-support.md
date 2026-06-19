@@ -6,9 +6,10 @@
 
 ## 🔨 Currently Working On
 
-- 🟡 **Audio fix**: sounds slow-mo/distorted — investigating sample rate / PPSSPP audio backend
-- 🟡 **ESC pause menu**: direct handler added, needs user verification
-- 🟡 **Save state/save memory**: code in place, needs end-to-end ROM test
+- 🔴 **Audio fix**: still distorted/slow-mo — need to investigate PPSSPP audio backend integration
+- 🔴 **ESC pause menu**: direct handler added but not yet responding — need debug
+- 🔴 **Save state (F1/F3)**: code in place but not working — `DoGBAState()` may have path or data issue
+- 🔴 **Load state**: same as save state — needs end-to-end debug
 
 ---
 
