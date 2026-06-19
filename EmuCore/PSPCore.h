@@ -17,7 +17,7 @@ public:
 	bool LoadROM(const Path &path) override;
 	void RunFrame() override;
 	void Reset() override;
-	void Render() override;
+	void Render(Draw::DrawContext *draw) override;
 
 	int GetAudioSampleRate() const override;
 	void GetAudioSamples(int16_t *buffer, size_t *samples) override;

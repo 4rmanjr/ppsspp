@@ -3,6 +3,7 @@
 // Jangan hapus, jangan ubah kode upstream.
 
 #include "EmuCore/PSPCore.h"
+#include "Common/GPU/thin3d.h"
 #include "Core/System.h"
 #include "Core/Core.h"
 #include "Core/HLE/sceCtrl.h"
@@ -24,8 +25,8 @@ void PSPCore::Reset() {
 	PSP_Shutdown(unused);
 }
 
-void PSPCore::Render() {
-	// PSP rendering is done by GPU backends.
+void PSPCore::Render(Draw::DrawContext *draw) {
+	// PSP rendering is handled by its own GPU backends — no-op here.
 }
 
 int PSPCore::GetAudioSampleRate() const {

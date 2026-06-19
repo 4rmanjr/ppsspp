@@ -187,33 +187,9 @@ EmuScreen::EmuScreen(const Path &filename
 	, coreType_(coreType)
 #endif
 {
+	// [PPSSPP-FORK] MultiCore: initialize GBA core if needed
 #ifdef PPSSPP_MULTICORE
-	// [PPSSPP-FORK] MultiCore: initialize appropriate core
-	if (coreType_ != EmuCore::Type::PSP) {
-		INFO_LOG(Log::System, "[GBA] EmuScreen created for GBA core, file: %s", filename.c_str());
-
-		// [PPSSPP-FORK] MultiCore: switch config to GBA mode
-		EmuCore::LoadConfig(EmuCore::Type::GBA);
-
-		// Ensure GBA save directories exist
-		File::CreateFullPath(GetSysDirectory(DIRECTORY_SAVEDATA) / "GBA");
-		File::CreateFullPath(GetSysDirectory(DIRECTORY_SAVESTATE) / "GBA");
-
-		activeCore_ = EmuCore::Create(filename);
-		if (activeCore_) {
-			// Configure save memory directory before loading ROM
-			EmuCore::GBACore *gba = static_cast<EmuCore::GBACore *>(activeCore_.get());
-			gba->SetSaveDirectory(
-				(GetSysDirectory(DIRECTORY_SAVEDATA) / "GBA").ToString()
-			);
-			if (activeCore_->LoadROM(filename)) {
-				INFO_LOG(Log::System, "[GBA] ROM loaded, boot pending");
-			} else {
-				ERROR_LOG(Log::System, "[GBA] Failed to load ROM");
-			}
-		}
-		bootPending_ = true;
-	}
+	InitGBA(filename);
 #endif
 	saveStateSlot_ = SaveState::GetCurrentSlot();
 	g_controlMapper.AddListener(this);
@@ -499,14 +475,9 @@ void EmuScreen::bootComplete() {
 }
 
 EmuScreen::~EmuScreen() {
+	// [PPSSPP-FORK] MultiCore: cleanup GBA resources
 #ifdef PPSSPP_MULTICORE
-	// [PPSSPP-FORK] MultiCore: save config and restore PSP config on exit
-	if (coreType_ != EmuCore::Type::PSP) {
-		EmuCore::SaveConfig(EmuCore::Type::GBA);
-	}
-
-	// [PPSSPP-FORK] MultiCore: release GBA rendering resources
-	ShutdownGBARendering();
+	ShutdownGBA();
 #endif
 
 	g_controlMapper.RemoveListener(this);
@@ -559,14 +530,8 @@ EmuScreen::~EmuScreen() {
 
 	Achievements::UnloadGame();
 
-#ifdef PPSSPP_MULTICORE
 	// [PPSSPP-FORK] MultiCore: skip PSP shutdown for non-PSP cores
-	if (coreType_ == EmuCore::Type::PSP) {
-		PSP_Shutdown(true);
-	}
-#else
-	PSP_Shutdown(true);
-#endif
+	if (!IsGBA()) PSP_Shutdown(true);
 
 	// If achievements are disabled in the global config, let's shut it down here.
 	if (!g_Config.bAchievementsEnable) {
@@ -674,11 +639,8 @@ void EmuScreen::sendMessage(UIMessage message, const char *value) {
 			return;
 		}
 		Achievements::UnloadGame();
-#ifdef PPSSPP_MULTICORE
 		// [PPSSPP-FORK] MultiCore: skip PSP shutdown for non-PSP cores
-		if (coreType_ == EmuCore::Type::PSP)
-#endif
-		PSP_Shutdown(true);
+		if (!IsGBA()) PSP_Shutdown(true);
 		UI::EnableFocusMovement(false);
 
 		// Restart the boot process
@@ -717,11 +679,8 @@ void EmuScreen::sendMessage(UIMessage message, const char *value) {
 			});
 		} else {
 			Achievements::UnloadGame();
-#ifdef PPSSPP_MULTICORE
 			// [PPSSPP-FORK] MultiCore: skip PSP shutdown for non-PSP cores
-			if (coreType_ == EmuCore::Type::PSP)
-#endif
-			PSP_Shutdown(true);
+			if (!IsGBA()) PSP_Shutdown(true);
 
 			// OK, now pop any open settings screens and stuff that are running above us.
 			// Otherwise, we can get strange results with game-specific settings.
@@ -1141,9 +1100,15 @@ void EmuScreen::ProcessVKey(VirtKey virtKey) {
 	case VIRTKEY_SAVE_STATE:
 		if (!Achievements::WarnUserIfHardcoreModeActive(true) && !NetworkWarnUserIfOnlineAndCantSavestate() && !bootPending_) {
 #ifdef PPSSPP_MULTICORE
-			// [PPSSPP-FORK] MultiCore: GBA uses raw buffer save, PSP uses SaveState system
-			if (coreType_ != EmuCore::Type::PSP) {
-				DoGBAState(GBASAVEACTION_SAVE);
+			// [PPSSPP-FORK] MultiCore: GBA uses file-based save via GBACore
+			if (IsGBA()) {
+				EmuCore::GBACore *gba = static_cast<EmuCore::GBACore *>(activeCore_.get());
+				int slot = g_Config.iCurrentStateSlot;
+				if (gba->SaveStateToFile(slot)) {
+					g_OSD.Show(OSDType::MESSAGE_SUCCESS, StringFromFormat("GBA state saved (slot %d)", slot + 1), 2.0f);
+				} else {
+					g_OSD.Show(OSDType::MESSAGE_WARNING, "GBA save state failed", 3.0f);
+				}
 			} else
 #endif
 			SaveState::SaveSlot(SaveState::GetGamePrefix(g_paramSFO), g_Config.iCurrentStateSlot, &ShowMessageAfterSaveStateAction);
@@ -1152,9 +1117,15 @@ void EmuScreen::ProcessVKey(VirtKey virtKey) {
 	case VIRTKEY_LOAD_STATE:
 		if (!Achievements::WarnUserIfHardcoreModeActive(false) && !NetworkWarnUserIfOnlineAndCantSavestate() && !bootPending_) {
 #ifdef PPSSPP_MULTICORE
-			// [PPSSPP-FORK] MultiCore: GBA uses raw buffer load, PSP uses SaveState system
-			if (coreType_ != EmuCore::Type::PSP) {
-				DoGBAState(GBASAVEACTION_LOAD);
+			// [PPSSPP-FORK] MultiCore: GBA uses file-based load via GBACore
+			if (IsGBA()) {
+				EmuCore::GBACore *gba = static_cast<EmuCore::GBACore *>(activeCore_.get());
+				int slot = g_Config.iCurrentStateSlot;
+				if (gba->LoadStateFromFile(slot)) {
+					g_OSD.Show(OSDType::MESSAGE_SUCCESS, StringFromFormat("GBA state loaded (slot %d)", slot + 1), 2.0f);
+				} else {
+					g_OSD.Show(OSDType::MESSAGE_WARNING, StringFromFormat("No GBA save state in slot %d", slot + 1), 2.0f);
+				}
 			} else
 #endif
 			if (g_Config.bConfirmLoadState) {
@@ -1288,18 +1259,12 @@ bool EmuScreen::UnsyncKey(const KeyInput &key) {
 		return UIScreen::UnsyncKey(key);
 	}
 
-#ifdef PPSSPP_MULTICORE
 	// [PPSSPP-FORK] MultiCore: direct ESC handler for GBA mode
-	// ESC normally goes through VIRTKEY_PAUSE → OnVKey → pauseTrigger_,
-	// but the timing/state tracking in ControlMapper can miss it for GBA.
-	if (coreType_ != EmuCore::Type::PSP) {
-		if ((key.flags & KeyInputFlags::DOWN) && UI::IsEscapeKey(key)) {
-			NOTICE_LOG(Log::System, "[GBA] ESC pressed — direct pause trigger");
-			pauseTrigger_ = true;
-			return true;
-		}
+	if (IsGBA() && (key.flags & KeyInputFlags::DOWN) && UI::IsEscapeKey(key)) {
+		NOTICE_LOG(Log::System, "[GBA] ESC pressed — direct pause trigger");
+		pauseTrigger_ = true;
+		return true;
 	}
-#endif
 
 	return g_controlMapper.Key(key);
 }
@@ -1425,286 +1390,111 @@ void EmuScreen::AddGBATouchButtons(const Bounds &bounds, DeviceOrientation orien
 	}
 }
 
-// [PPSSPP-FORK] MultiCore: GBA video rendering
-struct GBAVertex {
-	float x, y, z;
-	float u, v;
-	uint32_t rgba;
-};
+// [PPSSPP-FORK] MultiCore: initialize GBA core in constructor
+void EmuScreen::InitGBA(const Path &filename) {
+	if (!IsGBA()) return;
 
-void EmuScreen::InitGBARendering() {
-	NOTICE_LOG(Log::System, "[GBA] InitGBARendering START");
+	INFO_LOG(Log::System, "[GBA] EmuScreen created for GBA core, file: %s", filename.c_str());
+
+	EmuCore::LoadConfig(EmuCore::Type::GBA);
+
+	File::CreateFullPath(GetSysDirectory(DIRECTORY_SAVEDATA) / "GBA");
+	File::CreateFullPath(GetSysDirectory(DIRECTORY_SAVESTATE) / "GBA");
+
+	activeCore_ = EmuCore::Create(filename);
+	if (activeCore_) {
+		EmuCore::GBACore *gba = static_cast<EmuCore::GBACore *>(activeCore_.get());
+		gba->SetSaveDirectory(
+			(GetSysDirectory(DIRECTORY_SAVEDATA) / "GBA").ToString()
+		);
+		if (activeCore_->LoadROM(filename)) {
+			INFO_LOG(Log::System, "[GBA] ROM loaded, boot pending");
+		} else {
+			ERROR_LOG(Log::System, "[GBA] Failed to load ROM");
+		}
+	}
+	bootPending_ = true;
+}
+
+// [PPSSPP-FORK] MultiCore: cleanup GBA resources in destructor
+void EmuScreen::ShutdownGBA() {
+	if (!IsGBA()) return;
+
+	EmuCore::SaveConfig(EmuCore::Type::GBA);
+	if (activeCore_) activeCore_->DeviceLost();
+	activeCore_.reset();
+}
+
+// [PPSSPP-FORK] MultiCore: run one GBA update frame
+void EmuScreen::UpdateGBA() {
+	if (bootPending_) {
+		bootPending_ = false;
+		readyToFinishBoot_ = false;
+	}
+
+	activeCore_->RunFrame();
+
+	// Push resampled audio (32768→44100 Hz, int32 format)
+	static constexpr int MAX_AUDIO_PAIRS = 735;
+	int32_t audioBuf32[MAX_AUDIO_PAIRS * 2];
+	size_t stereoPairs = 0;
+	EmuCore::GBACore *gba = static_cast<EmuCore::GBACore *>(activeCore_.get());
+	gba->GetMixedAudio(audioBuf32, &stereoPairs);
+
+	static int audioDebug = 0;
+	if (++audioDebug <= 5 || audioDebug % 180 == 0) {
+		NOTICE_LOG(Log::System, "[GBA] Audio frame %d: stereoPairs=%zu", audioDebug, stereoPairs);
+	}
+	if (stereoPairs > 0) {
+		System_AudioPushSamples(audioBuf32, (int)stereoPairs, 1.0f);
+	}
+
+	// Forward input
+	uint32_t pspButtons = __CtrlPeekButtons();
+	static int inputDebug = 0;
+	if (++inputDebug <= 5 || inputDebug % 180 == 0) {
+		NOTICE_LOG(Log::System, "[GBA] Input frame %d: pspButtons=0x%04X", inputDebug, pspButtons);
+	}
+	activeCore_->SetKeys(pspButtons);
+
+	// Pause handling
+	if (g_controlMapper.PollPauseTrigger()) {
+		NOTICE_LOG(Log::System, "[GBA] PollPauseTrigger=true");
+		pauseTrigger_ = true;
+	}
+	if (pauseTrigger_) {
+		NOTICE_LOG(Log::System, "[GBA] Opening pause screen");
+		pauseTrigger_ = false;
+		screenManager()->push(new GamePauseScreen(gamePath_, bootPending_));
+	}
+
+	UIScreen::update();
+	resumeButton_->SetVisibility(UI::V_GONE);
+	resetButton_->SetVisibility(UI::V_GONE);
+	backButton_->SetVisibility(UI::V_GONE);
+}
+
+// [PPSSPP-FORK] MultiCore: render one GBA frame
+ScreenRenderFlags EmuScreen::RenderGBA(ScreenRenderFlags screenRenderFlags) {
 	Draw::DrawContext *draw = screenManager()->getDrawContext();
-	if (!draw || gbaPipeline_) {
-		if (!draw) ERROR_LOG(Log::G3D, "[GBA] InitGBARendering: no DrawContext!");
-		return;
-	}
+	if (!draw) return screenRenderFlags;
 
-	using namespace Draw;
+	const Draw::Viewport viewport{0.0f, 0.0f, (float)g_display.pixel_xres, (float)g_display.pixel_yres, 0.0f, 1.0f};
+	draw->SetViewport(viewport);
+	draw->SetScissorRect(0, 0, g_display.pixel_xres, g_display.pixel_yres);
 
-	// Sampler — nearest neighbor for pixel-perfect GBA graphics
-	NOTICE_LOG(Log::G3D, "[GBA] Creating sampler...");
-	SamplerStateDesc nearestDesc{};
-	nearestDesc.magFilter = TextureFilter::NEAREST;
-	nearestDesc.minFilter = TextureFilter::NEAREST;
-	gbaSampler_ = draw->CreateSamplerState(nearestDesc);
-	NOTICE_LOG(Log::G3D, "[GBA] Sampler created: %p", gbaSampler_);
+	// Clear to black background (letterbox area)
+	draw->Clear(Draw::Aspect::COLOR_BIT, 0xFF000000, 0.0f, 0);
 
-	// Shaders from presets (same ones used by UIContext)
-	NOTICE_LOG(Log::G3D, "[GBA] Getting shader presets...");
-	ShaderModule *vs = draw->GetVshaderPreset(VS_TEXTURE_COLOR_2D);
-	ShaderModule *fs = draw->GetFshaderPreset(FS_TEXTURE_COLOR_2D);
-	NOTICE_LOG(Log::G3D, "[GBA] VS=%p FS=%p", vs, fs);
-	if (!vs || !fs) {
-		ERROR_LOG(Log::G3D, "GBA: failed to get shader presets");
-		return;
-	}
+	// Draw GBA video framebuffer
+	if (activeCore_) activeCore_->Render(draw);
 
-	// Input layout — matches DrawBuffer vertex format
-	NOTICE_LOG(Log::G3D, "[GBA] Creating input layout...");
-	InputLayoutDesc inputDesc = {
-		sizeof(GBAVertex),
-		{
-			{ SEM_POSITION, DataFormat::R32G32B32_FLOAT, 0 },
-			{ SEM_TEXCOORD0, DataFormat::R32G32_FLOAT, 12 },
-			{ SEM_COLOR0, DataFormat::R8G8B8A8_UNORM, 20 },
-		},
-	};
-	InputLayout *inputLayout = draw->CreateInputLayout(inputDesc);
-	NOTICE_LOG(Log::G3D, "[GBA] Input layout: %p", inputLayout);
-
-	NOTICE_LOG(Log::G3D, "[GBA] Creating blend/depth/raster states...");
-	BlendState *blend = draw->CreateBlendState({ true, 0xF, BlendFactor::ONE, BlendFactor::ONE_MINUS_SRC_ALPHA });
-	DepthStencilState *depth = draw->CreateDepthStencilState({ false, false, Comparison::LESS });
-	RasterState *raster = draw->CreateRasterState({});
-	NOTICE_LOG(Log::G3D, "[GBA] Blend=%p Depth=%p Raster=%p", blend, depth, raster);
-
-	NOTICE_LOG(Log::G3D, "[GBA] Creating graphics pipeline...");
-	PipelineDesc pipelineDesc{
-		Primitive::TRIANGLE_LIST,
-		{ vs, fs },
-		inputLayout, depth, blend, raster, &vsTexColBufDesc,
-	};
-
-	gbaPipeline_ = draw->CreateGraphicsPipeline(pipelineDesc, "gba_video");
-	NOTICE_LOG(Log::G3D, "[GBA] Pipeline created: %p", gbaPipeline_);
-
-	// Release refs — pipeline holds its own
-	if (inputLayout) inputLayout->Release();
-	if (blend) blend->Release();
-	if (depth) depth->Release();
-	if (raster) raster->Release();
-
-	// Create GBA framebuffer texture (240x160, RGBA8888)
-	NOTICE_LOG(Log::G3D, "[GBA] Creating framebuffer texture...");
-	TextureDesc texDesc{};
-	texDesc.type = TextureType::LINEAR2D;
-	texDesc.format = DataFormat::R8G8B8A8_UNORM;
-	texDesc.width = 240;
-	texDesc.height = 160;
-	texDesc.depth = 1;
-	texDesc.mipLevels = 1;
-	texDesc.tag = "GBA_fb";
-	// Provide valid initial data (will be overwritten on first frame)
-	static std::vector<uint8_t> dummyData(240 * 160 * 4, 0);
-	texDesc.initData.push_back(dummyData.data());
-	gbaTexture_ = draw->CreateTexture(texDesc);
-	NOTICE_LOG(Log::G3D, "[GBA] Texture created: %p", gbaTexture_);
-
-	NOTICE_LOG(Log::System, "[GBA] InitGBARendering COMPLETE — pipeline=%p texture=%p", gbaPipeline_, gbaTexture_);
-	INFO_LOG(Log::G3D, "GBA rendering initialized: pipeline=%p texture=%p", gbaPipeline_, gbaTexture_);
+	// Draw touch controls + FPS overlay
+	renderUI();
+	return screenRenderFlags;
 }
 
-void EmuScreen::ShutdownGBARendering() {
-	if (gbaPipeline_) {
-		gbaPipeline_->Release();
-		gbaPipeline_ = nullptr;
-	}
-	if (gbaTexture_) {
-		gbaTexture_->Release();
-		gbaTexture_ = nullptr;
-	}
-	if (gbaSampler_) {
-		gbaSampler_->Release();
-		gbaSampler_ = nullptr;
-	}
-}
-
-void EmuScreen::DrawGBAVideo() {
-	if (!activeCore_)
-		return;
-
-	// Lazy init — DrawContext may not be available during construction
-	if (!gbaTexture_ || !gbaPipeline_) {
-		InitGBARendering();
-		if (!gbaTexture_ || !gbaPipeline_)
-			return;
-	}
-
-	using namespace Draw;
-	DrawContext *draw = screenManager()->getDrawContext();
-	if (!draw)
-		return;
-
-	// Upload GBA framebuffer to texture
-	EmuCore::GBACore *gbaCore = static_cast<EmuCore::GBACore *>(activeCore_.get());
-	const uint32_t *videoBuf = gbaCore->GetVideoBuffer();
-
-	// Debug: check if video buffer has non-black pixels
-	static int debugFrame = 0;
-	if (++debugFrame <= 5 || debugFrame % 120 == 0) {
-		bool hasColor = false;
-		uint32_t firstNonZero = 0;
-		for (int i = 0; i < 240*160; i++) {
-			if (videoBuf[i] != 0xFF000000 && videoBuf[i] != 0x00000000) {
-				if (!hasColor) firstNonZero = videoBuf[i];
-				hasColor = true;
-				break;
-			}
-		}
-		NOTICE_LOG(Log::System, "[GBA] Frame %d video: firstPixel=0x%08X hasNonBlack=%d", debugFrame, videoBuf[0], hasColor ? 1 : 0);
-		if (hasColor) NOTICE_LOG(Log::System, "[GBA] First non-black pixel: 0x%08X", firstNonZero);
-	}
-	const uint8_t *data = reinterpret_cast<const uint8_t *>(videoBuf);
-	draw->UpdateTextureLevels(gbaTexture_, &data, nullptr, 1);
-
-	// Bind pipeline + sampler + texture
-	draw->BindPipeline(gbaPipeline_);
-	Draw::SamplerState *samplers[1] = { gbaSampler_ };
-	draw->BindSamplerStates(0, 1, samplers);
-	draw->BindTexture(0, gbaTexture_);
-
-	// Calculate GBA viewport with correct aspect ratio (240:160 = 3:2)
-	int screenW = g_display.pixel_xres;
-	int screenH = g_display.pixel_yres;
-	float gbaAspect = 240.0f / 160.0f;
-	float screenAspect = (float)screenW / (float)screenH;
-
-	float drawW, drawH, drawX, drawY;
-	if (screenAspect > gbaAspect) {
-		// Screen wider than GBA → letterbox left/right
-		drawH = (float)screenH;
-		drawW = drawH * gbaAspect;
-		drawX = (screenW - drawW) / 2.0f;
-		drawY = 0.0f;
-	} else {
-		// Screen taller than GBA → letterbox top/bottom
-		drawW = (float)screenW;
-		drawH = drawW / gbaAspect;
-		drawX = 0.0f;
-		drawY = (screenH - drawH) / 2.0f;
-	}
-
-	// Draw fullscreen quad with GBA texture (2 triangles = 6 vertices)
-	GBAVertex verts[6] = {
-		{ drawX,         drawY,          0.0f, 0.0f, 0.0f, 0xFFFFFFFF },
-		{ drawX + drawW, drawY,          0.0f, 1.0f, 0.0f, 0xFFFFFFFF },
-		{ drawX + drawW, drawY + drawH,  0.0f, 1.0f, 1.0f, 0xFFFFFFFF },
-		{ drawX,         drawY,          0.0f, 0.0f, 0.0f, 0xFFFFFFFF },
-		{ drawX + drawW, drawY + drawH,  0.0f, 1.0f, 1.0f, 0xFFFFFFFF },
-		{ drawX,         drawY + drawH,  0.0f, 0.0f, 1.0f, 0xFFFFFFFF },
-	};
-
-	// Update uniform buffer (matching VsTexColUB layout)
-	VsTexColUB ub{};
-	Lin::Matrix4x4 ortho = ComputeOrthoMatrix((float)screenW, (float)screenH, draw->GetDeviceCaps().coordConvention);
-	memcpy(ub.WorldViewProj, ortho.getReadPtr(), sizeof(Lin::Matrix4x4));
-	ub.tint = 1.0f;
-	ub.saturation = 1.0f;
-	draw->UpdateDynamicUniformBuffer(&ub, sizeof(ub));
-
-	draw->DrawUP(verts, 6);
-}
-
-// [PPSSPP-FORK] MultiCore: generate safe filename prefix from GBA game title
-std::string EmuScreen::GetGBASavePrefix() {
-	std::string title, id;
-	activeCore_->GetGameInfo(title, id);
-
-	// Sanitize: keep only alphanumeric + underscore, max 32 chars
-	std::string prefix;
-	for (char c : title) {
-		if (isalnum((unsigned char)c) || c == '_' || c == '-') {
-			prefix += c;
-		} else if (!prefix.empty() && prefix.back() != '_') {
-			prefix += '_';
-		}
-		if (prefix.size() >= 32)
-			break;
-	}
-	if (prefix.empty())
-		prefix = "GBA_ROM";
-
-	// Use game code if available for dedup
-	if (!id.empty()) {
-		std::string cleanId;
-		for (char c : id) {
-			if (isalnum((unsigned char)c))
-				cleanId += c;
-		}
-		if (!cleanId.empty())
-			prefix = cleanId + "_" + prefix;
-	}
-	return prefix;
-}
-
-Path EmuScreen::GetGBASaveStatePath(int slot) {
-	std::string prefix = GetGBASavePrefix();
-	std::string filename = StringFromFormat("%s_%d.gbast", prefix.c_str(), slot);
-	return GetSysDirectory(DIRECTORY_SAVESTATE) / "GBA" / filename;
-}
-
-void EmuScreen::DoGBAState(GBAStateAction action) {
-	if (!activeCore_)
-		return;
-
-	int slot = g_Config.iCurrentStateSlot;
-	Path path = GetGBASaveStatePath(slot);
-	std::string prefix = GetGBASavePrefix();
-
-	// Ensure directory exists
-	File::CreateFullPath(path);
-
-	if (action == GBASAVEACTION_SAVE) {
-		size_t size = activeCore_->GetStateSize();
-		INFO_LOG(Log::SaveState, "[GBA] Saving state — slot=%d, prefix='%s', size=%zu", slot, prefix.c_str(), size);
-
-		if (size == 0) {
-			ERROR_LOG(Log::SaveState, "[GBA] Save state failed: state size is 0");
-			g_OSD.Show(OSDType::MESSAGE_WARNING, "GBA save state failed: empty state", 3.0f);
-			return;
-		}
-
-		std::vector<u8> buffer(size);
-		if (activeCore_->SaveState(buffer.data())) {
-			File::WriteDataToFile(false, buffer.data(), size, path);
-			INFO_LOG(Log::SaveState, "[GBA] State saved to: %s", path.c_str());
-			g_OSD.Show(OSDType::MESSAGE_SUCCESS, StringFromFormat("GBA state saved (slot %d)", slot + 1), 2.0f);
-		} else {
-			ERROR_LOG(Log::SaveState, "[GBA] SaveState() returned false");
-			g_OSD.Show(OSDType::MESSAGE_WARNING, "GBA save state failed", 3.0f);
-		}
-	} else {
-		// Load
-		INFO_LOG(Log::SaveState, "[GBA] Loading state — slot=%d, prefix='%s'", slot, prefix.c_str());
-
-		std::string data;
-		if (!File::ReadBinaryFileToString(path, &data)) {
-			WARN_LOG(Log::SaveState, "[GBA] No save state file at: %s", path.c_str());
-			g_OSD.Show(OSDType::MESSAGE_WARNING, StringFromFormat("No GBA save state in slot %d", slot + 1), 2.0f);
-			return;
-		}
-
-		INFO_LOG(Log::SaveState, "[GBA] Read %zu bytes from: %s", data.size(), path.c_str());
-		if (activeCore_->LoadState(data.data())) {
-			INFO_LOG(Log::SaveState, "[GBA] State loaded successfully");
-			g_OSD.Show(OSDType::MESSAGE_SUCCESS, StringFromFormat("GBA state loaded (slot %d)", slot + 1), 2.0f);
-		} else {
-			ERROR_LOG(Log::SaveState, "[GBA] LoadState() returned false");
-			g_OSD.Show(OSDType::MESSAGE_WARNING, "GBA load state failed", 3.0f);
-		}
-	}
-}
+// [PPSSPP-FORK] MultiCore: GBA save state moved to GBACore::SaveStateToFile / LoadStateFromFile
 #endif
 
 void EmuScreen::CreateViews() {
@@ -1849,9 +1639,9 @@ void EmuScreen::deviceLost() {
 		sleep_ms(100, "device-lost-during-boot");
 	}
 
-#ifdef PPSSPP_MULTICORE
 	// [PPSSPP-FORK] MultiCore: release GBA GPU resources before draw context is destroyed
-	ShutdownGBARendering();
+#ifdef PPSSPP_MULTICORE
+	if (IsGBA() && activeCore_) activeCore_->DeviceLost();
 #endif
 
 	UIScreen::deviceLost();
@@ -1867,11 +1657,9 @@ void EmuScreen::deviceLost() {
 void EmuScreen::deviceRestored(Draw::DrawContext *draw) {
 	UIScreen::deviceRestored(draw);
 
+	// [PPSSPP-FORK] MultiCore: GBA resources recreated lazily on next Render() call
 #ifdef PPSSPP_MULTICORE
-	// [PPSSPP-FORK] MultiCore: recreate GBA rendering resources
-	if (coreType_ != EmuCore::Type::PSP) {
-		InitGBARendering();
-	}
+	if (IsGBA() && activeCore_) activeCore_->DeviceRestored(draw);
 #endif
 	if (imguiInited_) {
 		ImGui_ImplThin3d_CreateDeviceObjects(draw);
@@ -1915,74 +1703,10 @@ ViewLayoutMode EmuScreen::LayoutMode() const {
 void EmuScreen::update() {
 	using namespace UI;
 
-#ifdef PPSSPP_MULTICORE
 	// [PPSSPP-FORK] MultiCore: GBA emulation path
-	if (coreType_ != EmuCore::Type::PSP && activeCore_) {
-		// Handle boot process for non-PSP cores
-		if (bootPending_) {
-			bootPending_ = false;
-			readyToFinishBoot_ = false;
-		}
-
-		// Run one frame of GBA emulation
-		activeCore_->RunFrame();
-
-		// Push audio to PPSSPP audio system
-		// [PPSSPP-FORK] MultiCore: convert int16 GBA audio → int32 PPSSPP format
-		// GBA audio: 44100Hz stereo. At ~60fps: 44100/60 = 735 stereo pairs = 1470 mono samples per frame
-		static constexpr int SAMPLES_PER_FRAME = 1470;  // 44100 / 60 * 2 (stereo)
-		int16_t audioBuf16[4096];
-		size_t samplesBytes = SAMPLES_PER_FRAME * sizeof(int16_t);
-		activeCore_->GetAudioSamples(audioBuf16, &samplesBytes);
-		size_t numSamples = samplesBytes / sizeof(int16_t);
-
-		// Debug: log audio stats every 120 frames
-		static int audioDebug = 0;
-		if (++audioDebug <= 5 || audioDebug % 180 == 0) {
-			NOTICE_LOG(Log::System, "[GBA] Audio frame %d: samplesBytes=%zu numSamples=%zu", audioDebug, samplesBytes, numSamples);
-		}
-
-		if (numSamples > 0) {
-			// Convert int16 → int32 (shift left 16 bits for PPSSPP audio mixer)
-			int32_t audioBuf32[SAMPLES_PER_FRAME];
-			for (size_t i = 0; i < numSamples; i++) {
-				audioBuf32[i] = ((int32_t)audioBuf16[i]) << 16;
-			}
-			// Pad with silence if mGBA produced fewer samples than expected
-			for (size_t i = numSamples; i < SAMPLES_PER_FRAME; i++) {
-				audioBuf32[i] = 0;
-			}
-			// PPSSPP expects numSamples = stereo pair count (not mono sample count)
-			System_AudioPushSamples(audioBuf32, SAMPLES_PER_FRAME / 2, 1.0f);
-		}
-
-		// Forward input from PSP system to GBA core
-		uint32_t pspButtons = __CtrlPeekButtons();
-
-		// Debug: log input state periodically
-		static int inputDebug = 0;
-		if (++inputDebug <= 5 || inputDebug % 180 == 0) {
-			NOTICE_LOG(Log::System, "[GBA] Input frame %d: pspButtons=0x%04X", inputDebug, pspButtons);
-		}
-
-		activeCore_->SetKeys(pspButtons);
-
-		// [PPSSPP-FORK] MultiCore: check pause trigger (normally handled after GBA path returns)
-		if (g_controlMapper.PollPauseTrigger()) {
-			NOTICE_LOG(Log::System, "[GBA] PollPauseTrigger=true");
-			pauseTrigger_ = true;
-		}
-		if (pauseTrigger_) {
-			NOTICE_LOG(Log::System, "[GBA] Opening pause screen");
-			pauseTrigger_ = false;
-			screenManager()->push(new GamePauseScreen(gamePath_, bootPending_));
-		}
-
-		// Minimal UI update for GBA mode
-		UIScreen::update();
-		resumeButton_->SetVisibility(V_GONE);
-		resetButton_->SetVisibility(V_GONE);
-		backButton_->SetVisibility(V_GONE);
+#ifdef PPSSPP_MULTICORE
+	if (IsGBA() && activeCore_) {
+		UpdateGBA();
 		return;
 	}
 #endif
@@ -2168,17 +1892,13 @@ bool EmuScreen::ShouldRunEmulation(ScreenRenderMode mode) const {
 }
 
 ScreenRenderFlags EmuScreen::PreRender(ScreenRenderMode mode) {
-#ifdef PPSSPP_MULTICORE
 	// [PPSSPP-FORK] MultiCore: skip PSP boot for non-PSP cores
-	if (coreType_ == EmuCore::Type::PSP) {
-		ProcessGameBoot(gamePath_);
-	} else {
+	if (IsGBA()) {
 		fprintf(stderr, "[MULTICORE] PreRender: non-PSP core, skipping ProcessGameBoot\n");
+	} else {
+		// If a boot is in progress, update it.
+		ProcessGameBoot(gamePath_);
 	}
-#else
-	// If a boot is in progress, update it.
-	ProcessGameBoot(gamePath_);
-#endif
 
 	using namespace Draw;
 	skipBufferEffects_ = g_Config.bSkipBufferEffects;
@@ -2234,20 +1954,10 @@ ScreenRenderFlags EmuScreen::render(ScreenRenderMode mode) {
 	if (!PSP_IsInited() || readyToFinishBoot_) {
 		// It's possible this might be set outside PSP_RunLoopFor().
 		// In this case, we need to double check it here.
-#ifdef PPSSPP_MULTICORE
 		// [PPSSPP-FORK] MultiCore: GBA mode — draw video before UI
-		if (coreType_ != EmuCore::Type::PSP) {
-			static bool firstRender = true;
-			if (firstRender) {
-				NOTICE_LOG(Log::System, "[GBA] First render() call — initializing GBA video...");
-				firstRender = false;
-			}
-			draw->SetViewport(viewport);
-			draw->SetScissorRect(0, 0, g_display.pixel_xres, g_display.pixel_yres);
-			draw->Clear(Draw::Aspect::COLOR_BIT, 0xFF000000, 0.0f, 0);
-			DrawGBAVideo();
-			renderUI();
-			return screenRenderFlags;
+#ifdef PPSSPP_MULTICORE
+		if (IsGBA()) {
+			return RenderGBA(screenRenderFlags);
 		}
 #endif
 		if (mode & ScreenRenderMode::TOP) {
@@ -2259,27 +1969,10 @@ ScreenRenderFlags EmuScreen::render(ScreenRenderMode mode) {
 		return screenRenderFlags;
 	}
 
-#ifdef PPSSPP_MULTICORE
 	// [PPSSPP-FORK] MultiCore: GBA rendering path — redundant safety (should be caught above)
-	if (coreType_ != EmuCore::Type::PSP) {
-		static bool firstRender = true;
-		if (firstRender) {
-			NOTICE_LOG(Log::System, "[GBA] First render() call — initializing GBA video...");
-			firstRender = false;
-		}
-
-		draw->SetViewport(viewport);
-		draw->SetScissorRect(0, 0, g_display.pixel_xres, g_display.pixel_yres);
-
-		// Clear to black background (letterbox area)
-		draw->Clear(Draw::Aspect::COLOR_BIT, 0xFF000000, 0.0f, 0);
-
-		// Draw GBA video framebuffer as texture
-		DrawGBAVideo();
-
-		// Draw touch controls + FPS overlay on top
-		renderUI();
-		return screenRenderFlags;
+#ifdef PPSSPP_MULTICORE
+	if (IsGBA()) {
+		return RenderGBA(screenRenderFlags);
 	}
 #endif
 
@@ -2427,11 +2120,8 @@ ScreenRenderFlags EmuScreen::RunEmulation(bool skipBufferEffects) {
 
 		if (SaveState::PollRestartNeeded() && !bootPending_) {
 			Achievements::UnloadGame();
-#ifdef PPSSPP_MULTICORE
 			// [PPSSPP-FORK] MultiCore: skip PSP shutdown for non-PSP cores
-			if (coreType_ == EmuCore::Type::PSP)
-#endif
-			PSP_Shutdown(true);
+			if (!IsGBA()) PSP_Shutdown(true);
 
 			// Restart the boot process
 			bootPending_ = true;
@@ -2603,10 +2293,8 @@ void EmuScreen::renderUI() {
 	// This sets up some important states but not the viewport.
 	ctx->Begin();
 
-#ifdef PPSSPP_MULTICORE
-	// [PPSSPP-FORK] MultiCore: GBA rendering — framebuffer drawn via UI
-	// Full framebuffer texture rendering will be implemented in a follow-up task.
-	if (coreType_ != EmuCore::Type::PSP) {
+	// [PPSSPP-FORK] MultiCore: GBA UI rendering path
+	if (IsGBA()) {
 		if (root_) {
 			UI::LayoutViewHierarchy(*ctx, RootMargins(), root_, LayoutMode(), UseImmersiveMode());
 			root_->Draw(*ctx);
@@ -2616,7 +2304,6 @@ void EmuScreen::renderUI() {
 		}
 		return;
 	}
-#endif
 
 	if (root_) {
 		UI::LayoutViewHierarchy(*ctx, RootMargins(), root_, LayoutMode(), UseImmersiveMode());

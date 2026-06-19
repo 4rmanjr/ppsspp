@@ -37,6 +37,8 @@ struct AxisInput;
 #include "EmuCore/EmuCore.h"
 #endif
 
+#include "Common/GPU/thin3d.h"
+
 class AsyncImageFileView;
 class ChatMenu;
 class ImDebugger;
@@ -77,6 +79,17 @@ public:
 	void SendImDebuggerCommand(const ImCommand &command) {
 		imCmd_ = command;
 	}
+
+	// [PPSSPP-FORK] MultiCore: helpers to reduce #ifdef clutter at call sites
+#ifdef PPSSPP_MULTICORE
+	bool IsGBA() const { return coreType_ != EmuCore::Type::PSP; }
+	void InitGBA(const Path &filename);
+	void ShutdownGBA();
+	void UpdateGBA();
+	ScreenRenderFlags RenderGBA(ScreenRenderFlags screenRenderFlags);
+#else
+	static constexpr bool IsGBA() { return false; }
+#endif
 
 protected:
 	bool AllowKeyboardNavigation() const override;
@@ -188,19 +201,7 @@ private:
 	std::unique_ptr<EmuCore::Core> activeCore_;
 	void AddGBATouchButtons(const Bounds &bounds, DeviceOrientation orientation);
 
-	// [PPSSPP-FORK] MultiCore: GBA video rendering
-	Draw::Texture *gbaTexture_ = nullptr;
-	Draw::Pipeline *gbaPipeline_ = nullptr;
-	Draw::SamplerState *gbaSampler_ = nullptr;
-	void InitGBARendering();
-	void ShutdownGBARendering();
-	void DrawGBAVideo();
-
-	// [PPSSPP-FORK] MultiCore: GBA save state (raw buffer I/O)
-	enum GBAStateAction { GBASAVEACTION_SAVE, GBASAVEACTION_LOAD };
-	void DoGBAState(GBAStateAction action);
-	std::string GetGBASavePrefix();
-	Path GetGBASaveStatePath(int slot);
+	// [PPSSPP-FORK] MultiCore: GBA rendering + save state moved to GBACore
 #endif
 };
 

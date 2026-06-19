@@ -10,6 +10,10 @@
 #include "Common/File/Path.h"
 #include "Common/CommonTypes.h"
 
+namespace Draw {
+class DrawContext;
+}
+
 namespace EmuCore {
 
 enum class Type {
@@ -32,8 +36,14 @@ public:
 	virtual void RunFrame() = 0;
 	virtual void Reset() = 0;
 
-	// Rendering — GBA renders to buffer, PSP renders via GPU
-	virtual void Render() = 0;
+	// Rendering — draws core output to the provided DrawContext.
+	// For GBA: renders framebuffer as a textured quad.
+	// For PSP: no-op (uses existing GPU pipeline).
+	virtual void Render(Draw::DrawContext *draw) = 0;
+
+	// Device lifecycle — release/recreate GPU resources.
+	virtual void DeviceLost() {}
+	virtual void DeviceRestored(Draw::DrawContext *draw) {}
 
 	// Audio
 	virtual int GetAudioSampleRate() const = 0;

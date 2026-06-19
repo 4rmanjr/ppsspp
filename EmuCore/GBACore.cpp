@@ -10,6 +10,11 @@
 #include <fcntl.h>
 
 #include "Common/Log.h"
+#include "Common/System/Display.h"
+#include "Common/StringUtils.h"
+#include "Common/File/FileUtil.h"
+#include "Core/System.h"
+#include "Core/Util/PathUtil.h"
 
 #include <mgba/core/core.h>
 #include <mgba/gba/core.h>
@@ -195,14 +200,20 @@ void GBACore::RunFrame() {
 	struct mAudioBuffer *audio = core_->getAudioBuffer(core_);
 	if (audio) {
 		size_t available = mAudioBufferAvailable(audio);
+		audioStereoPairs_ = 0;
 		if (available > 0) {
 			// Limit to our buffer (in stereo frames)
 			size_t toRead = (available < AUDIO_BUF_SIZE) ? available : AUDIO_BUF_SIZE;
 
 			// mAudioBufferRead returns stereo frames read
 			size_t read = mAudioBufferRead(audio, audioBuffer_, toRead);
-			// Store as bytes for GetAudioSamples
+			// Store as bytes for GetAudioSamples (backward compat)
 			audioAvailable_ = read * 2 * sizeof(int16_t);
+			// Store native stereo pair count for GetMixedAudio
+			audioStereoPairs_ = read;
+		} else {
+			// No audio available this frame — reset both counters
+			audioAvailable_ = 0;
 		}
 	}
 }
@@ -214,8 +225,163 @@ void GBACore::Reset() {
 	}
 }
 
-void GBACore::Render() {
-	// Rendering is handled externally by EmuScreen which uploads videoBuffer_ as a texture.
+// ─── Vertex format matching Thin3D TEXTURE_COLOR_2D shader preset ───
+struct GBAVertex {
+	float x, y, z;
+	float u, v;
+	uint32_t rgba;
+};
+
+void GBACore::InitRendering(Draw::DrawContext *draw) {
+	if (!draw || gbaPipeline_)
+		return;
+
+	NOTICE_LOG(Log::System, "[GBA] InitRendering START");
+	using namespace Draw;
+
+	// Sampler — nearest neighbor for pixel-perfect GBA graphics
+	SamplerStateDesc nearestDesc{};
+	nearestDesc.magFilter = TextureFilter::NEAREST;
+	nearestDesc.minFilter = TextureFilter::NEAREST;
+	gbaSampler_ = draw->CreateSamplerState(nearestDesc);
+
+	// Shaders from presets (same ones used by UIContext)
+	ShaderModule *vs = draw->GetVshaderPreset(VS_TEXTURE_COLOR_2D);
+	ShaderModule *fs = draw->GetFshaderPreset(FS_TEXTURE_COLOR_2D);
+	if (!vs || !fs) {
+		ERROR_LOG(Log::G3D, "[GBA] Failed to get shader presets");
+		return;
+	}
+
+	// Input layout
+	InputLayoutDesc inputDesc = {
+		sizeof(GBAVertex),
+		{
+			{ SEM_POSITION, DataFormat::R32G32B32_FLOAT, 0 },
+			{ SEM_TEXCOORD0, DataFormat::R32G32_FLOAT, 12 },
+			{ SEM_COLOR0, DataFormat::R8G8B8A8_UNORM, 20 },
+		},
+	};
+	InputLayout *inputLayout = draw->CreateInputLayout(inputDesc);
+
+	BlendState *blend = draw->CreateBlendState({ true, 0xF, BlendFactor::ONE, BlendFactor::ONE_MINUS_SRC_ALPHA });
+	DepthStencilState *depth = draw->CreateDepthStencilState({ false, false, Comparison::LESS });
+	RasterState *raster = draw->CreateRasterState({});
+
+	PipelineDesc pipelineDesc{
+		Primitive::TRIANGLE_LIST,
+		{ vs, fs },
+		inputLayout, depth, blend, raster, &vsTexColBufDesc,
+	};
+	gbaPipeline_ = draw->CreateGraphicsPipeline(pipelineDesc, "gba_video");
+
+	// Release intermediate refs — pipeline holds its own
+	if (inputLayout) inputLayout->Release();
+	if (blend) blend->Release();
+	if (depth) depth->Release();
+	if (raster) raster->Release();
+
+	// GBA framebuffer texture (240x160, RGBA8888)
+	TextureDesc texDesc{};
+	texDesc.type = TextureType::LINEAR2D;
+	texDesc.format = DataFormat::R8G8B8A8_UNORM;
+	texDesc.width = GBA_WIDTH;
+	texDesc.height = GBA_HEIGHT;
+	texDesc.depth = 1;
+	texDesc.mipLevels = 1;
+	texDesc.tag = "GBA_fb";
+	static std::vector<uint8_t> dummyData(GBA_WIDTH * GBA_HEIGHT * 4, 0);
+	texDesc.initData.push_back(dummyData.data());
+	gbaTexture_ = draw->CreateTexture(texDesc);
+
+	NOTICE_LOG(Log::System, "[GBA] InitRendering COMPLETE — pipeline=%p texture=%p sampler=%p",
+		gbaPipeline_, gbaTexture_, gbaSampler_);
+}
+
+void GBACore::ShutdownRendering() {
+	if (gbaPipeline_) { gbaPipeline_->Release(); gbaPipeline_ = nullptr; }
+	if (gbaTexture_)  { gbaTexture_->Release();  gbaTexture_ = nullptr; }
+	if (gbaSampler_)  { gbaSampler_->Release();  gbaSampler_ = nullptr; }
+	NOTICE_LOG(Log::System, "[GBA] ShutdownRendering — all GPU resources released");
+}
+
+void GBACore::Render(Draw::DrawContext *draw) {
+	if (!draw || !core_)
+		return;
+
+	// Lazy init rendering pipeline on first render call
+	if (!gbaTexture_ || !gbaPipeline_) {
+		InitRendering(draw);
+		if (!gbaTexture_ || !gbaPipeline_)
+			return;
+	}
+
+	// Upload GBA framebuffer to texture
+	const uint8_t *data = reinterpret_cast<const uint8_t *>(videoBuffer_);
+	draw->UpdateTextureLevels(gbaTexture_, &data, nullptr, 1);
+
+	// Bind pipeline + sampler + texture
+	draw->BindPipeline(gbaPipeline_);
+	Draw::SamplerState *samplers[1] = { gbaSampler_ };
+	draw->BindSamplerStates(0, 1, samplers);
+	draw->BindTexture(0, gbaTexture_);
+
+	// Calculate viewport with correct GBA aspect (240:160 = 3:2)
+	int screenW = g_display.pixel_xres;
+	int screenH = g_display.pixel_yres;
+	float gbaAspect = (float)GBA_WIDTH / (float)GBA_HEIGHT;
+	float screenAspect = (float)screenW / (float)screenH;
+
+	float drawW, drawH, drawX, drawY;
+	if (screenAspect > gbaAspect) {
+		// Screen wider than GBA → letterbox left/right
+		drawH = (float)screenH;
+		drawW = drawH * gbaAspect;
+		drawX = (screenW - drawW) / 2.0f;
+		drawY = 0.0f;
+	} else {
+		// Screen taller than GBA → letterbox top/bottom
+		drawW = (float)screenW;
+		drawH = drawW / gbaAspect;
+		drawX = 0.0f;
+		drawY = (screenH - drawH) / 2.0f;
+	}
+
+	using namespace Draw;
+
+	// Build a textured fullscreen quad (2 triangles = 6 verts, non-indexed)
+	const float left = drawX;
+	const float right = drawX + drawW;
+	const float top = drawY;
+	const float bottom = drawY + drawH;
+
+	GBAVertex verts[6] = {
+		{ left,  top,    0.0f, 0.0f, 0.0f, 0xFFFFFFFF },
+		{ right, top,    0.0f, 1.0f, 0.0f, 0xFFFFFFFF },
+		{ right, bottom, 0.0f, 1.0f, 1.0f, 0xFFFFFFFF },
+		{ left,  top,    0.0f, 0.0f, 0.0f, 0xFFFFFFFF },
+		{ right, bottom, 0.0f, 1.0f, 1.0f, 0xFFFFFFFF },
+		{ left,  bottom, 0.0f, 0.0f, 1.0f, 0xFFFFFFFF },
+	};
+
+	// Update uniform buffer (matching VsTexColUB layout)
+	VsTexColUB ub{};
+	Lin::Matrix4x4 ortho = ComputeOrthoMatrix((float)screenW, (float)screenH, draw->GetDeviceCaps().coordConvention);
+	memcpy(ub.WorldViewProj, ortho.getReadPtr(), sizeof(Lin::Matrix4x4));
+	ub.tint = 1.0f;
+	ub.saturation = 1.0f;
+	draw->UpdateDynamicUniformBuffer(&ub, sizeof(ub));
+
+	draw->DrawUP(verts, 6);
+}
+
+void GBACore::DeviceLost() {
+	ShutdownRendering();
+}
+
+void GBACore::DeviceRestored(Draw::DrawContext *draw) {
+	// Rendering resources will be lazily recreated on next Render() call.
+	NOTICE_LOG(Log::System, "[GBA] DeviceRestored — lazy reinit on next render");
 }
 
 int GBACore::GetAudioSampleRate() const {
@@ -226,6 +392,53 @@ void GBACore::GetAudioSamples(int16_t *buffer, size_t *samples) {
 	size_t toCopy = (audioAvailable_ < *samples) ? audioAvailable_ : *samples;
 	memcpy(buffer, audioBuffer_, toCopy);
 	*samples = toCopy;
+	audioAvailable_ = 0;
+}
+
+void GBACore::GetMixedAudio(int32_t *buffer, size_t *stereoPairs) {
+	if (!buffer || !stereoPairs) return;
+
+	size_t nativePairs = audioStereoPairs_;
+	if (nativePairs == 0 || nativePairs > AUDIO_BUF_SIZE) {
+		// No audio this frame — return silence
+		static constexpr int TARGET_PAIRS = TARGET_RATE / 60;  // 735
+		memset(buffer, 0, TARGET_PAIRS * 2 * sizeof(int32_t));
+		*stereoPairs = TARGET_PAIRS;
+		return;
+	}
+
+	static constexpr int TARGET_PAIRS = TARGET_RATE / 60;  // 735 at 44100Hz 60fps
+	*stereoPairs = TARGET_PAIRS;
+
+	if (nativePairs == TARGET_PAIRS) {
+		// Same count, simple int16→int32 conversion
+		for (size_t i = 0; i < nativePairs * 2; i++) {
+			buffer[i] = ((int32_t)audioBuffer_[i]) << 16;
+		}
+	} else {
+		// Linear interpolation from nativePairs → TARGET_PAIRS
+		// This handles the 32768 Hz → 44100 Hz resample (~546 → 735 stereo pairs)
+		float ratio = (float)nativePairs / (float)TARGET_PAIRS;
+		for (size_t o = 0; o < TARGET_PAIRS; o++) {
+			float inPos = (float)o * ratio;
+			size_t inIdx = (size_t)inPos;
+			float frac = inPos - (float)inIdx;
+			size_t nextIdx = (inIdx + 1 < nativePairs) ? inIdx + 1 : inIdx;
+
+			// Left channel
+			float left = (float)audioBuffer_[inIdx * 2] * (1.0f - frac)
+				       + (float)audioBuffer_[nextIdx * 2] * frac;
+			// Right channel
+			float right = (float)audioBuffer_[inIdx * 2 + 1] * (1.0f - frac)
+				        + (float)audioBuffer_[nextIdx * 2 + 1] * frac;
+
+			buffer[o * 2]     = ((int32_t)((int16_t)left)) << 16;
+			buffer[o * 2 + 1] = ((int32_t)((int16_t)right)) << 16;
+		}
+	}
+
+	// Mark as consumed
+	audioStereoPairs_ = 0;
 	audioAvailable_ = 0;
 }
 
@@ -264,6 +477,95 @@ bool GBACore::LoadState(const void *buffer) {
 		return core_->loadState(core_, buffer);
 	}
 	return false;
+}
+
+std::string GBACore::GetSavePrefix() const {
+	std::string title, id;
+	GetGameInfo(const_cast<std::string &>(title), const_cast<std::string &>(id));
+	return GetSavePrefix(title, id);
+}
+
+std::string GBACore::GetSavePrefix(const std::string &title_in, const std::string &id) {
+	std::string title = title_in;
+	// Sanitize: keep only alphanumeric + underscore, max 32 chars
+	std::string prefix;
+	for (char c : title) {
+		if (isalnum((unsigned char)c) || c == '_' || c == '-') {
+			prefix += c;
+		} else if (!prefix.empty() && prefix.back() != '_') {
+			prefix += '_';
+		}
+		if (prefix.size() >= 32)
+			break;
+	}
+	if (prefix.empty())
+		prefix = "GBA_ROM";
+
+	// Use game code if available for dedup
+	if (!id.empty()) {
+		std::string cleanId;
+		for (char c : id) {
+			if (isalnum((unsigned char)c))
+				cleanId += c;
+		}
+		if (!cleanId.empty())
+			prefix = cleanId + "_" + prefix;
+	}
+	return prefix;
+}
+
+bool GBACore::SaveStateToFile(int slot) {
+	if (!core_) return false;
+
+	std::string prefix = GetSavePrefix();
+	Path dir = GetSysDirectory(DIRECTORY_SAVESTATE) / "GBA";
+	std::string filename = StringFromFormat("%s_%d.gbast", prefix.c_str(), slot);
+	Path path = dir / filename;
+
+	File::CreateFullPath(path);
+
+	size_t size = GetStateSize();
+	if (size == 0) {
+		WARN_LOG(Log::SaveState, "[GBA] Save state failed: size is 0");
+		return false;
+	}
+
+	std::vector<u8> buffer(size);
+	if (!SaveState(buffer.data())) {
+		WARN_LOG(Log::SaveState, "[GBA] SaveState() returned false");
+		return false;
+	}
+
+	bool ok = File::WriteDataToFile(false, buffer.data(), size, path);
+	if (ok) {
+		INFO_LOG(Log::SaveState, "[GBA] State saved: %s (slot %d, %zu bytes)", path.c_str(), slot + 1, size);
+	} else {
+		WARN_LOG(Log::SaveState, "[GBA] Failed to write file: %s", path.c_str());
+	}
+	return ok;
+}
+
+bool GBACore::LoadStateFromFile(int slot) {
+	if (!core_) return false;
+
+	std::string prefix = GetSavePrefix();
+	Path dir = GetSysDirectory(DIRECTORY_SAVESTATE) / "GBA";
+	std::string filename = StringFromFormat("%s_%d.gbast", prefix.c_str(), slot);
+	Path path = dir / filename;
+
+	std::string data;
+	if (!File::ReadBinaryFileToString(path, &data)) {
+		WARN_LOG(Log::SaveState, "[GBA] No save state file: %s", path.c_str());
+		return false;
+	}
+
+	bool ok = LoadState(data.data());
+	if (ok) {
+		INFO_LOG(Log::SaveState, "[GBA] State loaded: %s (slot %d, %zu bytes)", path.c_str(), slot + 1, data.size());
+	} else {
+		WARN_LOG(Log::SaveState, "[GBA] LoadState() returned false");
+	}
+	return ok;
 }
 
 void GBACore::GetGameInfo(std::string &title, std::string &id) const {
