@@ -1,8 +1,14 @@
 # GBA Support — Progress Report
 
-**Date:** 2026-06-19
+**Date:** 2026-06-19 (updated)
 **Branch:** `feature/lan-sync`
-**Build:** `PPSSPP_MULTICORE=ON` (feature flag), 28-core parallel build
+**Build:** `PPSSPP_MULTICORE=ON` (feature flag)
+
+## 🔨 Currently Working On
+
+- 🟡 **Audio fix**: sounds slow-mo/distorted — investigating sample rate / PPSSPP audio backend
+- 🟡 **ESC pause menu**: direct handler added, needs user verification
+- 🟡 **Save state/save memory**: code in place, needs end-to-end ROM test
 
 ---
 
@@ -11,84 +17,99 @@
 ### 1. Multi-Emulator Architecture (EmuCore)
 - [x] Abstract `EmuCore::Core` interface — `EmuCore/EmuCore.h`
 - [x] Factory `EmuCore::Create()` + `EmuCore::DetectType()` — `EmuCore/EmuCore.cpp`
-- [x] PSPCore wrapper (delegates to existing system) — `EmuCore/PSPCore.h/.cpp`
+- [x] PSPCore wrapper — `EmuCore/PSPCore.h/.cpp`
 - [x] GBACore via libmgba — `EmuCore/GBACore.h/.cpp`
 - [x] Per-core config isolation — `EmuCore/Config.h/.cpp`
 
 ### 2. mGBA Integration
 - [x] Submodule `ext/libmgba` (commit `d5e9fae`)
-- [x] Static library `libmgba.a` (LIBMGBA_ONLY, no frontends)
-- [x] GBA core: video (240x160 RGBA8888 buffer, XBGR→RGBA conversion)
-- [x] GBA core: audio (44100Hz stereo, mAudioBuffer → int16 samples)
-- [x] GBA core: input (setKeys/getKeys)
-- [x] GBA core: savestate (stateSize/saveState/loadState)
-- [x] GBA core: game info (title, code)
+- [x] Static library `libmgba.a` (LIBMGBA_ONLY, --whole-archive to prevent linker stripping)
+- [x] `mCoreConfigInit()` called to initialize mGBA config hash table
+- [x] `setVideoBuffer()` called to enable mGBA video rendering into our buffer
+- [x] Video: XBGR8 → RGBA8888 conversion per frame
+- [x] Audio: 44100Hz stereo via mAudioBuffer → int16
+- [x] Input: PSP→GBA key mapping via `PSPSKeysToGBA()`
+- [x] Savestate: raw buffer via `stateSize/saveState/loadState`
+- [x] Save memory: `mDirectorySetInit`, `mCoreAutoloadSave`, auto-flush on destruct
 
 ### 3. File Detection & Routing
-- [x] `.gba/.gb/.gbc` added to game file filter — `UI/GameBrowser.cpp`
+- [x] `.gba/.gb/.gbc` in game file filter — `UI/GameBrowser.cpp`
 - [x] Auto-detect file type in `LaunchFile` — `UI/MainScreen.cpp`
+- [x] NativeApp auto-boot GBA detection
 - [x] EmuScreen multi-core aware — constructor + update() + render()
 
 ### 4. CMake Build System
-- [x] `EmuCore/CMakeLists.txt` — EmuCore static library + libmgba build
+- [x] `EmuCore/CMakeLists.txt` — EmuCore + libmgba build
 - [x] Root `CMakeLists.txt` — `PPSSPP_MULTICORE` feature flag
-- [x] Dual build verified: `ON` (28MB PPSSPPSDL) and `OFF` (zero upstream impact)
-- [x] `test_gba_core` CMake target (test GBA core directly)
+- [x] `--whole-archive` for mgba to prevent linker stripping
+- [x] Dual build verified ON/OFF
+- [x] `test_gba_core` CMake target
 
-### 5. Input Mapping (PSP → GBA)
-- [x] `GBACore::PSPSKeysToGBA()` — static converter
-- [x] Cross → A, Circle → B, Triangle → A (alt), Square → B (alt)
-- [x] Start/Select/L/R/D-Pad mapped directly
-- [x] `SetKeys()` transparently converts PSP bitmask → GBA bitmask
+### 5. Video Rendering
+- [x] `InitGBARendering()` — thin3d pipeline + texture (lazy init)
+- [x] `DrawGBAVideo()` — RGBA8888 texture upload + fullscreen quad with 3:2 aspect
+- [x] `VS_TEXTURE_COLOR_2D` + `FS_TEXTURE_COLOR_2D` shader presets
+- [x] GBA render path BEFORE `PSP_IsInited()` check
+- [x] Cleanup in destructor + deviceLost/deviceRestored
+- [x] ✅ **VISUALLY WORKING** — Breath of Fire renders correctly
 
-### 6. GBA Touch Layout
-- [x] `UI/TouchLayoutGBA.h/.cpp` — button positions for landscape + portrait
-- [x] `EmuScreen::AddGBATouchButtons()` — creates PSPButton instances at GBA positions
-- [x] GBA mode uses separate AnchorLayout (no PSP buttons visible)
-- [x] A/B/Start/Select/L/R/D-Pad touch controls
+### 6. Audio Routing
+- [x] int16 → int32 conversion (shift left 16 bits)
+- [x] Fixed sample rate: 1470 mono samples/frame = 735 stereo pairs (44100Hz @ 60fps)
+- [x] `System_AudioPushSamples()` called with stereo pair count (not mono count)
+- [x] Silence padding when mGBA produces fewer samples
+- [x] ⚠️ **Audio plays but sounds "slow-mo"** — sample rate mismatch suspected
+
+### 7. Input Mapping
+- [x] `PSPSKeysToGBA()` — Cross→A, Circle→B, D-Pad, L/R, Start/Select
+- [x] Keyboard works via existing PPSSPP ControlMapper
+- [x] ESC direct handler in UnsyncKey for GBA mode
+- [x] Pause trigger check in GBA update path
+- [x] ✅ **Game buttons working** (A, S, Z, X, Space, arrows)
+- [x] ⚠️ **ESC pause menu not yet verified working**
+
+### 8. Save Memory (SRAM/Flash/EEPROM)
+- [x] `mDirectorySetInit` + `SetSaveDirectory` + `mCoreAutoloadSave`
+- [x] Auto-flush on destruct via `mDirectorySetDeinit`
+- [x] Files: `PSP/SAVEDATA/GBA/<title>.sav`
+
+### 9. Save State (Snapshot)
+- [x] `DoGBAState()` — raw buffer I/O
+- [x] Files: `PSP/PPSSPP_STATE/GBA/<prefix>_N.gbast`
+- [x] Reuses F1-F4 hotkeys + same slot config
+- [x] No new UI needed
+
+### 10. Touch Layout
+- [x] `UI/TouchLayoutGBA.h/.cpp` — GBA button positions
+- [x] A/B/Start/Select/L/R/D-Pad
+
+### 11. Config Isolation
+- [x] `SaveCurrentConfig()` — snapshot PSP settings to memory
+- [x] `LoadGBAOverrides()` — read `[GBA]` section from `ppsspp.ini`
+- [x] `SaveGBAOverrides()` — write `[GBA]` section on exit
+- [x] `RestoreSavedConfig()` — restore PSP settings on exit
+- [x] GBA defaults: nearest filter, auto resolution
+- [x] ✅ **Config isolation working** — PSP and GBA settings don't mix
+
+### 12. Debug Logging
+- [x] Boot sequence logging (`[BOOT]` prefix)
+- [x] GBA core lifecycle (`[GBA]` prefix)
+- [x] Video render debug (first pixel, non-black check)
+- [x] Audio stats (samples per frame)
+- [x] Input state logging
+- [x] Config save/restore logging (`[CONFIG]` prefix)
+- [x] All mGBA internal logs (DMA, BIOS SWI) via PPSSPP log system
 
 ---
 
-## 🔄 Pending
+## 🟡 In Progress / Needs Verification
 
-### 7. GBA Video Rendering
-- [x] thin3d pipeline + texture created via `InitGBARendering()` — `UI/EmuScreen.cpp`
-- [x] Lazy init pattern: pipeline created on first frame (DrawContext not available during construction)
-- [x] `DrawGBAVideo()` — uploads `videoBuffer_[240*160]` RGBA8888, draws fullscreen with aspect ratio (3:2)
-- [x] Uses `VS_TEXTURE_COLOR_2D` + `FS_TEXTURE_COLOR_2D` shader presets (same as UIContext)
-- [x] Letterboxed with black background in `render()` before `renderUI()`
-- [x] Cleanup in destructor + deviceLost, recreate in deviceRestored
-- [x] Build verified: `MULTICORE=ON` (26.6MB) and `MULTICORE=OFF` (25.5MB)
-
-### 8. Audio Routing
-- [x] Convert int16 GBA audio → int32 PPSSPP format (shift left 16 bits) — `UI/EmuScreen.cpp` ~line 1738
-- [x] `GetAudioSamples()` provides bytes of int16 stereo; converted to int32 then `System_AudioPushSamples()`
-- [x] Buffer: 4096 samples (int16), converted on the fly each frame
-- [x] Build verified: `MULTICORE=ON` (26.6MB) and `MULTICORE=OFF` (25.5MB)
-
-### 9. Save Memory (SRAM/Flash/EEPROM)
-- [x] `mDirectorySetInit(&core_->dirs)` called in GBACore constructor
-- [x] `mDirectorySetDeinit(&core_->dirs)` called in GBACore destructor (flushes save data)
-- [x] `SetSaveDirectory()` configures `DIRECTORY_SAVEDATA/GBA/` via PPSSPP's `GetSysDirectory()`
-- [x] `mCoreAutoloadSave()` called after `loadROM()` — auto-loads `.sav` if exists, creates new if not
-- [x] mGBA manages dirty tracking + writeback automatically — no manual flush needed
-- [x] Save memory files: `PSP/SAVEDATA/GBA/<title>.sav`
-
-### 10. Save State (Snapshot)
-- [x] `DoGBAState()` — raw buffer save/load using `GBACore::SaveState()`/`LoadState()`/`GetStateSize()`
-- [x] File format: `PSP/PPSSPP_STATE/GBA/<prefix>_N.gbast` (binary, no PSP chunk format)
-- [x] Prefix from game title + game code for dedup (e.g., `AGB-POKE_Pokemon_Emerald`)
-- [x] Reuses existing hotkeys: F1 (save), F3 (load), F2/F4 (prev/next slot)
-- [x] Reuses existing `iCurrentStateSlot` (0-4) — same config as PSP
-- [x] Reuses existing slot display OSD (`SAVESTATE_DISPLAY_SLOT`)
-- [x] **No new UI** — same pause menu, same hotkeys, same slot indicator
-- [x] Build verified: `MULTICORE=ON` and `MULTICORE=OFF`
-
-### 11. Test Verification
-- [x] `test_gba_core` binary built (2.4MB)
-- [ ] Need a GBA ROM to run actual test
-- [ ] Verify input mapping works end-to-end
-- [ ] Verify savestate serialization
+| Item | Status | Notes |
+|------|--------|-------|
+| **Audio clarity** | 🟡 Slow-mo | Fixed sample count (735 stereo pairs), but still distorted |
+| **ESC pause menu** | 🟡 Unverified | Direct handler added, needs user test |
+| **Save state end-to-end** | 🟡 Untested | Code in place, needs ROM test |
+| **Save memory end-to-end** | 🟡 Untested | Code in place, needs ROM test |
 
 ---
 
@@ -96,24 +117,47 @@
 
 | Target | Size | Status |
 |--------|------|--------|
-| `PPSSPPSDL` (MULTICORE=ON) | 26.6MB | ✅ |
+| `PPSSPPSDL` (MULTICORE=ON) | 26.7MB | ✅ |
 | `PPSSPPSDL` (MULTICORE=OFF) | 25.5MB | ✅ zero impact |
-| `test_gba_core` | 1.6MB | ✅ |
+| `test_gba_core` | 1.6MB | ✅ ALL TESTS PASSED |
 | `libmgba.a` | 1.8MB | ✅ |
-| `libEmuCore.a` | 25KB | ✅ |
+| `libEmuCore.a` | ~25KB | ✅ |
 
 ---
 
-## 🔧 How to Use
+## 🐛 Bugs Fixed This Session
+
+| # | Bug | Root Cause | Fix |
+|---|-----|------------|-----|
+| 1 | Segfault on boot | Linker stripped mGBA function pointers | `--whole-archive mgba --no-whole-archive` |
+| 2 | Crash in `HashTableLookup` | `mCoreConfig` hash table uninitialized | `mCoreConfigInit(&core_->config, "gba")` |
+| 3 | Video all black | `getPixels` returns NULL without `setVideoBuffer` | `setVideoBuffer(rawVideoBuffer_, 240)` |
+| 4 | Crash creating texture | `texDesc.depth=0`, `initData=nullptr` | `depth=1`, valid zeroed buffer |
+| 5 | GBA video never drawn | `!PSP_IsInited()` caught GBA before render path | GBA check moved above PSP check |
+| 6 | Audio noise/static | Pushing too many samples (overflow) | Cap at 1470 samples/frame |
+| 7 | Audio slow-mo | `numSamples` passed as mono count instead of stereo pairs | `SAMPLES_PER_FRAME / 2` |
+| 8 | ESC not working | GBA `update()` returned before pause check | Direct ESC handler + pause check in GBA path |
+| 9 | `Unexpected PSP_Shutdown` | Destructor called `PSP_Shutdown` for GBA | Guard with `coreType_ == PSP` check |
+| 10 | Config mixing PSP/GBA | No config isolation | SaveCurrentConfig / RestoreSavedConfig + [GBA] INI section |
+
+---
+
+## 🔧 How to Build & Run
 
 ```bash
-# Build
-cmake -B build -DCMAKE_BUILD_TYPE=Release -DUSE_SYSTEM_FFMPEG=ON
-cmake --build build -j$(nproc)
+# Build (MULTICORE=ON)
+cmake -B build-test2 -DCMAKE_BUILD_TYPE=Release -DPPSSPP_MULTICORE=ON
+cmake --build build-test2 --target PPSSPPSDL -j$(nproc)
 
 # Run GBA ROM
-./build/PPSSPPSDL /path/to/game.gba
+./build-test2/PPSSPPSDL "/path/to/game.gba"
 
-# Or test core directly
-./build/test_gba_core /path/to/game.gba
+# Test core directly
+./build-test2/test_gba_core "/path/to/game.gba"
+
+# Run with GBA-only log
+./build-test2/PPSSPPSDL "/path/to/game.gba" 2>&1 | grep "\[GBA\]"
+
+# Run with config log
+./build-test2/PPSSPPSDL "/path/to/game.gba" 2>&1 | grep "\[CONFIG\]"
 ```
