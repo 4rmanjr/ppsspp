@@ -897,6 +897,7 @@ void EmuScreen::ProcessVKey(VirtKey virtKey) {
 	case VIRTKEY_PAUSE:
 		// Note: We don't check NetworkWarnUserIfOnlineAndCantSpeed, because we can keep
 		// running in the background of the menu.
+		NOTICE_LOG(Log::System, "[GBA] VIRTKEY_PAUSE received, setting pauseTrigger_");
 		pauseTrigger_ = true;
 		break;
 
@@ -1928,7 +1929,8 @@ void EmuScreen::update() {
 			for (size_t i = numSamples; i < SAMPLES_PER_FRAME; i++) {
 				audioBuf32[i] = 0;
 			}
-			System_AudioPushSamples(audioBuf32, SAMPLES_PER_FRAME, 1.0f);
+			// PPSSPP expects numSamples = stereo pair count (not mono sample count)
+			System_AudioPushSamples(audioBuf32, SAMPLES_PER_FRAME / 2, 1.0f);
 		}
 
 		// Forward input from PSP system to GBA core
@@ -1944,9 +1946,11 @@ void EmuScreen::update() {
 
 		// [PPSSPP-FORK] MultiCore: check pause trigger (normally handled after GBA path returns)
 		if (g_controlMapper.PollPauseTrigger()) {
+			NOTICE_LOG(Log::System, "[GBA] PollPauseTrigger=true");
 			pauseTrigger_ = true;
 		}
 		if (pauseTrigger_) {
+			NOTICE_LOG(Log::System, "[GBA] Opening pause screen");
 			pauseTrigger_ = false;
 			screenManager()->push(new GamePauseScreen(gamePath_, bootPending_));
 		}
