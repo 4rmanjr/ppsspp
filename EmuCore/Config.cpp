@@ -100,13 +100,18 @@ static void SaveGBAOverrides(IniFile &ini) {
 void LoadConfig(Type coreType) {
 	if (coreType != Type::GBA) return;
 
+	NOTICE_LOG(Log::System, "[CONFIG] LoadConfig(GBA) — saving PSP config first");
 	SaveCurrentConfig();
 
 	Path iniPath = GetSysDirectory(DIRECTORY_SYSTEM) / "ppsspp.ini";
+	NOTICE_LOG(Log::System, "[CONFIG] Looking for config at: %s", iniPath.c_str());
+
 	IniFile ini;
 	if (ini.Load(iniPath)) {
+		NOTICE_LOG(Log::System, "[CONFIG] Config loaded, checking [GBA] section");
 		LoadGBAOverrides(ini);
 	} else {
+		NOTICE_LOG(Log::System, "[CONFIG] No config file, applying GBA defaults");
 		ApplyGBADefaults();
 	}
 }
@@ -115,12 +120,24 @@ void SaveConfig(Type coreType) {
 	if (coreType != Type::GBA) return;
 
 	Path iniPath = GetSysDirectory(DIRECTORY_SYSTEM) / "ppsspp.ini";
-	IniFile ini;
-	ini.Load(iniPath);
-	SaveGBAOverrides(ini);
-	ini.Save(iniPath);
-	NOTICE_LOG(Log::System, "[CONFIG] Wrote GBA config to %s", iniPath.c_str());
+	NOTICE_LOG(Log::System, "[CONFIG] SaveConfig(GBA) — writing to %s", iniPath.c_str());
 
+	// Ensure directory exists
+	File::CreateFullPath(GetSysDirectory(DIRECTORY_SYSTEM));
+
+	IniFile ini;
+	if (!ini.Load(iniPath)) {
+		NOTICE_LOG(Log::System, "[CONFIG] No existing config, creating new");
+	}
+	SaveGBAOverrides(ini);
+
+	if (ini.Save(iniPath)) {
+		NOTICE_LOG(Log::System, "[CONFIG] Wrote GBA config OK");
+	} else {
+		WARN_LOG(Log::System, "[CONFIG] Failed to save config to %s", iniPath.c_str());
+	}
+
+	NOTICE_LOG(Log::System, "[CONFIG] Restoring PSP config");
 	RestoreSavedConfig();
 }
 
