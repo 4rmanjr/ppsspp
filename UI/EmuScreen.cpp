@@ -1905,23 +1905,51 @@ void EmuScreen::update() {
 
 		// Push audio to PPSSPP audio system
 		// [PPSSPP-FORK] MultiCore: convert int16 GBA audio → int32 PPSSPP format
+		// GBA audio: 44100Hz stereo. At ~60fps: 44100/60 = 735 stereo pairs = 1470 mono samples per frame
+		static constexpr int SAMPLES_PER_FRAME = 1470;  // 44100 / 60 * 2 (stereo)
 		int16_t audioBuf16[4096];
-		size_t samplesBytes = sizeof(audioBuf16);
+		size_t samplesBytes = SAMPLES_PER_FRAME * sizeof(int16_t);
 		activeCore_->GetAudioSamples(audioBuf16, &samplesBytes);
 		size_t numSamples = samplesBytes / sizeof(int16_t);
+
+		// Debug: log audio stats every 120 frames
+		static int audioDebug = 0;
+		if (++audioDebug <= 5 || audioDebug % 180 == 0) {
+			NOTICE_LOG(Log::System, "[GBA] Audio frame %d: samplesBytes=%zu numSamples=%zu", audioDebug, samplesBytes, numSamples);
+		}
+
 		if (numSamples > 0) {
 			// Convert int16 → int32 (shift left 16 bits for PPSSPP audio mixer)
-			int32_t audioBuf32[4096];
-			size_t convert = numSamples < 4096 ? numSamples : 4096;
-			for (size_t i = 0; i < convert; i++) {
+			int32_t audioBuf32[SAMPLES_PER_FRAME];
+			for (size_t i = 0; i < numSamples; i++) {
 				audioBuf32[i] = ((int32_t)audioBuf16[i]) << 16;
 			}
-			System_AudioPushSamples(audioBuf32, (int)convert, 1.0f);
+			// Pad with silence if mGBA produced fewer samples than expected
+			for (size_t i = numSamples; i < SAMPLES_PER_FRAME; i++) {
+				audioBuf32[i] = 0;
+			}
+			System_AudioPushSamples(audioBuf32, SAMPLES_PER_FRAME, 1.0f);
 		}
 
 		// Forward input from PSP system to GBA core
 		uint32_t pspButtons = __CtrlPeekButtons();
+
+		// Debug: log input state periodically
+		static int inputDebug = 0;
+		if (++inputDebug <= 5 || inputDebug % 180 == 0) {
+			NOTICE_LOG(Log::System, "[GBA] Input frame %d: pspButtons=0x%04X", inputDebug, pspButtons);
+		}
+
 		activeCore_->SetKeys(pspButtons);
+
+		// [PPSSPP-FORK] MultiCore: check pause trigger (normally handled after GBA path returns)
+		if (g_controlMapper.PollPauseTrigger()) {
+			pauseTrigger_ = true;
+		}
+		if (pauseTrigger_) {
+			pauseTrigger_ = false;
+			screenManager()->push(new GamePauseScreen(gamePath_, bootPending_));
+		}
 
 		// Minimal UI update for GBA mode
 		UIScreen::update();
