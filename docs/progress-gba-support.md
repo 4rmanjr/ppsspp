@@ -1,15 +1,22 @@
 # GBA Support — Progress Report
 
-**Date:** 2026-06-19 (updated)
+**Date:** 2026-06-20 (updated — P1-P3 refactor)
 **Branch:** `feature/lan-sync`
 **Build:** `PPSSPP_MULTICORE=ON` (feature flag)
 
-## 🔨 Currently Working On
+> ⚠️ **Progress doc ini STALE sebelum P1-P3 refactor (`fa08833c01`).**
+> Berikut adalah status real berdasarkan verifikasi kode (static analysis),
+> **belum runtime-test** karena keterbatasan lingkungan (proot, tanpa GPU).
 
-- 🔴 **Audio fix**: still distorted/slow-mo — need to investigate PPSSPP audio backend integration
-- 🔴 **ESC pause menu**: direct handler added but not yet responding — need debug
-- 🔴 **Save state (F1/F3)**: code in place but not working — `DoGBAState()` may have path or data issue
-- 🔴 **Load state**: same as save state — needs end-to-end debug
+## 🔨 Perlu Runtime Test (di PC sungguhan)
+
+Keempat item di bawah sudah diimplementasi ulang di P1-P3 refactor,
+**tapi belum pernah di-run** — status real tidak diketahui:
+
+- 🟡 **Audio clarity** — `GetMixedAudio()`: resample 32768→44100 Hz via linear interpolation, zero silence padding. **Kode sudah fix, perlu test suara.**
+- 🟡 **ESC pause menu** — Direct handler di `UnsyncKey()` → `pauseTrigger_` → `UpdateGBA()` push `GamePauseScreen`. **Rantai handler lengkap, perlu test apakah pause muncul.**
+- 🟡 **Save state (F1/F3)** — `GBACore::SaveStateToFile(slot)`, file I/O proper, OSD message. **Kode baru total, perlu test.**
+- 🟡 **Load state** — `GBACore::LoadStateFromFile(slot)`. **Sama, perlu test.**
 
 ---
 
@@ -47,19 +54,22 @@
 - [x] `test_gba_core` CMake target
 
 ### 5. Video Rendering
-- [x] `InitGBARendering()` — thin3d pipeline + texture (lazy init)
-- [x] `DrawGBAVideo()` — RGBA8888 texture upload + fullscreen quad with 3:2 aspect
+- [x] `InitRendering()` + `Render(DrawContext*)` — thin3d pipeline + texture (lazy init), **pindah ke GBACore** (P1 refactor)
+- [x] RGBA8888 texture upload + fullscreen quad with 3:2 aspect
 - [x] `VS_TEXTURE_COLOR_2D` + `FS_TEXTURE_COLOR_2D` shader presets
 - [x] GBA render path BEFORE `PSP_IsInited()` check
-- [x] Cleanup in destructor + deviceLost/deviceRestored
+- [x] Cleanup via `DeviceLost()`/`DeviceRestored()` — lazy reinit
 - [x] ✅ **VISUALLY WORKING** — Breath of Fire renders correctly
 
 ### 6. Audio Routing
-- [x] int16 → int32 conversion (shift left 16 bits)
-- [x] Fixed sample rate: 1470 mono samples/frame = 735 stereo pairs (44100Hz @ 60fps)
-- [x] `System_AudioPushSamples()` called with stereo pair count (not mono count)
-- [x] Silence padding when mGBA produces fewer samples
-- [x] ⚠️ **Audio plays but sounds "slow-mo"** — sample rate mismatch suspected
+- [x] **Root cause slow-mo identified**: mGBA native 32768 Hz ≠ PPSSPP mixer 44100 Hz
+- [x] `GetMixedAudio(int32_t*, size_t*)` — **resample 32768→44100 Hz** via linear interpolation (P1 refactor)
+- [x] ~546 native stereo pairs/frame → 735 target pairs @ 44100 Hz 60fps
+- [x] int16 → int32 conversion (shift left 16 bits) **setelah resample**
+- [x] **Zero silence padding** (sebelumnya 25.7% silence per frame)
+- [x] Audio conversion **pindah dari EmuScreen ke GBACore**
+- [x] `System_AudioPushSamples()` called with stereo pairs count
+- [x] ⚠️ **Kode fix sudah diimplementasi, tapi belum runtime-test**
 
 ### 7. Input Mapping
 - [x] `PSPSKeysToGBA()` — Cross→A, Circle→B, D-Pad, L/R, Start/Select
@@ -75,10 +85,13 @@
 - [x] Files: `PSP/SAVEDATA/GBA/<title>.sav`
 
 ### 9. Save State (Snapshot)
-- [x] `DoGBAState()` — raw buffer I/O
+- [x] `GBACore::SaveStateToFile(slot)` / `LoadStateFromFile(slot)` — **pindah dari EmuScreen ke GBACore** (P3 refactor)
+- [x] `GBACore::GetSavePrefix()` — sanitasi game title (alphanumeric + underscore, max 32 chars)
 - [x] Files: `PSP/PPSSPP_STATE/GBA/<prefix>_N.gbast`
-- [x] Reuses F1-F4 hotkeys + same slot config
+- [x] Reuses F1-F4 hotkeys + same slot config, OSD success/fail messages
+- [x] EmuScreen VIRTKEY handler call GBACore langsung + OSD messages
 - [x] No new UI needed
+- [x] ⚠️ **Kode baru total, belum runtime-test**
 
 ### 10. Touch Layout
 - [x] `UI/TouchLayoutGBA.h/.cpp` — GBA button positions
@@ -103,14 +116,24 @@
 
 ---
 
-## 🟡 In Progress / Needs Verification
+## 🟡 Perlu Runtime Test
 
-| Item | Status | Notes |
-|------|--------|-------|
-| **Audio clarity** | 🟡 Slow-mo | Fixed sample count (735 stereo pairs), but still distorted |
-| **ESC pause menu** | 🟡 Unverified | Direct handler added, needs user test |
-| **Save state end-to-end** | 🟡 Untested | Code in place, needs ROM test |
-| **Save memory end-to-end** | 🟡 Untested | Code in place, needs ROM test |
+| Item | Kode | Runtime | Prioritas |
+|------|------|---------|-----------|
+| **Audio clarity** | `GetMixedAudio()` resample 32768→44100 Hz ✅ | ❌ Belum di-test | 🔴 Tinggi |
+| **ESC pause menu** | UnsyncKey → pauseTrigger → UpdateGBA chain ✅ | ❌ Belum di-test | 🟡 Sedang |
+| **Save state** | `SaveStateToFile()` file I/O proper ✅ | ❌ Belum di-test | 🟡 Sedang |
+| **Load state** | `LoadStateFromFile()` file I/O proper ✅ | ❌ Belum di-test | 🟡 Sedang |
+| **Save memory (SRAM)** | Auto-load via `mCoreAutoloadSave` ✅ | ✅ Sudah jalan (sejak awal) | ❌ |
+
+---
+
+## 🧹 P2: #ifdef Cleanup (tidak tercatat di progress doc sebelumnya)
+
+- [x] 31 dari ~45 `#ifdef PPSSPP_MULTICORE` di call site **dihilangkan**
+- [x] Pattern: `if (IsGBA())` bukan `#ifdef + if (coreType_ != PSP)`
+- [x] Helper methods: `InitGBA()`, `ShutdownGBA()`, `UpdateGBA()`, `RenderGBA()`
+- [x] `IsGBA()` constexpr → `static constexpr bool IsGBA() { return false; }` saat MULTICORE=OFF
 
 ---
 
@@ -126,20 +149,26 @@
 
 ---
 
-## 🐛 Bugs Fixed This Session
+## 🐛 Bugs Fixed (Semua Sesi)
 
-| # | Bug | Root Cause | Fix |
-|---|-----|------------|-----|
-| 1 | Segfault on boot | Linker stripped mGBA function pointers | `--whole-archive mgba --no-whole-archive` |
-| 2 | Crash in `HashTableLookup` | `mCoreConfig` hash table uninitialized | `mCoreConfigInit(&core_->config, "gba")` |
-| 3 | Video all black | `getPixels` returns NULL without `setVideoBuffer` | `setVideoBuffer(rawVideoBuffer_, 240)` |
-| 4 | Crash creating texture | `texDesc.depth=0`, `initData=nullptr` | `depth=1`, valid zeroed buffer |
-| 5 | GBA video never drawn | `!PSP_IsInited()` caught GBA before render path | GBA check moved above PSP check |
-| 6 | Audio noise/static | Pushing too many samples (overflow) | Cap at 1470 samples/frame |
-| 7 | Audio slow-mo | `numSamples` passed as mono count instead of stereo pairs | `SAMPLES_PER_FRAME / 2` |
-| 8 | ESC not working | GBA `update()` returned before pause check | Direct ESC handler + pause check in GBA path |
-| 9 | `Unexpected PSP_Shutdown` | Destructor called `PSP_Shutdown` for GBA | Guard with `coreType_ == PSP` check |
-| 10 | Config mixing PSP/GBA | No config isolation | SaveCurrentConfig / RestoreSavedConfig + [GBA] INI section |
+| # | Bug | Root Cause | Fix | Sesi |
+|---|-----|------------|-----|------|
+| 1 | Segfault on boot | Linker stripped mGBA function pointers | `--whole-archive mgba --no-whole-archive` | Sebelum P1 |
+| 2 | Crash in `HashTableLookup` | `mCoreConfig` hash table uninitialized | `mCoreConfigInit(&core_->config, "gba")` | Sebelum P1 |
+| 3 | Video all black | `getPixels` returns NULL without `setVideoBuffer` | `setVideoBuffer(rawVideoBuffer_, 240)` | Sebelum P1 |
+| 4 | Crash creating texture | `texDesc.depth=0`, `initData=nullptr` | `depth=1`, valid zeroed buffer | Sebelum P1 |
+| 5 | GBA video never drawn | `!PSP_IsInited()` caught GBA before render path | GBA check moved above PSP check | Sebelum P1 |
+| 6 | Audio noise/static | Pushing too many samples (overflow) | Cap at 1470 samples/frame | Sebelum P1 |
+| 7 | Audio slow-mo (early) | `numSamples` passed as mono count instead of stereo pairs | `SAMPLES_PER_FRAME / 2` | Sebelum P1 |
+| 8 | ESC not working | GBA `update()` returned before pause check | Direct ESC handler + pause check in GBA path | Sebelum P1 |
+| 9 | `Unexpected PSP_Shutdown` | Destructor called `PSP_Shutdown` for GBA | Guard with `coreType_ == PSP` check | Sebelum P1 |
+| 10 | Config mixing PSP/GBA | No config isolation | SaveCurrentConfig / RestoreSavedConfig + [GBA] INI section | Sebelum P1 |
+| --- | --- | --- | --- | --- |
+| **11** | **Audio slow-mo root cause** | mGBA native 32768 Hz ≠ PPSSPP 44100 Hz, silence padding 25.7% | `GetMixedAudio()` resample linear + zero silence padding | **P1** |
+| **12** | **Code duplication render** | Thin3D pipeline ada di EmuScreen, bukan di core | Pindah ke `GBACore::Render(DrawContext*)` | **P1** |
+| **13** | **Code duplication audio** | Audio conversion ada di EmuScreen | Pindah ke `GBACore::GetMixedAudio()` | **P1** |
+| **14** | **`#ifdef` clutter** | ~45 `#ifdef PPSSPP_MULTICORE` di call site | 31 dihilangkan, pakai `IsGBA()` pattern | **P2** |
+| **15** | **Save state di EmuScreen** | Raw buffer I/O + path logic campur di EmuScreen | Pindah ke `SaveStateToFile/LoadStateFromFile` di GBACore | **P3** |
 
 ---
 
