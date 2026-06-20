@@ -13,6 +13,86 @@ EmuCore/            → Folder baru, tidak sentuh upstream
 └── CMakeLists.txt
 ```
 
+### Diagram Alur Audio (contoh GBA)
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  mGBA (libmgba) — EMULASI GBA HARDWARE                      │
+│  ┌──────────────────┐     ┌──────────────────┐              │
+│  │ GBA Sound Chip    │     │ mAudioBuffer     │              │
+│  │ (FIFO, DMA,       │────▶│ int16 stereo     │              │
+│  │  Square/Wave/Noise)│     │ 32768 Hz (native)│              │
+│  └──────────────────┘     └────────┬─────────┘              │
+└───────────────────────────────────┼──────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────┐
+│  GBACore (EmuCore) — KONVERSI FORMAT                        │
+│  ┌──────────────────────────────────────────────────────┐   │
+│  │ GetMixedAudio()                                       │   │
+│  │ 1. Resample: 32768 Hz → 44100 Hz (linear interp)     │   │
+│  │ 2. Convert:  int16 → int32 (shift left 16)           │   │
+│  │                                                       │   │
+│  │ Catatan:                                               │   │
+│  │ - TIDAK padding silence (sebab slow-mo)               │   │
+│  │ - Method spesifik GBA, bukan di interface Core         │   │
+│  └──────────────────────┬────────────────────────────────┘   │
+└─────────────────────────┼────────────────────────────────────┘
+                          │
+                          ▼
+┌─────────────────────────────────────────────────────────────┐
+│  PPSSPP Audio Backend — KODE UPSTREAM, TIDAK DISENTUH       │
+│  ┌──────────────────────────────────────────────────────┐   │
+│  │ System_AudioPushSamples(int32_t*, stereoPairs, vol)   │   │
+│  │                                                       │   │
+│  │ Ini fungsi BAWAAN PPSSPP. Zero modifikasi.            │   │
+│  │ EmuScreen hanya:                                      │   │
+│  │   gba->GetMixedAudio(buf, &pairs);                    │   │
+│  │   System_AudioPushSamples(buf, pairs, 1.0f);          │   │
+│  └──────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Diagram Alur Video (contoh GBA)
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  mGBA (libmgba)                                             │
+│  ┌──────────────────┐     ┌──────────────────┐              │
+│  │ GBA LCD/PPU       │     │ rawVideoBuffer_   │              │
+│  │ Emulation         │────▶│ mColor (XBGR8)    │              │
+│  │ (240×160 px)      │     │ 240×160           │              │
+│  └──────────────────┘     └────────┬─────────┘              │
+└───────────────────────────────────┼──────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────┐
+│  GBACore (EmuCore) — KONVERSI + RENDER                      │
+│  ┌──────────────────────────────────────────────────────┐   │
+│  │ RunFrame():                                           │   │
+│  │ 1. core_->runFrame() → mGBA renders ke rawVideoBuffer  │   │
+│  │ 2. XBGR8 → RGBA8888 conversion                       │   │
+│  │                                                       │   │
+│  │ Render(DrawContext*):                                  │   │
+│  │ 1. Lazy init pipeline + texture (first call)          │   │
+│  │ 2. Upload RGBA8888 ke Thin3D texture                  │   │
+│  │ 3. Draw fullscreen quad (3:2 aspect, letterbox)       │   │
+│  └──────────────────────┬────────────────────────────────┘   │
+└─────────────────────────┼────────────────────────────────────┘
+                          │
+                          ▼
+┌─────────────────────────────────────────────────────────────┐
+│  PPSSPP GPU Backend — KODE UPSTREAM, TIDAK DISENTUH         │
+│  ┌──────────────────────────────────────────────────────┐   │
+│  │ Thin3D (OpenGL/Vulkan)                               │   │
+│  │                                                       │   │
+│  │ EmuScreen hanya:                                      │   │
+│  │   activeCore_->Render(draw);       // GBA render      │   │
+│  │   renderUI();                       // touch + FPS     │   │
+│  └──────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────┘
+```
+
 ## Aturan Ketat
 
 ### 1. Setiap core baru WAJIB mengikuti EmuCore interface
