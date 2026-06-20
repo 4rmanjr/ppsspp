@@ -1,14 +1,25 @@
 # GBA Support — Progress Report
 
-**Date:** 2026-06-20 (updated — P1-P3 refactor)
+**Date:** 2026-06-20 (updated)
 **Branch:** `feature/lan-sync`
 **Build:** `PPSSPP_MULTICORE=ON` (feature flag)
 
-> ⚠️ **Progress doc ini STALE sebelum P1-P3 refactor (`fa08833c01`).**
-> Berikut adalah status real berdasarkan verifikasi kode (static analysis),
-> **belum runtime-test** karena keterbatasan lingkungan (proot, tanpa GPU).
+## Target Platform
 
-## 🔨 Perlu Runtime Test (di PC sungguhan)
+| Platform | Build System | Status |
+|----------|-------------|--------|
+| **Android** | ndk-build (`Android.mk`) | 🟡 **Perlu integrasi** — lihat [# Android Build](#-android-build-belum-terintegrasi) |
+| **Linux SDL** | CMake | ✅ **Working** (sudah terverifikasi build) |
+| **Qt** | ❌ **Excluded** — issue Wayland/X11 compatibility, platform mulai ditinggalkan |
+
+> ⚠️ **Progress doc sebelumnya STALE** — ditulis sebelum P1-P3 refactor (`fa08833c01`).
+> Status di bawah berdasarkan verifikasi kode (static analysis),
+> **belum runtime-test** karena keterbatasan lingkungan (proot, tanpa GPU).
+> Setelah runtime test sukses di **Linux SDL**, integrasi **Android** menyusul.
+
+---
+
+## 🔨 Perlu Runtime Test (di PC sungguhan / Linux SDL)
 
 Keempat item di bawah sudah diimplementasi ulang di P1-P3 refactor,
 **tapi belum pernah di-run** — status real tidak diketahui:
@@ -17,6 +28,8 @@ Keempat item di bawah sudah diimplementasi ulang di P1-P3 refactor,
 - 🟡 **ESC pause menu** — Direct handler di `UnsyncKey()` → `pauseTrigger_` → `UpdateGBA()` push `GamePauseScreen`. **Rantai handler lengkap, perlu test apakah pause muncul.**
 - 🟡 **Save state (F1/F3)** — `GBACore::SaveStateToFile(slot)`, file I/O proper, OSD message. **Kode baru total, perlu test.**
 - 🟡 **Load state** — `GBACore::LoadStateFromFile(slot)`. **Sama, perlu test.**
+
+> Setelah runtime test sukses di **Linux SDL**, integrasi **Android** bisa dikerjakan.
 
 ---
 
@@ -170,9 +183,41 @@ Keempat item di bawah sudah diimplementasi ulang di P1-P3 refactor,
 | **14** | **`#ifdef` clutter** | ~45 `#ifdef PPSSPP_MULTICORE` di call site | 31 dihilangkan, pakai `IsGBA()` pattern | **P2** |
 | **15** | **Save state di EmuScreen** | Raw buffer I/O + path logic campur di EmuScreen | Pindah ke `SaveStateToFile/LoadStateFromFile` di GBACore | **P3** |
 
+## 🔧 Android Build (Belum Terintegrasi)
+
+Android pakai `ndk-build` bukan CMake. Yang perlu ditambahkan:
+
+```makefile
+# android/jni/Locals.mk — tambah:
+LOCAL_CFLAGS += -DPPSSPP_MULTICORE
+LOCAL_C_INCLUDES += $(LOCAL_PATH)/../../ext/libmgba/include
+
+# android/jni/Android.mk — tambah static library:
+# mgba
+include $(CLEAR_VARS)
+include $(LOCAL_PATH)/Locals.mk
+LOCAL_MODULE := mgba
+LOCAL_SRC_FILES := $(MGBA_FILES)  # semua .c ext/libmgba/
+include $(BUILD_STATIC_LIBRARY)
+
+# EmuCore
+include $(CLEAR_VARS)
+include $(LOCAL_PATH)/Locals.mk
+LOCAL_MODULE := EmuCore
+LOCAL_SRC_FILES := \
+  $(SRC)/EmuCore/EmuCore.cpp \
+  $(SRC)/EmuCore/PSPCore.cpp \
+  $(SRC)/EmuCore/GBACore.cpp \
+  $(SRC)/EmuCore/Config.cpp
+LOCAL_STATIC_LIBRARIES += mgba
+include $(BUILD_STATIC_LIBRARY)
+```
+
+**Belum dikerjakan** — menunggu runtime-test sukses di Linux SDL dulu.
+
 ---
 
-## 🔧 How to Build & Run
+## 🔧 Linux SDL: Build & Run
 
 ```bash
 # Build (MULTICORE=ON)
