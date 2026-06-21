@@ -347,6 +347,21 @@ void SaveSlotView::Draw(UIContext &dc) {
 void SaveSlotView::OnLoadState(UI::EventParams &e) {
 	if (!NetworkWarnUserIfOnlineAndCantSavestate()) {
 		g_Config.iCurrentStateSlot = slot_;
+#ifdef PPSSPP_MULTICORE
+		// [PPSSPP-FORK] MultiCore: GBA uses direct file load via GBACore
+		if (g_gbaModeActive && g_activeCore) {
+			EmuCore::GBACore *gba = static_cast<EmuCore::GBACore *>(g_activeCore);
+			if (gba && gba->LoadStateFromFile(slot_)) {
+				g_OSD.Show(OSDType::MESSAGE_SUCCESS, StringFromFormat("GBA state loaded (slot %d)", slot_ + 1), 2.0f);
+			} else {
+				g_OSD.Show(OSDType::MESSAGE_WARNING, StringFromFormat("No GBA save state in slot %d", slot_ + 1), 2.0f);
+			}
+			UI::EventParams e2{};
+			e2.v = this;
+			OnStateLoaded.Trigger(e2);
+			return;
+		}
+#endif
 		UI::EventParams e2{};
 		e2.v = this;
 		OnLoadRequested.Trigger(e2);
@@ -356,6 +371,21 @@ void SaveSlotView::OnLoadState(UI::EventParams &e) {
 void SaveSlotView::OnSaveState(UI::EventParams &e) {
 	if (!NetworkWarnUserIfOnlineAndCantSavestate()) {
 		g_Config.iCurrentStateSlot = slot_;
+#ifdef PPSSPP_MULTICORE
+		// [PPSSPP-FORK] MultiCore: GBA uses direct file save via GBACore
+		if (g_gbaModeActive && g_activeCore) {
+			EmuCore::GBACore *gba = static_cast<EmuCore::GBACore *>(g_activeCore);
+			if (gba && gba->SaveStateToFile(slot_)) {
+				g_OSD.Show(OSDType::MESSAGE_SUCCESS, StringFromFormat("GBA state saved (slot %d)", slot_ + 1), 2.0f);
+			} else {
+				g_OSD.Show(OSDType::MESSAGE_WARNING, "GBA save state failed", 3.0f);
+			}
+			UI::EventParams e2{};
+			e2.v = this;
+			OnStateSaved.Trigger(e2);
+			return;
+		}
+#endif
 		SaveState::SaveSlot(saveStatePrefix_, slot_, &ShowMessageAfterSaveStateAction);
 		UI::EventParams e2{};
 		e2.v = this;

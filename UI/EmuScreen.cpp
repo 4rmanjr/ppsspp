@@ -73,6 +73,7 @@ using namespace std::placeholders;
 #include "Core/RetroAchievements.h"
 #include "Core/SaveState.h"
 #include "Core/Screenshot.h"
+#include "Core/Util/RecentFiles.h"
 #include "UI/ImDebugger/ImDebugger.h"
 #if !defined(MOBILE_DEVICE)
 #include "SDL/SDLLANSync.h"
@@ -1455,6 +1456,8 @@ void EmuScreen::InitGBA(const Path &filename) {
 		);
 		if (activeCore_->LoadROM(filename)) {
 			INFO_LOG(Log::System, "[GBA] ROM loaded, boot pending");
+			// [PPSSPP-FORK] MultiCore: add to recent files
+			g_recentFiles.Add(filename.ToString());
 		}
 
 		// [PPSSPP-FORK] MultiCore: set GBA mode globals AFTER core + ROM ready
