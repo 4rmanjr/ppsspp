@@ -89,9 +89,17 @@ GBACore::GBACore() {
 		mAudioBufferInit(static_cast<struct mAudioBuffer*>(resampleDest_), AUDIO_BUF_SIZE, 2);
 		resampler_ = reinterpret_cast<struct mAudioResampler*>(new char[sizeof(struct mAudioResampler)]);
 		mAudioResamplerInit(static_cast<struct mAudioResampler*>(resampler_), mINTERPOLATOR_SINC);
+		// [PPSSPP-FORK] MultiCore: upgrade sinc width from 8 (default) to 16 for better audio
+		{
+			auto *r = static_cast<struct mAudioResampler*>(resampler_);
+			mInterpolatorSincDeinit(&r->sinc);
+			mInterpolatorSincInit(&r->sinc, 8192, 16);
+			r->lowWaterMark = r->sinc.width;
+			r->highWaterMark = r->sinc.width;
+		}
 		mAudioResamplerSetDestination(static_cast<struct mAudioResampler*>(resampler_), static_cast<struct mAudioBuffer*>(resampleDest_), TARGET_RATE);
 
-		INFO_LOG(Log::System, "[GBA] Core initialized with sinc resampler");
+		INFO_LOG(Log::System, "[GBA] Core initialized with sinc resampler (width=16)");
 	} else {
 		ERROR_LOG(Log::System, "[GBA] Failed to create core");
 	}
