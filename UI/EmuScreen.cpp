@@ -1407,6 +1407,11 @@ void EmuScreen::InitGBA(const Path &filename) {
 
 	EmuCore::LoadConfig(EmuCore::Type::GBA);
 
+	// [PPSSPP-FORK] MultiCore: prevent PPSSPP autosave from overwriting PSP settings
+	// GBA mode uses g_Config but saves to [GBA] section only at ShutdownGBA()
+	g_Config.bSaveSettings = false;
+	NOTICE_LOG(Log::System, "[CONFIG] GBA mode active — autosave disabled");
+
 	File::CreateFullPath(GetSysDirectory(DIRECTORY_SAVEDATA) / "GBA");
 	File::CreateFullPath(GetSysDirectory(DIRECTORY_SAVESTATE) / "GBA");
 
@@ -1429,7 +1434,10 @@ void EmuScreen::InitGBA(const Path &filename) {
 void EmuScreen::ShutdownGBA() {
 	if (!IsGBA()) return;
 
+	// [PPSSPP-FORK] MultiCore: save GBA config to [GBA] section and restore PSP autosave
 	EmuCore::SaveConfig(EmuCore::Type::GBA);
+	g_Config.bSaveSettings = true;
+	NOTICE_LOG(Log::System, "[CONFIG] GBA mode ended — autosave restored");
 	if (activeCore_) activeCore_->DeviceLost();
 	activeCore_.reset();
 }
