@@ -83,6 +83,7 @@ tapi Thin3D expect R,G,B,A. Fix: `(B<<16)|(G<<8)|R` = memory R,G,B,A ✓
 | **Save state** F1/pause menu | 🟡 | Pause menu panggil PSP API, bukan GBACore |
 | **Config isolation** | 🟡 | Setting PSP & GBA masih campur |
 | **Recent tab** | ❌ **TIDAK BEKERJA** | `g_recentFiles.Add()` tidak pernah dipanggil untuk GBA |
+| **Game icon** | ❌ **TIDAK TAMPIL** | PPSSPP download icon dari server untuk PSP game ID, GBA tidak punya |
 | **Android build** | 🔴 | Belum dimulai |
 
 ---
