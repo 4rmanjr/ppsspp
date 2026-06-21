@@ -638,8 +638,8 @@ bool GBACore::SaveStateToFile(int slot) {
 	if (!core_) return false;
 
 	std::string prefix = GetSavePrefix();
-	Path dir = GetSysDirectory(DIRECTORY_SAVESTATE) / "GBA";
-	std::string filename = StringFromFormat("%s_%d.gbast", prefix.c_str(), slot);
+	Path dir = GetSysDirectory(DIRECTORY_SAVESTATE);
+	std::string filename = StringFromFormat("GBA_%s_%d.ppst", prefix.c_str(), slot);
 	Path path = dir / filename;
 
 	File::CreateFullPath(path);
@@ -669,8 +669,8 @@ bool GBACore::LoadStateFromFile(int slot) {
 	if (!core_) return false;
 
 	std::string prefix = GetSavePrefix();
-	Path dir = GetSysDirectory(DIRECTORY_SAVESTATE) / "GBA";
-	std::string filename = StringFromFormat("%s_%d.gbast", prefix.c_str(), slot);
+	Path dir = GetSysDirectory(DIRECTORY_SAVESTATE);
+	std::string filename = StringFromFormat("GBA_%s_%d.ppst", prefix.c_str(), slot);
 	Path path = dir / filename;
 
 	std::string data;

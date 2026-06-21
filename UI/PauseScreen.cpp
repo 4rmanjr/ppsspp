@@ -70,6 +70,10 @@
 #include "UI/RetroAchievementScreens.h"
 #include "UI/TouchControlLayoutScreen.h"
 #include "UI/BackgroundAudio.h"
+
+#ifdef PPSSPP_MULTICORE
+#include "EmuCore/GBACore.h"
+#endif
 #include "UI/MiscViews.h"
 #include "UI/AdhocServerScreen.h"
 
@@ -155,6 +159,20 @@ private:
 void ScreenshotViewScreen::OnSaveState(UI::EventParams &e) {
 	if (!NetworkWarnUserIfOnlineAndCantSavestate()) {
 		g_Config.iCurrentStateSlot = slot_;
+#ifdef PPSSPP_MULTICORE
+		// [PPSSPP-FORK] MultiCore: GBA uses direct file save via GBACore
+		if (g_gbaModeActive && g_activeCore) {
+			EmuCore::GBACore *gba = static_cast<EmuCore::GBACore *>(g_activeCore);
+			int slot = g_Config.iCurrentStateSlot;
+			if (gba && gba->SaveStateToFile(slot)) {
+				g_OSD.Show(OSDType::MESSAGE_SUCCESS, StringFromFormat("GBA state saved (slot %d)", slot + 1), 2.0f);
+			} else {
+				g_OSD.Show(OSDType::MESSAGE_WARNING, "GBA save state failed", 3.0f);
+			}
+			TriggerFinish(DR_OK);
+			return;
+		}
+#endif
 		SaveState::SaveSlot(saveStatePrefix_, slot_, &ShowMessageAfterSaveStateAction);
 		TriggerFinish(DR_OK); //OK will close the pause screen as well
 	}
@@ -163,6 +181,20 @@ void ScreenshotViewScreen::OnSaveState(UI::EventParams &e) {
 void ScreenshotViewScreen::OnLoadState(UI::EventParams &e) {
 	if (!NetworkWarnUserIfOnlineAndCantSavestate()) {
 		g_Config.iCurrentStateSlot = slot_;
+#ifdef PPSSPP_MULTICORE
+		// [PPSSPP-FORK] MultiCore: GBA uses direct file load via GBACore
+		if (g_gbaModeActive && g_activeCore) {
+			EmuCore::GBACore *gba = static_cast<EmuCore::GBACore *>(g_activeCore);
+			int slot = g_Config.iCurrentStateSlot;
+			if (gba && gba->LoadStateFromFile(slot)) {
+				g_OSD.Show(OSDType::MESSAGE_SUCCESS, StringFromFormat("GBA state loaded (slot %d)", slot + 1), 2.0f);
+			} else {
+				g_OSD.Show(OSDType::MESSAGE_WARNING, StringFromFormat("No GBA save state in slot %d", slot + 1), 2.0f);
+			}
+			TriggerFinish(DR_OK);
+			return;
+		}
+#endif
 		if (g_Config.bConfirmLoadState) {
 			screenManager()->push(new LoadStateConfirmScreen(saveStatePrefix_, slot_, [this](bool result) {
 				if (result) {
