@@ -96,7 +96,7 @@ Bug: R↔B terbalik (little-endian byte order). Fix: `(B<<16)|(G<<8)|R`.
 | Recent tab (GBA not added) | 🟡 | `g_recentFiles.Add()` tidak dipanggil |
 | Recent tab (group per emulator) | 💡 | Saran fitur |
 | Game icon/cover | ❌ | GBA tidak punya cover download |
-| Key mapping terpisah | 📋 | Plan siap (GBA VIRTKEY) |
+| Key mapping terpisah | 🟡 | Plan siap — GBA VIRTKEY, belum diimplement |
 | Android build | 🔴 | Belum dimulai |
 
 ---
