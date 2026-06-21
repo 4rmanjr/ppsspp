@@ -488,13 +488,11 @@ void GBACore::GetMixedAudio(int32_t *buffer, size_t *stereoPairs) {
 		buffer[i * 2 + 1] = ((int32_t)((int16_t)outR)) << 16;
 	}
 
-	// Pad remaining slots if fewer than target
-	if (toCopy < (size_t)TARGET_PAIRS && toCopy > 0) {
-		int32_t padL = buffer[(toCopy - 1) * 2];
-		int32_t padR = buffer[(toCopy - 1) * 2 + 1];
+	// Pad remaining slots with zero (no DC step — avoids harsh/tinny artifacts)
+	if (toCopy < (size_t)TARGET_PAIRS) {
 		for (i = toCopy; i < (size_t)TARGET_PAIRS; i++) {
-			buffer[i * 2] = padL;
-			buffer[i * 2 + 1] = padR;
+			buffer[i * 2] = 0;
+			buffer[i * 2 + 1] = 0;
 		}
 	}
 
