@@ -1,8 +1,8 @@
 # GBA Support — Progress Report
 
-**Date:** 2026-06-21 (final update)
+**Date:** 2026-06-22 (updated)
 **Branch:** `feature/lan-sync`
-**Last commit:** `59ce8a1` — sinc width 8→16 + direct SDL
+**Last commit:** `5e3b5e5` — save state fix: CreateFullPath bug
 **Build:** `build-final/PPSSPPSDL` — MULTICORE=ON ✅
 
 ---
@@ -21,43 +21,43 @@
 
 | Item | Status | Catatan |
 |------|--------|---------|
-| **Video** | ✅ **FIXED** | R↔B swap di pixel packing (mColor BGR→RGBA) |
-| **Input** | ✅ **WORKING** | A/S/Z/X/Space/arrows + ESC pause |
-| **Save RAM** | ✅ **WORKING** | SRAM auto-load/flash via mGBA |
+| **Video** | ✅ **FIXED** | R↔B swap di pixel packing |
+| **Input (keyboard)** | ✅ **WORKING** | A/S/Z/X/Space/arrows |
+| **Save RAM (SRAM)** | ✅ **WORKING** | Auto-load/flash via mGBA |
 | **ESC pause** | ✅ **WORKING** | Direct handler di UnsyncKey |
-| **Audio** | ✅ **FIXED** | 3 bugs berturut-turut (lihat bawah) |
-| **Speed control** | ❌ **Belum test** | VIRTKEY handler perlu verifikasi |
-| **Save state** | ❌ **Belum test** | F1/F3 + pause menu perlu implement |
-| **Config isolation** | ❌ **Belum** | Per-core config blm jalan |
+| **Audio** | ✅ **FIXED** | sinc resampler + direct SDL |
+| **Save state (F1/F3)** | ✅ **WORKING** | `<SAVESTATE>/GBA_<code>_<title>_<slot>.ppst` |
+| **Save state (pause menu)** | 🟡 **SEBAGIAN** | ScreenshotViewScreen OK, main slot view masih PSP |
+| **Save state thumbnail** | ❌ **TIDAK ADA** | GBA save tidak punya screenshot/cover |
+| **Speed control** | ❌ **Belum test** | |
+| **Config isolation** | 🟡 **SEBAGIAN** | Boundary OK, UI settings masih campur |
+| **Recent tab** | ❌ **TIDAK BEKERJA** | GBA game tidak tercatat di Recent |
+| **Game icon/cover** | ❌ **TIDAK TAMPIL** | PPSSPP download icon untuk PSP game ID |
+| **Android build** | 🔴 **Belum dimulai** | |
 
 ---
 
 ## Audio Pipeline (Final)
 
 ```
-mGBA core → [sinc resampler width=16] → int16 → DC filter → SDL langsung
+mGBA core → [sinc resampler width=16, resolusi=8192] → int16 → DC filter → SDL langsung
 ```
 
 - **Satu** resample step (32768/65536 → 44100 Hz)
-- Sinc width **16** (upgrade dari default 8)
 - Bypass PPSSPP StereoResampler sepenuhnya
 - Format int16 langsung ke SDL (S16 format)
+- mGBA's own sinc resampler (`mAudioResampler` + `mINTERPOLATOR_SINC`)
 
-### Bugs yang Pernah Terjadi
+### Audio Bugs Fixed
 
-| # | Bug | Root Cause | Fix |
-|---|-----|------------|-----|
-| 1 | **Kasar/clipping total** | `(int32_t)sample << 16` → semua sample 65536x over range → hard-clip | Hapus `<< 16`, simpan int16 langsung |
-| 2 | **Mendem/tidak jernih** | Push `int32_t*` ke SDL stream format `S16` → SDL baca tiap int32 sebagai 2 int16 | Push `int16_t*` via `GetRawAudio()` |
-| 3 | **Kresek-kresek** | Skip push saat SDL buffer penuh → gap 138ms tanpa audio | Jangan skip, biarkan SDL handle buffering |
-| 4 | **Double resample** | sinc 44100 → StereoResampler linear → host | Direct SDL, bypass StereoResampler |
-| 5 | **Akumulasi source** | Resampler tinggalkan ~10 sample/frame | Drain ke LOW_WATER=8 |
-
-### Referensi
-
-- **mGBA**: sinc width=8 default. Sama dengan mGBA SDL frontend.
-- **SkyEmu**: band-limited square wave synthesis + DC filter (`capacitor *= 0.996`)
-- Kita adopsi DC filter dari SkyEmu, sinc resampler dari mGBA
+| # | Bug | Fix |
+|---|-----|-----|
+| 1 | Clipping total (`<< 16`) | Hapus shift, simpan int16 langsung |
+| 2 | Format mismatch (int32→SDL_S16) | Push int16 via `GetRawAudio()` |
+| 3 | Skip push → gap audio | Jangan skip, biarkan SDL handle buffer |
+| 4 | Double resample (sinc + StereoResampler) | Direct SDL, bypass StereoResampler |
+| 5 | Resampler source accumulation | Drain ke LOW_WATER |
+| 6 | Sinc width default 8 | Upgrade ke 16 |
 
 ---
 
@@ -65,27 +65,42 @@ mGBA core → [sinc resampler width=16] → int16 → DC filter → SDL langsung
 
 ```
 mGBA render → rawVideoBuffer_ (mColor, format M_RGB5_TO_BGR8)
-→ konversi: extract R,G,B → pack sebagai (A<<24)|(B<<16)|(G<<8)|R
+→ extract R,G,B → pack (A<<24)|(B<<16)|(G<<8)|R
 → Thin3D texture upload → fullscreen quad (3:2 aspect)
 ```
 
-Bug: R↔B terbalik karena `(R<<16)|(G<<8)|B` = memory B,G,R,A (little-endian)
-tapi Thin3D expect R,G,B,A. Fix: `(B<<16)|(G<<8)|R` = memory R,G,B,A ✓
+Bug: R↔B terbalik (little-endian byte order). Fix: `(B<<16)|(G<<8)|R`.
 
 ---
 
-## Known Issues (Open)
+## Save State
+
+### Format
+- **File:** `<SAVESTATE>/GBA_<gameCode>_<sanitizedTitle>_<slot>.ppst`
+- **Content:** Raw binary dari `core_->saveState()` (mGBA internal state)
+- **Size:** ~388KB (Breath of Fire)
+- **Trigger:** F1 (save), F3 (load), pause menu ScreenshotViewScreen
+
+### Limitations
+- ❌ Main pause menu slot view (SaveSlotView) masih panggil PSP `SaveState::`
+- ❌ Tidak ada screenshot/thumbnail untuk GBA save state
+- ❌ Tidak ada undo save / rewind untuk GBA
+
+---
+
+## Known Issues
 
 | Issue | Priority | Note |
 |-------|----------|------|
-| **Audio** masih belum 100% setara mGBA | 🟡 | Mungkin butuh fine-tune sinc atau filter |
-| **Speed control** Tab/Backspace | 🟡 | VIRTKEY handler perlu test |
-| **Save state** F1/pause menu | 🟡 | Pause menu panggil PSP API, bukan GBACore |
-| **Config isolation** | 🟡 **SEBAGIAN** | Boundary start/exit OK. Tapi autosave PPSSPP masih timpa PSP settings |
-| **Recent tab** | ❌ **TIDAK BEKERJA** | `g_recentFiles.Add()` tidak pernah dipanggil untuk GBA |
-| **Recent tab (grouping)** | 💡 **SARAN** | Pisah Recent per-emulator (GBA/PSP) dengan header |
-| **Game icon** | ❌ **TIDAK TAMPIL** | PPSSPP download icon dari server untuk PSP game ID, GBA tidak punya |
-| **Android build** | 🔴 | Belum dimulai |
+| Pause menu save slot masih PSP | 🟡 | SaveSlotView di GamePauseScreen panggil PSP API |
+| Thumbnail save state | 🟡 | Perlu screenshot capture + save sbg JPEG |
+| Speed control (Tab/Backspace) | 🟡 | Belum diverifikasi |
+| Config isolation (UI) | 🟡 | Setting PSP masih muncul di GBA mode |
+| Recent tab (GBA not added) | 🟡 | `g_recentFiles.Add()` tidak dipanggil |
+| Recent tab (group per emulator) | 💡 | Saran fitur |
+| Game icon/cover | ❌ | GBA tidak punya cover download |
+| Key mapping terpisah | 📋 | Plan siap di `docs/plans/gba-keymapping-plan.md` |
+| Android build | 🔴 | Belum dimulai |
 
 ---
 
@@ -94,5 +109,5 @@ tapi Thin3D expect R,G,B,A. Fix: `(B<<16)|(G<<8)|R` = memory R,G,B,A ✓
 ```bash
 cmake -B build-final -DCMAKE_BUILD_TYPE=Release -DPPSSPP_MULTICORE=ON
 cmake --build build-final --target PPSSPPSDL -j$(nproc)
-./build-final/PPSSPPSDL "/path/to/game.gba"
+./build-final/PPSSPPSDL "/path/to/game.gba" 2>&1 | grep "\[GBA\]"
 ```
