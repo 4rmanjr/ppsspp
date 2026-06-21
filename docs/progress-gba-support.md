@@ -82,6 +82,7 @@ tapi Thin3D expect R,G,B,A. Fix: `(B<<16)|(G<<8)|R` = memory R,G,B,A ✓
 | **Speed control** Tab/Backspace | 🟡 | VIRTKEY handler perlu test |
 | **Save state** F1/pause menu | 🟡 | Pause menu panggil PSP API, bukan GBACore |
 | **Config isolation** | 🟡 | Setting PSP & GBA masih campur |
+| **Recent tab** | ❌ **TIDAK BEKERJA** | `g_recentFiles.Add()` tidak pernah dipanggil untuk GBA |
 | **Android build** | 🔴 | Belum dimulai |
 
 ---
