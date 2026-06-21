@@ -430,16 +430,14 @@ void GBACore::GetAudioSamples(int16_t *buffer, size_t *samples) {
 }
 
 void GBACore::ClearAudio() {
-	// Discard all pending audio: both resampler dest buffer and core source buffer
-	// Used during fast forward to prevent audio accumulation between frames
+	// Only clear the mGBA source buffer — preserve resampler state (timestamp, sinc history)
+	// to prevent discontinuities when audio resumes after frame skip.
 	struct mAudioBuffer *src = core_->getAudioBuffer(core_);
 	if (src) {
 		mAudioBufferClear(src);
 	}
-	size_t avail = mAudioBufferAvailable(static_cast<struct mAudioBuffer*>(resampleDest_));
-	if (avail > 0) {
-		mAudioBufferClear(static_cast<struct mAudioBuffer*>(resampleDest_));
-	}
+	// Do NOT clear resampleDest_ — mAudioResampler maintains internal timestamp
+	// and sinc interpolation state. Clearing it loses filter continuity.
 	audioStereoPairs_ = 0;
 }
 
