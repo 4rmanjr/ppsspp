@@ -27,8 +27,8 @@
 | **ESC pause** | ✅ **WORKING** | Direct handler di UnsyncKey |
 | **Audio** | ✅ **FIXED** | sinc resampler + direct SDL |
 | **Save state (F1/F3)** | ✅ **WORKING** | `<SAVESTATE>/GBA_<code>_<title>_<slot>.ppst` |
-| **Save state (pause menu)** | 🟡 **SEBAGIAN** | ScreenshotViewScreen OK, main slot view masih PSP |
-| **Save state thumbnail** | ❌ **TIDAK ADA** | GBA save tidak punya screenshot/cover |
+| **Save state (pause menu)** | ✅ **WORKING** | SaveSlotView + ScreenshotViewScreen redirect ke GBACore |
+| **Save state thumbnail** | ✅ **WORKING** | `pngSave()` dari `videoBuffer_` ke `.jpg` (auto-detect) |
 | **Speed control** | ❌ **Belum test** | |
 | **Config isolation** | 🟡 **SEBAGIAN** | Boundary OK, UI settings masih campur |
 | **Recent tab** | ❌ **TIDAK BEKERJA** | GBA game tidak tercatat di Recent |
