@@ -241,14 +241,17 @@ void GBACore::RunFrame() {
 			size_t read = mAudioBufferRead(static_cast<struct mAudioBuffer*>(resampleDest_), audioBuffer_, outAvail);
 			audioStereoPairs_ = read;
 
-			// Debug: print resampler stats
+			// Debug: print resampler stats + warn on underrun
 			static int audioDbg = 0;
 			if (++audioDbg <= 3 || audioDbg % 300 == 0) {
-				NOTICE_LOG(Log::System, "[GBA] Audio frame %d: coreAvail=%zu coreRate=%u outPairs=%zu first=[%d,%d] last=[%d,%d]",
-					audioDbg, available, coreSampleRate_, read,
+				NOTICE_LOG(Log::System, "[GBA] Audio frame %d: coreAvail=%zu coreRate=%u outPairs=%zu/%d first=[%d,%d] last=[%d,%d]",
+					audioDbg, available, coreSampleRate_, read, TARGET_PAIRS,
 					audioBuffer_[0], audioBuffer_[1],
 					read > 0 ? audioBuffer_[(read-1)*2] : 0,
 					read > 0 ? audioBuffer_[(read-1)*2+1] : 0);
+				if (read < TARGET_PAIRS) {
+					WARN_LOG(Log::System, "[GBA] Audio underrun: got %zu pairs, expected %d", read, TARGET_PAIRS);
+				}
 			}
 		}
 	}
