@@ -1468,8 +1468,6 @@ void EmuScreen::UpdateGBA() {
 
 		if (framesToRun > 0) {
 		EmuCore::GBACore *gba = static_cast<EmuCore::GBACore *>(activeCore_.get());
-		static constexpr int MAX_AUDIO_PAIRS = 735;
-		int32_t audioBuf32[MAX_AUDIO_PAIRS * 2];
 
 		for (int f = 0; f < framesToRun; f++) {
 			activeCore_->RunFrame();
@@ -1478,35 +1476,23 @@ void EmuScreen::UpdateGBA() {
 			// Intermediate frames: clear resampler to prevent accumulation
 			if (f == framesToRun - 1) {
 				size_t stereoPairs = 0;
-				gba->GetMixedAudio(audioBuf32, &stereoPairs);
+				const int16_t *audio16 = gba->GetRawAudio(&stereoPairs);
 
 				static int audioDebug = 0;
 				if (++audioDebug <= 5 || audioDebug % 180 == 0) {
 					NOTICE_LOG(Log::System, "[GBA] Audio frame %d: stereoPairs=%zu frames=%d", audioDebug, stereoPairs, framesToRun);
 				}
-				if (stereoPairs > 0) {
+				if (stereoPairs > 0 && audio16) {
 					// Direct SDL output: bypass PPSSPP StereoResampler
+					// audio16 is native int16 data (SDL expects S16 format)
 					SDL_AudioStream *s = GetSDLAudioStream();
 					if (s) {
-						// Check buffer level to prevent underrun/overrun -> crackling
-						// SDL plays at 44100 Hz. Target: keep ~1 frame (735 pairs) in queue.
-						// If too much queued: skip (prevent overflow)
-						// If too little: push now (prevent underrun)
-						static constexpr int TARGET_QUEUED = 735;  // 1 frame of audio
-						static constexpr int MAX_QUEUED = 1470;     // 2 frames max
-						int queued = SDL_GetAudioStreamQueued(s) / (int)(2 * sizeof(int16_t));
-						if (queued < MAX_QUEUED) {
-							// Push only if buffer not full (prevents overflow blocking)
-							SDL_PutAudioStreamData(s, audioBuf32, (int)(stereoPairs * 2 * sizeof(int16_t)));
-							static int audioDbg = 0;
-							if (++audioDbg <= 5 || audioDbg % 180 == 0) {
-								NOTICE_LOG(Log::System, "[GBA] SDL audio: pushed=%zu queued=%d/%d", stereoPairs, queued, MAX_QUEUED);
-							}
-						} else {
-							static int skipDbg = 0;
-							if (++skipDbg <= 3) {
-								NOTICE_LOG(Log::System, "[GBA] SDL audio skip: queued=%d >= max=%d", queued, MAX_QUEUED);
-							}
+						SDL_PutAudioStreamData(s, audio16, (int)(stereoPairs * 2 * sizeof(int16_t)));
+
+						static int audioDbg = 0;
+						if (++audioDbg <= 5 || audioDbg % 180 == 0) {
+							int queued = SDL_GetAudioStreamQueued(s) / (int)(2 * sizeof(int16_t));
+							NOTICE_LOG(Log::System, "[GBA] SDL audio: pushed=%zu queued=%d", stereoPairs, queued);
 						}
 					}
 				}

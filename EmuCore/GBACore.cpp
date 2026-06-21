@@ -458,6 +458,39 @@ void GBACore::ClearAudio() {
 	audioStereoPairs_ = 0;
 }
 
+const int16_t *GBACore::GetRawAudio(size_t *stereoPairs) {
+	// Get the raw resampled int16 audio buffer with DC filter applied.
+	// Caller should use this for direct SDL output (int16 format).
+	if (audioStereoPairs_ == 0) {
+		*stereoPairs = 0;
+		return nullptr;
+	}
+
+	size_t pairs = audioStereoPairs_ > AUDIO_BUF_SIZE ? AUDIO_BUF_SIZE : audioStereoPairs_;
+	for (size_t i = 0; i < pairs; i++) {
+		float left = (float)audioBuffer_[i * 2];
+		float right = (float)audioBuffer_[i * 2 + 1];
+
+		// DC blocking filter (SkyEmu-inspired)
+		float outL = left - dcCapL_;
+		float outR = right - dcCapR_;
+		dcCapL_ = (left - outL) * 0.996f;
+		dcCapR_ = (right - outR) * 0.996f;
+
+		if (outL > 32767.0f) outL = 32767.0f;
+		if (outL < -32768.0f) outL = -32768.0f;
+		if (outR > 32767.0f) outR = 32767.0f;
+		if (outR < -32768.0f) outR = -32768.0f;
+
+		audioBuffer_[i * 2]     = (int16_t)outL;
+		audioBuffer_[i * 2 + 1] = (int16_t)outR;
+	}
+
+	*stereoPairs = pairs;
+	audioStereoPairs_ = 0;
+	return audioBuffer_;
+}
+
 void GBACore::GetMixedAudio(int32_t *buffer, size_t *stereoPairs) {
 	if (!buffer || !stereoPairs) return;
 
