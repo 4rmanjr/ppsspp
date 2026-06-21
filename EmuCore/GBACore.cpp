@@ -234,6 +234,18 @@ void GBACore::RunFrame() {
 			// Process resampler: reads from core buffer, writes sinc-interpolated output to dest
 			mAudioResamplerProcess(static_cast<struct mAudioResampler*>(resampler_));
 
+			// Drain remaining source audio not consumed by resampler (prevents buffer overflow)
+			// Resampler's consume logic leaves ~10 frames unread per frame due to lowWaterMark
+			size_t remaining = mAudioBufferAvailable(src);
+			if (remaining > 0) {
+				int16_t drainBuf[64];
+				while (remaining > 0) {
+					size_t toDrain = remaining > 64 ? 64 : remaining;
+					mAudioBufferRead(src, drainBuf, toDrain);
+					remaining -= toDrain;
+				}
+			}
+
 			// Read resampled output (44100 Hz) into our buffer
 			size_t outAvail = mAudioBufferAvailable(static_cast<struct mAudioBuffer*>(resampleDest_));
 			if (outAvail > AUDIO_BUF_SIZE) outAvail = AUDIO_BUF_SIZE;
@@ -433,21 +445,19 @@ void GBACore::GetAudioSamples(int16_t *buffer, size_t *samples) {
 }
 
 void GBACore::ClearAudio() {
-	// Only clear the mGBA source buffer — preserve resampler state (timestamp, sinc history)
-	// to prevent discontinuities when audio resumes after frame skip.
+	// Clear all pending audio including resampler dest to prevent stale sample
+	// carryover after fast-forward frame skip.
 	struct mAudioBuffer *src = core_->getAudioBuffer(core_);
 	if (src) {
 		mAudioBufferClear(src);
 	}
-	// Do NOT clear resampleDest_ — mAudioResampler maintains internal timestamp
-	// and sinc interpolation state. Clearing it loses filter continuity.
+	mAudioBufferClear(static_cast<struct mAudioBuffer*>(resampleDest_));
 	audioStereoPairs_ = 0;
 }
 
 void GBACore::GetMixedAudio(int32_t *buffer, size_t *stereoPairs) {
 	if (!buffer || !stereoPairs) return;
 
-	static constexpr int TARGET_PAIRS = TARGET_RATE / 60;  // 735 at 44100Hz 60fps
 	*stereoPairs = TARGET_PAIRS;
 
 	size_t pairs = audioStereoPairs_;
@@ -466,27 +476,25 @@ void GBACore::GetMixedAudio(int32_t *buffer, size_t *stereoPairs) {
 		float left = (float)audioBuffer_[i * 2];
 		float right = (float)audioBuffer_[i * 2 + 1];
 
-		// DC blocking filter — first-order IIR high-pass (SkyEmu reference)
-		// y[n] = x[n] - dcCap[n-1]
-		// dcCap[n] = (x[n] - y[n]) * 0.996
-		float outL = left - dcCapL_;
-		float outR = right - dcCapR_;
+		// DC blocking filter — EMA tracker for SOUNDBIAS residual DC
+		// Tracks actual DC offset instead of self-decaying capacitor
+		dcCapL_ += (left - dcCapL_) * 0.004f;
+		dcCapR_ += (right - dcCapR_) * 0.004f;
 
-		// Safety clamp (SkyEmu: reset if capacitor drifted beyond ±2.0)
+		// Safety clamp (reset if capacitor drifted beyond ±2.0)
 		if (!(dcCapL_ < 2.0f && dcCapL_ > -2.0f)) dcCapL_ = 0.0f;
 		if (!(dcCapR_ < 2.0f && dcCapR_ > -2.0f)) dcCapR_ = 0.0f;
 
-		// Update capacitor: tracks DC offset with 0.996 decay
-		dcCapL_ = (left - outL) * 0.996f;
-		dcCapR_ = (right - outR) * 0.996f;
+		float outL = left - dcCapL_;
+		float outR = right - dcCapR_;
 
 		if (outL > 32767.0f) outL = 32767.0f;
 		if (outL < -32768.0f) outL = -32768.0f;
 		if (outR > 32767.0f) outR = 32767.0f;
 		if (outR < -32768.0f) outR = -32768.0f;
 
-		buffer[i * 2]     = ((int32_t)((int16_t)outL)) << 16;
-		buffer[i * 2 + 1] = ((int32_t)((int16_t)outR)) << 16;
+		buffer[i * 2]     = (int32_t)((int16_t)outL);
+		buffer[i * 2 + 1] = (int32_t)((int16_t)outR);
 	}
 
 	// Pad remaining slots with zero (no DC step — avoids harsh/tinny artifacts)

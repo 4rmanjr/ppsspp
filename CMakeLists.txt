@@ -3240,8 +3240,9 @@ if(PPSSPP_MULTICORE)
 endif()
 
 # [PPSSPP-FORK] MultiCore: test target for GBA core
+# Test links all libs used by the main binary to resolve all symbols
 if(PPSSPP_MULTICORE)
-	add_executable(test_gba_core test_gba_core.cpp)
+	add_executable(test_gba_core EXCLUDE_FROM_ALL test_gba_core.cpp)
 	target_link_libraries(test_gba_core PRIVATE EmuCore ${LinkCommon} Common)
 	target_compile_definitions(test_gba_core PRIVATE PPSSPP_MULTICORE)
 	target_include_directories(test_gba_core PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})

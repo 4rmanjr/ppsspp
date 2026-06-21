@@ -82,6 +82,7 @@ private:
 	static constexpr size_t AUDIO_BUF_SIZE = 4096;
 	static constexpr int GBA_NATIVE_RATE = 32768;  // mGBA core default
 	static constexpr int TARGET_RATE = 44100;       // PPSSPP mixer rate
+	static constexpr int TARGET_PAIRS = TARGET_RATE / 60;  // 735 at 44100Hz 60fps
 
 	// mGBA's own sinc resampler (32768 Hz -> 44100 Hz), void* for PIMPL
 	void* resampler_;
