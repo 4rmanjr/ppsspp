@@ -805,8 +805,10 @@ void EmuScreen::OnVKey(VirtKey virtualKeyCode, bool down) {
 			}
 			*/
 			PSP_CoreParameter().fastForward = true;
+			if (IsGBA()) NOTICE_LOG(Log::System, "[GBA] VIRTKEY_FASTFORWARD ON");
 		} else {
 			PSP_CoreParameter().fastForward = false;
+			if (IsGBA() && !down) NOTICE_LOG(Log::System, "[GBA] VIRTKEY_FASTFORWARD OFF");
 		}
 		break;
 
@@ -1451,6 +1453,7 @@ void EmuScreen::UpdateGBA() {
 
 	if (fastForward) {
 		framesToRun = g_Config.bRenderDuplicateFrames ? 3 : 8;
+		NOTICE_LOG(Log::System, "[GBA] Fast forward: frames=%d", framesToRun);
 	} else if (targetInterval <= 0.0 || (now - lastFrameTime) >= targetInterval * 0.95) {
 		framesToRun = 1;
 		lastFrameTime = now;
@@ -1492,7 +1495,11 @@ void EmuScreen::UpdateGBA() {
 		activeCore_->SetKeys(pspButtons);
 	}
 
-	// Pause handling	// Pause handling
+
+	// Process queued virtual keys (save/load state, speed toggle, etc.)
+	ProcessQueuedVKeys();
+
+	// Pause handling	// Pause handling	// Pause handling
 	if (g_controlMapper.PollPauseTrigger()) {
 		NOTICE_LOG(Log::System, "[GBA] PollPauseTrigger=true");
 		pauseTrigger_ = true;

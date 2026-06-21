@@ -2,7 +2,7 @@
 
 **Date:** 2026-06-21 (updated)
 **Branch:** `feature/lan-sync`
-**Last commit:** `60b0cd22ea`
+**Last commit:** `23363e9` (session 2026-06-21)
 **Build (latest):** `build-final/PPSSPPSDL` — MULTICORE=ON ✅
 
 ---
@@ -21,14 +21,14 @@
 
 | Item | Status | Terakhir Diverifikasi |
 |------|--------|----------------------|
-| **Video rendering (gambar)** | 🟡 **KELUAR tapi warna biru/ungu** — color format issue | 2026-06-21 |
+| **Video rendering (gambar)** | 🟡 **FIXED (perlu test)** — R↔B swap di pixel packing | 2026-06-21 |
 | **Input (keyboard)** | ✅ **WORKING** — A/S/Z/X/Space/arrows | 2026-06-21 |
 | **Save memory (SRAM)** | ✅ **WORKING** — auto-load/flash via mGBA | 2026-06-21 |
 | **ESC pause menu** | ✅ **WORKING** — pause muncul saat ESC | 2026-06-21 |
-| **Speed control** | ❌ **TIDAK ADA EFEK** — Tab/Backspace tidak respon | 2026-06-21 |
-| **Audio** | 🟡 **BERSUARA tapi masih kasar** — crackling | 2026-06-21 |
-| **Save state (F1/F3)** | ❌ **TIDAK BEKERJA** — tombol tidak respon di GBA mode | 2026-06-21 |
-| **Config isolation** | ❌ **TIDAK BEKERJA** — setting tidak terisolasi per-core | 2026-06-21 |
+| **Speed control** | 🟡 **FIXED (perlu test)** — ProcessQueuedVKeys di UpdateGBA + debug log | 2026-06-21 |
+| **Audio** | 🔴 **MASIH KASAR** — sinc resampler + DC filter tidak cukup | 2026-06-21 |
+| **Save state (F1/F3)** | 🟡 **FIXED (perlu test)** — ProcessQueuedVKeys di UpdateGBA | 2026-06-21 |
+| **Config isolation** | ❌ **BELUM DIPERBAIKI** | 2026-06-21 |
 
 ---
 
@@ -105,69 +105,64 @@
 
 ### 1. Audio: Suara masih kasar (crackling) — 🔴 PRIORITAS TINGGI
 **Gejala:** Suara game keluar tapi terdengar kasar/crackling, kurang jernih.
+**Status:** 🔴 **Belum fixed** — root cause belum ditemukan
+
 **Riwayat investigasi:**
 
 | # | Approach | Hasil |
 |---|----------|-------|
 | 1 | Linear interpolation 32768→44100 | ❌ Kasar |
-| 2 | Fresh pair extraction (buang duplicate SOUNDBIAS) | ❌ Malah hilang data valid |
+| 2 | Fresh pair extraction (buang duplicate SOUNDBIAS) | ❌ Salah — buang data valid |
 | 3 | DC blocking filter + soft clip (SkyEmu-inspired) | ❌ Tidak cukup |
 | 4 | mGBA sinc resampler (`mINTERPOLATOR_SINC`) | 🟡 Masih kasar |
 | 5 | Speed control fix (ClearAudio antar frame) | 🟡 Sedikit membaik |
 
-**Teori saat ini:**
-- Masalah **bukan** dari speed control
-- Masalah **bukan** dari kualitas resampler (sinc = kualitas tinggi)
-- Kemungkinan: **SOUNDBIAS oversampling** (65536 Hz) → sinc downsampling ke 44100 Hz masih ada artifact
-- Atau: **Aliasing dari square wave harmonics** — PSG square wave harmonics tinggi
+**Teori:**
+- Aliasing dari square wave harmonics PSG GBA
+- Sinc resampler width/resolution mungkin kurang curam
+- Perlu bandingkan output audio dengan mGBA standalone
 
 ---
 
-### 2. Video: Warna kebiru-biruan / ungu — 🔴 PRIORITAS TINGGI
-**Gejala:** Gambar game muncul tapi dengan tint biru/ungu, warna tidak akurat.
-**Lokasi kode:** Konversi XBGR8 → RGBA8888 di `GBACore::RunFrame()`
+### 2. Video: Warna — ✅ **SUDAH DIPERBAIKI, PERLU TEST**
+**Root cause:** mGBA output `mColor` via `M_RGB5_TO_BGR8()` yang menghasilkan
+format **B**lue-**G**reen-**R**ed dalam 32-bit word. Pixel packing kita sebelumnya
+`(r<<16) | (g<<8) | b` menyimpan B di byte 0 → R↔B terbalik vs Thin3D R8G8B8A8.
 
-```cpp
-// Kode saat ini:
-uint8_t r = c & 0xFF;
-uint8_t g = (c >> 8) & 0xFF;
-uint8_t b = (c >> 16) & 0xFF;
-uint8_t a = (c >> 24) & 0xFF;
-videoBuffer_[y * GBA_WIDTH + x] = (a << 24) | (r << 16) | (g << 8) | b;
-```
-
-Asumsi: mGBA output `mColor` format XBGR8 → konversi seperti di atas.
-Kenyataan: Mungkin format `mColor` berbeda (ABGR, BGRA, atau RGB565 tergantung backend).
+**Fix:** `(b<<16) | (g<<8) | r` — swap R dan B agar byte memory = R,G,B,A.
 
 ---
 
-### 3. Speed Control: Tab/Backspace tidak ada efek — 🟡 SEDANG
-**Gejala:** Menekan Tab (fast forward) atau Backspace (toggle speed) tidak mengubah kecepatan game.
-**Lokasi kode:** `UI/EmuScreen.cpp` — `UpdateGBA()`
+### 3. Speed Control — 🟡 **SUDAH DIPERBAIKI, PERLU TEST**
+**Masalah:** `ProcessQueuedVKeys()` hanya dipanggil di PSP render path,
+tidak pernah di GBA mode. VIRTKEY_SPEED_TOGGLE ada di function itu.
 
-Kemungkinan penyebab:
-- `PSP_CoreParameter().fastForward` tidak di-set untuk GBA mode (VIRTKEY handler mungkin skip GBA)
-- Atau: update loop tidak memproses key event dengan benar untuk GBA
+**Fix:** `ProcessQueuedVKeys()` sekarang dipanggil di akhir `UpdateGBA()`.
+VIRTKEY_FASTFORWARD (Tab) handled di OnVKey — sudah jalan untuk kedua mode.
 
----
-
-### 4. Save State: F1/F3 tidak berfungsi — 🟡 SEDANG
-**Gejala:** Menekan F1 (save) atau F3 (load) tidak melakukan apa-apa di GBA mode.
-**Lokasi kode:** `UI/EmuScreen.cpp` — VIRTKEY handler untuk save/load
-
-VIRTKEY handler mungkin melempar ke PSP save state system, bukan GBACore.
+**Test:** `[GBA] VIRTKEY_FASTFORWARD ON/OFF` + `[GBA] Fast forward: frames=8`
 
 ---
 
-### 5. Config Isolation: Setting tidak terisolasi per-core — 🟡 SEDANG
-**Gejala:** Pengaturan yang diubah (misal filter, resolusi) diterapkan ke semua game,
-tidak peduli PSP atau GBA.
-**Lokasi kode:** `EmuCore/Config.cpp` — per-core config
+### 4. Save State F1/F3 — 🟡 **SUDAH DIPERBAIKI, PERLU TEST**
+**Masalah:** Sama dengan speed toggle — VIRTKEY_SAVE_STATE/LOAD_STATE
+di ProcessVKey tidak pernah dijalankan untuk GBA.
+
+**Fix:** Sama — ProcessQueuedVKeys() sekarang dipanggil di UpdateGBA().
+Handler GBA sudah ada di VIRTKEY_SAVE_STATE (line 1102) dan VIRTKEY_LOAD_STATE (line 1119).
+
+**Test:** F1 → `GBA state saved (slot 1)`, F3 → `GBA state loaded (slot 1)`
 
 ---
 
-### 6. Android Build — BELUM DIMULAI
-- Menunggu audio fix + video color fix + save state fix
+### 5. Config Isolation — ❌ **BELUM DIPERBAIKI**
+**Lokasi kode:** `EmuCore/Config.cpp` — sudah ada `LoadGBAOverrides()`
+dan `SaveGBAOverrides()` tapi perlu dipanggil di waktu yang tepat.
+
+---
+
+### 6. Android Build — 🔴 **BELUM DIMULAI**
+- Menunggu audio fix + all fixes verified
 - Integrasi ndk-build (Android.mk) untuk mgba + EmuCore
 
 ---
@@ -216,9 +211,9 @@ Observasi:
 | 14 | #ifdef clutter | 45 #ifdefs | IsGBA() pattern | P2 |
 | 15 | Save state in EmuScreen | Logic campur | Move to GBACore | P3 |
 | **16** | **Audio crackling (current)** | ??? | **Belum fixed** | 🔴 |
-| **17** | **Video warna biru/ungu** | Mungkin format mColor berbeda (ABGR vs XBGR) | **Belum fixed** | 🔴 |
-| **18** | **Speed control tidak berefek** | VIRTKEY handler mungkin skip GBA | **Belum fixed** | 🟡 |
-| **19** | **Save state F1/F3 tidak kerja** | Handler lempar ke PSP system | **Belum fixed** | 🟡 |
+| **17** | **Video warna biru/ungu** | R↔B terbalik di pixel packing | Swap byte order | ✅ **Fixed 2026-06-21** |
+| **18** | **Speed control tidak berefek** | ProcessQueuedVKeys() tidak dipanggil | Panggil di UpdateGBA() | ✅ **Fixed 2026-06-21** |
+| **19** | **Save state F1/F3 tidak kerja** | ProcessQueuedVKeys() tidak dipanggil | Panggil di UpdateGBA() | ✅ **Fixed 2026-06-21** |
 | **20** | **Config tidak terisolasi** | Per-core config belum jalan | **Belum fixed** | 🟡 |
 
 ---

@@ -192,15 +192,19 @@ void GBACore::RunFrame() {
 	}
 
 	// Capture video — mGBA rendered into rawVideoBuffer_ via setVideoBuffer
-	// Convert from mColor (XBGR8) to RGBA8888
+	// Convert from mColor (BGR packed in uint32) to RGBA8888 (Thin3D format)
+	// mGBA stores B in high bits, G middle, R low bits:
+	//   M_RGB5_TO_BGR8 = (B5<<19) | (G5<<11) | (R5<<3)
+	// Thin3D R8G8B8A8 expects little-endian: byte0=R, byte1=G, byte2=B, byte3=A
 	for (int y = 0; y < GBA_HEIGHT; y++) {
 		for (int x = 0; x < GBA_WIDTH; x++) {
 			mColor c = rawVideoBuffer_[y * GBA_WIDTH + x];
-			// XBGR8 → RGBA8888
+			// Extract RGB from mGBA's BGR-packed uint32
 			uint8_t r = c & 0xFF;
 			uint8_t g = (c >> 8) & 0xFF;
 			uint8_t b = (c >> 16) & 0xFF;
-			videoBuffer_[y * GBA_WIDTH + x] = (0xFF << 24) | (r << 16) | (g << 8) | b;
+			// Pack as RGBA (not BGR!) — Thin3D expects byte0=R, byte1=G, byte2=B, byte3=A
+			videoBuffer_[y * GBA_WIDTH + x] = (0xFF << 24) | (b << 16) | (g << 8) | r;
 		}
 	}
 
