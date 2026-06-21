@@ -234,15 +234,18 @@ void GBACore::RunFrame() {
 			// Process resampler: reads from core buffer, writes sinc-interpolated output to dest
 			mAudioResamplerProcess(static_cast<struct mAudioResampler*>(resampler_));
 
-			// Drain remaining source audio not consumed by resampler (prevents buffer overflow)
-			// Resampler's consume logic leaves ~10 frames unread per frame due to lowWaterMark
+			// Drain excess source audio, but PRESERVE lowWaterMark samples for resampler state
+			// Resampler leaves timestamp at ~lowWaterMark (8), expects those source frames next frame
+			// If we drain everything, timestamp goes out of sync -> audio artifacts
 			size_t remaining = mAudioBufferAvailable(src);
-			if (remaining > 0) {
+			static constexpr size_t LOW_WATER = 8;
+			if (remaining > LOW_WATER + 4) {  // only if more than lowWaterMark + margin
+				size_t toDrain = remaining - LOW_WATER;
 				int16_t drainBuf[64];
-				while (remaining > 0) {
-					size_t toDrain = remaining > 64 ? 64 : remaining;
-					mAudioBufferRead(src, drainBuf, toDrain);
-					remaining -= toDrain;
+				while (toDrain > 0) {
+					size_t chunk = toDrain > 64 ? 64 : toDrain;
+					mAudioBufferRead(src, drainBuf, chunk);
+					toDrain -= chunk;
 				}
 			}
 

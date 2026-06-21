@@ -76,6 +76,13 @@ using namespace std::placeholders;
 #include "UI/ImDebugger/ImDebugger.h"
 #if !defined(MOBILE_DEVICE)
 #include "SDL/SDLLANSync.h"
+
+// [PPSSPP-FORK] MultiCore: direct SDL audio for GBA (bypasses StereoResampler)
+// Only available on SDL3 builds
+#include <SDL3/SDL.h>
+
+// Exposed from SDLMain.cpp for direct SDL stream access
+extern SDL_AudioStream *GetSDLAudioStream();
 #endif
 #include "Core/HLE/__sceAudio.h"
 #include "Core/HW/Display.h"
@@ -1468,7 +1475,7 @@ void EmuScreen::UpdateGBA() {
 			activeCore_->RunFrame();
 
 			// Only push audio for the LAST frame
-			// Intermediate frames: clear resampler to prevent accumulation + crackling
+			// Intermediate frames: clear resampler to prevent accumulation
 			if (f == framesToRun - 1) {
 				size_t stereoPairs = 0;
 				gba->GetMixedAudio(audioBuf32, &stereoPairs);
@@ -1478,10 +1485,16 @@ void EmuScreen::UpdateGBA() {
 					NOTICE_LOG(Log::System, "[GBA] Audio frame %d: stereoPairs=%zu frames=%d", audioDebug, stereoPairs, framesToRun);
 				}
 				if (stereoPairs > 0) {
-					System_AudioPushSamples(audioBuf32, (int)stereoPairs, 1.0f);
+					// Direct SDL output: bypass PPSSPP StereoResampler
+					SDL_AudioStream *s = GetSDLAudioStream();
+					if (s) {
+						// Convert int32 back to int16 for SDL (StereoResampler expects int32,
+						// but SDL stream wants native int16)
+						// audioBuf32 contains raw int16 values (no << 16 shift anymore)
+						SDL_PutAudioStreamData(s, audioBuf32, (int)(stereoPairs * 2 * sizeof(int16_t)));
+					}
 				}
 			} else {
-				// Discard audio from intermediate frames (fast forward / frame skipping)
 				gba->ClearAudio();
 			}
 		}

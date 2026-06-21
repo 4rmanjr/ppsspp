@@ -144,6 +144,11 @@ void sdl_mixaudio_callback(void *userdata, SDL_AudioStream *stream, int addition
 static SDL_AudioDeviceID audioDev = 0;
 static SDL_AudioStream *audioStream = nullptr;
 
+// Exposed for direct audio output (GBA mode bypasses StereoResampler)
+SDL_AudioStream *GetSDLAudioStream() {
+	return audioStream;
+}
+
 // Must be called after NativeInit().
 static void InitSDLAudioDevice(const std::string &name = "") {
 	SDL_AudioSpec fmt{};
