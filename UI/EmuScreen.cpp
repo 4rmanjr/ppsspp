@@ -1440,17 +1440,7 @@ void EmuScreen::InitGBA(const Path &filename) {
 
 	EmuCore::LoadConfig(EmuCore::Type::GBA);
 
-	// [PPSSPP-FORK] MultiCore: set GBA mode globals for pause menu save/load
-	g_gbaModeActive = true;
-	g_activeCore = activeCore_.get();
-	{
-		EmuCore::GBACore *gba = static_cast<EmuCore::GBACore *>(activeCore_.get());
-		g_gbaSavePrefix = "GBA_" + gba->GetSavePrefix();
-		NOTICE_LOG(Log::System, "[GBA] Save prefix: %s", g_gbaSavePrefix.c_str());
-	}
-
 	// [PPSSPP-FORK] MultiCore: prevent PPSSPP autosave from overwriting PSP settings
-	// GBA mode uses g_Config but saves to [GBA] section only at ShutdownGBA()
 	g_Config.bSaveSettings = false;
 	NOTICE_LOG(Log::System, "[CONFIG] GBA mode active — autosave disabled");
 
@@ -1465,9 +1455,15 @@ void EmuScreen::InitGBA(const Path &filename) {
 		);
 		if (activeCore_->LoadROM(filename)) {
 			INFO_LOG(Log::System, "[GBA] ROM loaded, boot pending");
-		} else {
-			ERROR_LOG(Log::System, "[GBA] Failed to load ROM");
 		}
+
+		// [PPSSPP-FORK] MultiCore: set GBA mode globals AFTER core + ROM ready
+		g_gbaModeActive = true;
+		g_activeCore = activeCore_.get();
+		g_gbaSavePrefix = "GBA_" + gba->GetSavePrefix();
+		NOTICE_LOG(Log::System, "[GBA] Save prefix: %s", g_gbaSavePrefix.c_str());
+	} else {
+		ERROR_LOG(Log::System, "[GBA] Failed to create core");
 	}
 	bootPending_ = true;
 }
