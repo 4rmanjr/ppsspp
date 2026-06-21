@@ -21,12 +21,14 @@
 
 | Item | Status | Terakhir Diverifikasi |
 |------|--------|----------------------|
-| **Video rendering (gambar)** | 🟡 **FIXED (perlu test)** — R↔B swap di pixel packing | 2026-06-21 |
+| **Video rendering (gambar)** | ✅ **FIXED** — R↔B swap di pixel packing, warna normal | 2026-06-21 |
 | **Input (keyboard)** | ✅ **WORKING** — A/S/Z/X/Space/arrows | 2026-06-21 |
 | **Save memory (SRAM)** | ✅ **WORKING** — auto-load/flash via mGBA | 2026-06-21 |
 | **ESC pause menu** | ✅ **WORKING** — pause muncul saat ESC | 2026-06-21 |
-| **Save state (pause menu + F1/F3)** | ❌ **TIDAK BEKERJA** — pause menu tidak punya handler GBA, F1/F3 tidak ter-mapping default | 2026-06-21 |
-| **Speed control (Tab)** | ❌ **TIDAK BEKERJA** — no log output, debug needed | 2026-06-21 |
+| **Audio** | ✅ **FIXED** — root cause: `<< 16` clipping total. Suara normal sekarang | 2026-06-21 |
+| **Speed control (Tab)** | 🟡 **Belum terverifikasi** — perlu test ulang | 2026-06-21 |
+| **Save state (F1/pause menu)** | 🟡 **Belum terverifikasi** — perlu test ulang | 2026-06-21 |
+| **Config isolation** | ❌ **BELUM** — belum diperbaiki | 2026-06-21 |
 
 ---
 
