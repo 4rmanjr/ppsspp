@@ -92,14 +92,11 @@ Bug: R↔B terbalik (little-endian byte order). Fix: `(B<<16)|(G<<8)|R`.
 
 | Issue | Priority | Note |
 |-------|----------|------|
-| Pause menu save slot masih PSP | 🟡 | SaveSlotView di GamePauseScreen panggil PSP API |
-| Thumbnail save state | 🟡 | Perlu screenshot capture + save sbg JPEG |
-| Speed control (Tab/Backspace) | 🟡 | Belum diverifikasi |
 | Config isolation (UI) | 🟡 | Setting PSP masih muncul di GBA mode |
 | Recent tab (GBA not added) | 🟡 | `g_recentFiles.Add()` tidak dipanggil |
 | Recent tab (group per emulator) | 💡 | Saran fitur |
 | Game icon/cover | ❌ | GBA tidak punya cover download |
-| Key mapping terpisah | 📋 | Plan siap di `docs/plans/gba-keymapping-plan.md` |
+| Key mapping terpisah | 📋 | Plan siap (GBA VIRTKEY) |
 | Android build | 🔴 | Belum dimulai |
 
 ---

@@ -1,4 +1,5 @@
 # Plan: GBA Key Mapping Terpisah (Zero Breaking Change)
+> **STATUS: 📋 BELUM — Menunggu implementasi**
 
 ## Tujuan
 Mapping keyboard/controller untuk GBA tidak mengganggu mapping PSP,

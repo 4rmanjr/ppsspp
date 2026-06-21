@@ -1,4 +1,5 @@
 # Plan: GBA Save State — Zero Breaking Change
+> **STATUS: ✅ SELESAI — All tasks implemented (F1/F3, pause menu, thumbnail, LAN sync)**
 
 ## Tujuan
 Save/load state untuk GBA via F1/F3 dan pause menu.
