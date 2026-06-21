@@ -69,6 +69,7 @@ public:
 	bool SaveStateToFile(int slot);
 	bool LoadStateFromFile(int slot);
 	static std::string GetSavePrefix(const std::string &title, const std::string &id);
+	std::string GetSavePrefix() const;
 
 private:
 	void CloseSaveMemory();
@@ -108,7 +109,6 @@ private:
 	size_t prevAvailable_ = 0;
 
 	bool LoadROMInternal(const Path &path);
-	std::string GetSavePrefix() const;
 
 	std::string saveDir_;
 

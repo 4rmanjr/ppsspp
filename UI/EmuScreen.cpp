@@ -135,6 +135,7 @@ extern bool g_TakeScreenshot;
 // [PPSSPP-FORK] MultiCore: GBA mode globals for cross-screen access (pause menu save/load)
 bool g_gbaModeActive = false;
 EmuCore::Core *g_activeCore = nullptr;
+std::string g_gbaSavePrefix;
 
 static void AssertCancelCallback(const char *message, void *userdata) {
 	NOTICE_LOG(Log::CPU, "Broke after assert: %s", message);
@@ -1442,6 +1443,11 @@ void EmuScreen::InitGBA(const Path &filename) {
 	// [PPSSPP-FORK] MultiCore: set GBA mode globals for pause menu save/load
 	g_gbaModeActive = true;
 	g_activeCore = activeCore_.get();
+	{
+		EmuCore::GBACore *gba = static_cast<EmuCore::GBACore *>(activeCore_.get());
+		g_gbaSavePrefix = "GBA_" + gba->GetSavePrefix();
+		NOTICE_LOG(Log::System, "[GBA] Save prefix: %s", g_gbaSavePrefix.c_str());
+	}
 
 	// [PPSSPP-FORK] MultiCore: prevent PPSSPP autosave from overwriting PSP settings
 	// GBA mode uses g_Config but saves to [GBA] section only at ShutdownGBA()
@@ -1473,6 +1479,7 @@ void EmuScreen::ShutdownGBA() {
 	// [PPSSPP-FORK] MultiCore: clear GBA mode globals
 	g_gbaModeActive = false;
 	g_activeCore = nullptr;
+	g_gbaSavePrefix.clear();
 
 	// [PPSSPP-FORK] MultiCore: save GBA config to [GBA] section and restore PSP autosave
 	EmuCore::SaveConfig(EmuCore::Type::GBA);

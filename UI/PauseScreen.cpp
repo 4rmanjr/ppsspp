@@ -397,6 +397,12 @@ GamePauseScreen::GamePauseScreen(const Path &filename, bool bootPending)
 	// So we can tell if something blew up while on the pause screen.
 	std::string assertStr = "PauseScreen: " + filename.GetFilename();
 	SetExtraAssertInfo(assertStr.c_str());
+#ifdef PPSSPP_MULTICORE
+	// [PPSSPP-FORK] MultiCore: GBA uses GBACore save prefix instead of PSP
+	if (g_gbaModeActive) {
+		saveStatePrefix_ = g_gbaSavePrefix;
+	} else
+#endif
 	saveStatePrefix_ = SaveState::GetGamePrefix(g_paramSFO);
 	SaveState::Rescan(saveStatePrefix_);
 	g_controlMapper.AddListener(this);

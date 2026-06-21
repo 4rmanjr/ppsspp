@@ -25,6 +25,9 @@
 #include <mgba-util/audio-buffer.h>
 #include <mgba-util/audio-resampler.h>
 
+// [PPSSPP-FORK] MultiCore: save state thumbnail
+#include "Common/Data/Format/PNGLoad.h"
+
 namespace EmuCore {
 
 // PSP CTRL bitmask values (from Core/HLE/sceCtrl.h)
@@ -664,6 +667,12 @@ bool GBACore::SaveStateToFile(int slot) {
 	bool ok = File::WriteDataToFile(false, buffer.data(), size, path);
 	if (ok) {
 		INFO_LOG(Log::SaveState, "[GBA] State saved: %s (slot %d, %zu bytes)", path.c_str(), slot + 1, size);
+
+		// Save thumbnail as PNG (named .jpg for SaveSlotView compatibility)
+		// AsyncImageFileView uses ImageFileType::DETECT which reads magic bytes,
+		// so PNG format with .jpg extension works correctly.
+		Path thumbPath = dir / StringFromFormat("GBA_%s_%d.jpg", prefix.c_str(), slot);
+		pngSave(thumbPath, videoBuffer_, GBA_WIDTH, GBA_HEIGHT, 4);
 	} else {
 		WARN_LOG(Log::SaveState, "[GBA] Failed to write file: %s", path.c_str());
 	}
