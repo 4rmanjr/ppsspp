@@ -65,3 +65,6 @@ private:
 
 // Singleton, don't make more.
 extern RecentFilesManager g_recentFiles;
+
+// [PPSSPP-FORK] MultiCore: separate recent list for GBA games
+extern RecentFilesManager g_recentFilesGBA;

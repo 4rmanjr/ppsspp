@@ -167,18 +167,35 @@ void MainScreen::CreateRecentTab() {
 
 	bool portrait = GetDeviceOrientation() == DeviceOrientation::Portrait;
 
-	GameBrowser *tabRecentGames = new GameBrowser(GetRequesterToken(),
-		Path("!RECENT"), BrowseFlags::NONE, portrait, &g_Config.bGridView1, screenManager(), "", "",
-		new LinearLayoutParams(FILL_PARENT, WRAP_CONTENT));
-	tabRecentGames->SetSearchBar(search);
+	// PSP Recent Games
+	if (g_recentFiles.HasAny()) {
+		scrollView->Add(new TextView("== PSP ===================", new LinearLayoutParams(FILL_PARENT, WRAP_CONTENT, Margins(10, 5, 0, 0))))->SetSmall(true);
+		GameBrowser *tabRecentGames = new GameBrowser(GetRequesterToken(),
+			Path("!RECENT"), BrowseFlags::NONE, portrait, &g_Config.bGridView1, screenManager(), "", "",
+			new LinearLayoutParams(FILL_PARENT, WRAP_CONTENT));
+		tabRecentGames->SetSearchBar(search);
+		scrollView->Add(tabRecentGames);
+		gameBrowsers_.push_back(tabRecentGames);
+		tabRecentGames->OnChoice.Handle(this, &MainScreen::OnGameSelectedInstant);
+		tabRecentGames->OnHoldChoice.Handle(this, &MainScreen::OnGameSelected);
+		tabRecentGames->OnHighlight.Handle(this, &MainScreen::OnGameHighlight);
+	}
 
-	scrollView->Add(tabRecentGames);
-	gameBrowsers_.push_back(tabRecentGames);
+	// [PPSSPP-FORK] MultiCore: GBA Recent Games
+	if (g_recentFilesGBA.HasAny()) {
+		scrollView->Add(new TextView("== GBA ===================", new LinearLayoutParams(FILL_PARENT, WRAP_CONTENT, Margins(10, 5, 0, 0))))->SetSmall(true);
+		GameBrowser *tabRecentGBA = new GameBrowser(GetRequesterToken(),
+			Path("!RECENT_GBA"), BrowseFlags::NONE, portrait, &g_Config.bGridView1, screenManager(), "", "",
+			new LinearLayoutParams(FILL_PARENT, WRAP_CONTENT));
+		tabRecentGBA->SetSearchBar(search);
+		scrollView->Add(tabRecentGBA);
+		gameBrowsers_.push_back(tabRecentGBA);
+		tabRecentGBA->OnChoice.Handle(this, &MainScreen::OnGameSelectedInstant);
+		tabRecentGBA->OnHoldChoice.Handle(this, &MainScreen::OnGameSelected);
+		tabRecentGBA->OnHighlight.Handle(this, &MainScreen::OnGameHighlight);
+	}
 
 	tabHolder_->AddTab(mm->T("Recent"), ImageID::invalid(), tabContainer);
-	tabRecentGames->OnChoice.Handle(this, &MainScreen::OnGameSelectedInstant);
-	tabRecentGames->OnHoldChoice.Handle(this, &MainScreen::OnGameSelected);
-	tabRecentGames->OnHighlight.Handle(this, &MainScreen::OnGameHighlight);
 }
 
 GameBrowser *MainScreen::CreateBrowserTab(const Path &path, std::string_view title, std::string_view howToTitle, std::string_view howToUri, BrowseFlags browseFlags, bool *bGridView, float *scrollPos) {
@@ -359,7 +376,7 @@ void MainScreen::CreateViews() {
 
 	tabHolder_->SetClip(true);
 
-	bool showRecent = g_Config.iMaxRecent > 0;
+	bool showRecent = g_Config.iMaxRecent > 0 || g_recentFilesGBA.HasAny();
 	bool hasStorageAccess = !System_GetPropertyBool(SYSPROP_SUPPORTS_PERMISSIONS) ||
 		System_GetPermissionStatus(SYSTEM_PERMISSION_STORAGE) == PERMISSION_STATUS_GRANTED;
 	bool storageIsTemporary = IsTempPath(GetSysDirectory(DIRECTORY_SAVEDATA)) && !confirmedTemporary_;
@@ -382,7 +399,7 @@ void MainScreen::CreateViews() {
 			remoteBrowser->SetHomePath(remotePath);
 		}
 
-		if (g_recentFiles.HasAny()) {
+		if (g_recentFiles.HasAny() || g_recentFilesGBA.HasAny()) {
 			tabHolder_->SetCurrentTab(std::clamp(g_Config.iDefaultTab, 0, g_Config.bRemoteTab ? 3 : 2), true);
 		} else if (g_Config.iMaxRecent > 0) {
 			tabHolder_->SetCurrentTab(1, true);	

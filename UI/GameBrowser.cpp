@@ -639,13 +639,21 @@ void GameBrowser::PinToggleClick(UI::EventParams &e) {
 }
 
 bool GameBrowser::DisplayTopBar() {
-	return path_.GetPath().ToString() != "!RECENT";
+	return path_.GetPath().ToString() != "!RECENT" && path_.GetPath().ToString() != "!RECENT_GBA";
 }
 
 bool GameBrowser::HasSpecialFiles(std::vector<Path> &filenames) {
 	if (path_.GetPath().ToString() == "!RECENT") {
 		filenames.clear();
 		for (auto &str : g_recentFiles.GetRecentFiles()) {
+			filenames.emplace_back(str);
+		}
+		return true;
+	}
+	// [PPSSPP-FORK] MultiCore: GBA recent files from separate list
+	if (path_.GetPath().ToString() == "!RECENT_GBA") {
+		filenames.clear();
+		for (auto &str : g_recentFilesGBA.GetRecentFiles()) {
 			filenames.emplace_back(str);
 		}
 		return true;

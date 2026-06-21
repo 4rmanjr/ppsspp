@@ -1393,6 +1393,11 @@ void Config::Load(const char *iniFileName, const char *controllerIniFilename) {
 		g_recentFiles.Clean();
 	}
 
+	// [PPSSPP-FORK] MultiCore: load GBA recent files from separate section
+	Section *gbaRecent = iniFile.GetOrCreateSection("GBA Recent");
+	g_recentFilesGBA.Load(gbaRecent, iMaxRecent > 0 ? iMaxRecent : 50);
+	g_recentFilesGBA.Clean();
+
 	// Time tracking
 	Section *playTime = iniFile.GetOrCreateSection("PlayTime");
 	playTimeTracker_.Load(playTime);
@@ -1515,6 +1520,10 @@ bool Config::Save(const char *saveReason) {
 		Section *recent = iniFile.GetOrCreateSection("Recent");
 		recent->Set("MaxRecent", iMaxRecent);
 		g_recentFiles.Save(recent, iMaxRecent);
+
+		// [PPSSPP-FORK] MultiCore: save GBA recent files
+		Section *gbaRecent = iniFile.GetOrCreateSection("GBA Recent");
+		g_recentFilesGBA.Save(gbaRecent, 50);
 
 		Section *pinnedPaths = iniFile.GetOrCreateSection("PinnedPaths");
 		pinnedPaths->Clear();

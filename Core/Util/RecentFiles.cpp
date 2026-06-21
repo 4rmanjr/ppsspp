@@ -15,6 +15,9 @@
 
 RecentFilesManager g_recentFiles;
 
+// [PPSSPP-FORK] MultiCore: separate recent list for GBA games
+RecentFilesManager g_recentFilesGBA;
+
 RecentFilesManager::RecentFilesManager() {}
 
 RecentFilesManager::~RecentFilesManager() {
