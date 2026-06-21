@@ -998,6 +998,8 @@ void AutoConfForPad(std::string_view name) {
 #if !defined(MOBILE_DEVICE)
 	g_controllerMap[VIRTKEY_PAUSE].push_back(MultiInputMapping(InputMapping(DEVICE_ID_KEYBOARD, NKCODE_ESCAPE)));
 	g_controllerMap[VIRTKEY_FASTFORWARD].push_back(MultiInputMapping(InputMapping(DEVICE_ID_KEYBOARD, NKCODE_TAB)));
+	g_controllerMap[VIRTKEY_SAVE_STATE].push_back(MultiInputMapping(InputMapping(DEVICE_ID_KEYBOARD, NKCODE_F1)));
+	g_controllerMap[VIRTKEY_LOAD_STATE].push_back(MultiInputMapping(InputMapping(DEVICE_ID_KEYBOARD, NKCODE_F3)));
 #endif
 	g_controllerMapGeneration++;
 }
