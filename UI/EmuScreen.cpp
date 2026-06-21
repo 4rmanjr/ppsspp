@@ -1488,10 +1488,26 @@ void EmuScreen::UpdateGBA() {
 					// Direct SDL output: bypass PPSSPP StereoResampler
 					SDL_AudioStream *s = GetSDLAudioStream();
 					if (s) {
-						// Convert int32 back to int16 for SDL (StereoResampler expects int32,
-						// but SDL stream wants native int16)
-						// audioBuf32 contains raw int16 values (no << 16 shift anymore)
-						SDL_PutAudioStreamData(s, audioBuf32, (int)(stereoPairs * 2 * sizeof(int16_t)));
+						// Check buffer level to prevent underrun/overrun -> crackling
+						// SDL plays at 44100 Hz. Target: keep ~1 frame (735 pairs) in queue.
+						// If too much queued: skip (prevent overflow)
+						// If too little: push now (prevent underrun)
+						static constexpr int TARGET_QUEUED = 735;  // 1 frame of audio
+						static constexpr int MAX_QUEUED = 1470;     // 2 frames max
+						int queued = SDL_GetAudioStreamQueued(s) / (int)(2 * sizeof(int16_t));
+						if (queued < MAX_QUEUED) {
+							// Push only if buffer not full (prevents overflow blocking)
+							SDL_PutAudioStreamData(s, audioBuf32, (int)(stereoPairs * 2 * sizeof(int16_t)));
+							static int audioDbg = 0;
+							if (++audioDbg <= 5 || audioDbg % 180 == 0) {
+								NOTICE_LOG(Log::System, "[GBA] SDL audio: pushed=%zu queued=%d/%d", stereoPairs, queued, MAX_QUEUED);
+							}
+						} else {
+							static int skipDbg = 0;
+							if (++skipDbg <= 3) {
+								NOTICE_LOG(Log::System, "[GBA] SDL audio skip: queued=%d >= max=%d", queued, MAX_QUEUED);
+							}
+						}
 					}
 				}
 			} else {
