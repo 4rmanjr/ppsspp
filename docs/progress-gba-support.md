@@ -94,7 +94,7 @@ Bug: R↔B terbalik (little-endian byte order). Fix: `(B<<16)|(G<<8)|R`.
 |-------|----------|------|
 | Config isolation (UI) | 🟡 | Setting PSP masih muncul di GBA mode |
 | Recent tab (GBA not added) | 🟡 | FIXED — `g_recentFiles.Add()` di InitGBA |
-| Recent tab (group per emulator) | 💡 | Saran fitur |
+| Recent tab (group per emulator) | ✅ **SELESAI** | Section =PSP= dan =GBA= dengan header |
 | Game icon/cover | ❌ | GBA tidak punya cover download |
 | Key mapping terpisah | 🟡 | Plan siap — GBA VIRTKEY, belum diimplement |
 | Android build | 🔴 | Belum dimulai |

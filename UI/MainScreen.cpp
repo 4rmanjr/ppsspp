@@ -169,7 +169,7 @@ void MainScreen::CreateRecentTab() {
 
 	// PSP Recent Games
 	if (g_recentFiles.HasAny()) {
-		scrollView->Add(new TextView("== PSP ===================", new LinearLayoutParams(FILL_PARENT, WRAP_CONTENT, Margins(10, 5, 0, 0))))->SetSmall(true);
+		scrollView->Add(new TextView("PSP GAMES", new LinearLayoutParams(FILL_PARENT, WRAP_CONTENT, Margins(10, 8, 0, 2))))->SetSmall(false);
 		GameBrowser *tabRecentGames = new GameBrowser(GetRequesterToken(),
 			Path("!RECENT"), BrowseFlags::NONE, portrait, &g_Config.bGridView1, screenManager(), "", "",
 			new LinearLayoutParams(FILL_PARENT, WRAP_CONTENT));
@@ -183,7 +183,7 @@ void MainScreen::CreateRecentTab() {
 
 	// [PPSSPP-FORK] MultiCore: GBA Recent Games
 	if (g_recentFilesGBA.HasAny()) {
-		scrollView->Add(new TextView("== GBA ===================", new LinearLayoutParams(FILL_PARENT, WRAP_CONTENT, Margins(10, 5, 0, 0))))->SetSmall(true);
+		scrollView->Add(new TextView("GBA GAMES", new LinearLayoutParams(FILL_PARENT, WRAP_CONTENT, Margins(10, 8, 0, 2))))->SetSmall(false);
 		GameBrowser *tabRecentGBA = new GameBrowser(GetRequesterToken(),
 			Path("!RECENT_GBA"), BrowseFlags::NONE, portrait, &g_Config.bGridView1, screenManager(), "", "",
 			new LinearLayoutParams(FILL_PARENT, WRAP_CONTENT));
