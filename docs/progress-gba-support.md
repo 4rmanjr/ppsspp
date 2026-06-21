@@ -25,10 +25,8 @@
 | **Input (keyboard)** | ✅ **WORKING** — A/S/Z/X/Space/arrows | 2026-06-21 |
 | **Save memory (SRAM)** | ✅ **WORKING** — auto-load/flash via mGBA | 2026-06-21 |
 | **ESC pause menu** | ✅ **WORKING** — pause muncul saat ESC | 2026-06-21 |
-| **Speed control** | 🟡 **FIXED (perlu test)** — ProcessQueuedVKeys di UpdateGBA + debug log | 2026-06-21 |
-| **Audio** | 🔴 **MASIH KASAR** — sinc resampler + DC filter tidak cukup | 2026-06-21 |
-| **Save state (F1/F3)** | 🟡 **FIXED (perlu test)** — ProcessQueuedVKeys di UpdateGBA | 2026-06-21 |
-| **Config isolation** | ❌ **BELUM DIPERBAIKI** | 2026-06-21 |
+| **Save state (pause menu + F1/F3)** | ❌ **TIDAK BEKERJA** — pause menu tidak punya handler GBA, F1/F3 tidak ter-mapping default | 2026-06-21 |
+| **Speed control (Tab)** | ❌ **TIDAK BEKERJA** — no log output, debug needed | 2026-06-21 |
 
 ---
 
@@ -133,37 +131,50 @@ format **B**lue-**G**reen-**R**ed dalam 32-bit word. Pixel packing kita sebelumn
 
 ---
 
-### 3. Speed Control — 🟡 **SUDAH DIPERBAIKI, PERLU TEST**
-**Masalah:** `ProcessQueuedVKeys()` hanya dipanggil di PSP render path,
-tidak pernah di GBA mode. VIRTKEY_SPEED_TOGGLE ada di function itu.
+### 3. Save State — ❌ **TIDAK BEKERJA**
+**Masalah:** Save state dari pause menu (tombol Save/Load State) dan tombol F1/F3
+tidak berfungsi di GBA mode.
 
-**Fix:** `ProcessQueuedVKeys()` sekarang dipanggil di akhir `UpdateGBA()`.
-VIRTKEY_FASTFORWARD (Tab) handled di OnVKey — sudah jalan untuk kedua mode.
+**Penyebab F1/F3:**
+- `NKCODE_F1` dan `NKCODE_F3` tidak memiliki default mapping ke `VIRTKEY_SAVE_STATE`
+dan `VIRTKEY_LOAD_STATE` di `Core/KeyMap.cpp`.
+- User harus set mapping manual di Control Settings.
 
-**Test:** `[GBA] VIRTKEY_FASTFORWARD ON/OFF` + `[GBA] Fast forward: frames=8`
+**Penyebab pause menu:**
+- `GamePauseScreen::CreateSavestateControls()` (line 401) memanggil `SaveState::SaveSlot/LoadSlot`
+yang PSP-specific.
+- Tidak ada pengecekan `IsGBA()` → tidak bisa panggil `GBACore::SaveStateToFile()`.
+- GBA save state perlu path: `PSP/PPSSPP_STATE/GBA/<prefix>_N.gbast`
+  sedangkan PSP pakai `PSP/PPSSPP_STATE/<game_id>_N.ppst`.
+
+**Fix:**
+- [ ] Tambah default key mapping F1→VIRTKEY_SAVE_STATE, F3→VIRTKEY_LOAD_STATE
+- [ ] Tambah GBA handler di pause screen (ScreenshotViewScreen / GamePauseScreen)
+- [ ] Handler panggil `GBACore::SaveStateToFile(slot)` untuk GBA
 
 ---
 
-### 4. Save State F1/F3 — 🟡 **SUDAH DIPERBAIKI, PERLU TEST**
-**Masalah:** Sama dengan speed toggle — VIRTKEY_SAVE_STATE/LOAD_STATE
-di ProcessVKey tidak pernah dijalankan untuk GBA.
-
-**Fix:** Sama — ProcessQueuedVKeys() sekarang dipanggil di UpdateGBA().
-Handler GBA sudah ada di VIRTKEY_SAVE_STATE (line 1102) dan VIRTKEY_LOAD_STATE (line 1119).
-
-**Test:** F1 → `GBA state saved (slot 1)`, F3 → `GBA state loaded (slot 1)`
+### 4. Speed Control (Tab/Backspace) — ❌ **BELUM TERVERIFIKASI**
+**Masalah:** Debug log tidak muncul, tidak bisa verifikasi apakah VIRTKEY handler terpanggil.
+Lihat issue #21 (logging).
 
 ---
 
-### 5. Config Isolation — ❌ **BELUM DIPERBAIKI**
+### 5. Log `[GBA]` Tidak Muncul — 🟡 **PERLU INVESTIGASI**
+**Gejala:** Setelah rebuild terbaru, stdout/stderr tidak menampilkan log `[GBA]`.
+Di build sebelumnya log muncul.
+
+**Coba:**
+```bash
+./build-final/PPSSPPSDL 2>&1 | head -50   # lihat raw output
+./build-final/PPSSPPSDL --log              # jika ada flag log
+```
+
+---
+
+### 6. Config Isolation — ❌ **BELUM DIPERBAIKI**
 **Lokasi kode:** `EmuCore/Config.cpp` — sudah ada `LoadGBAOverrides()`
 dan `SaveGBAOverrides()` tapi perlu dipanggil di waktu yang tepat.
-
----
-
-### 6. Android Build — 🔴 **BELUM DIMULAI**
-- Menunggu audio fix + all fixes verified
-- Integrasi ndk-build (Android.mk) untuk mgba + EmuCore
 
 ---
 
@@ -212,9 +223,10 @@ Observasi:
 | 15 | Save state in EmuScreen | Logic campur | Move to GBACore | P3 |
 | **16** | **Audio crackling (current)** | ??? | **Belum fixed** | 🔴 |
 | **17** | **Video warna biru/ungu** | R↔B terbalik di pixel packing | Swap byte order | ✅ **Fixed 2026-06-21** |
-| **18** | **Speed control tidak berefek** | ProcessQueuedVKeys() tidak dipanggil | Panggil di UpdateGBA() | ✅ **Fixed 2026-06-21** |
-| **19** | **Save state F1/F3 tidak kerja** | ProcessQueuedVKeys() tidak dipanggil | Panggil di UpdateGBA() | ✅ **Fixed 2026-06-21** |
+| **18** | **Speed control tidak berefek** | VIRTKEY handler mungkin tidak sampai? Debug log tidak muncul | **Belum fixed** | 🟡 |
+| **19** | **Save state F1/F3/tombol pause menu** | F1/F3 tidak default mapping. Pause menu panggil PSP SaveState:: bukan GBACore | **Belum fixed** | 🟡 |
 | **20** | **Config tidak terisolasi** | Per-core config belum jalan | **Belum fixed** | 🟡 |
+| **21** | **Log [GBA] tidak muncul** | Output log tidak ke stdout/stderr? | **Belum fixed** | 🟡 |
 
 ---
 
