@@ -1115,6 +1115,7 @@ void EmuScreen::ProcessVKey(VirtKey virtKey) {
 #ifdef PPSSPP_MULTICORE
 			// [PPSSPP-FORK] MultiCore: GBA uses file-based save via GBACore
 			if (IsGBA()) {
+				NOTICE_LOG(Log::System, "[GBA] VIRTKEY_SAVE_STATE triggered, slot=%d", g_Config.iCurrentStateSlot);
 				EmuCore::GBACore *gba = static_cast<EmuCore::GBACore *>(activeCore_.get());
 				int slot = g_Config.iCurrentStateSlot;
 				if (gba->SaveStateToFile(slot)) {
@@ -1132,6 +1133,7 @@ void EmuScreen::ProcessVKey(VirtKey virtKey) {
 #ifdef PPSSPP_MULTICORE
 			// [PPSSPP-FORK] MultiCore: GBA uses file-based load via GBACore
 			if (IsGBA()) {
+				NOTICE_LOG(Log::System, "[GBA] VIRTKEY_LOAD_STATE triggered, slot=%d", g_Config.iCurrentStateSlot);
 				EmuCore::GBACore *gba = static_cast<EmuCore::GBACore *>(activeCore_.get());
 				int slot = g_Config.iCurrentStateSlot;
 				if (gba->LoadStateFromFile(slot)) {
@@ -1277,6 +1279,32 @@ bool EmuScreen::UnsyncKey(const KeyInput &key) {
 		NOTICE_LOG(Log::System, "[GBA] ESC pressed — direct pause trigger");
 		pauseTrigger_ = true;
 		return true;
+	}
+
+	// [PPSSPP-FORK] MultiCore: direct save/load handler for GBA mode
+	if (IsGBA() && (key.flags & KeyInputFlags::DOWN)) {
+		if (key.keyCode == NKCODE_F1) {
+			NOTICE_LOG(Log::System, "[GBA] F1 pressed — direct save state");
+			EmuCore::GBACore *gba = static_cast<EmuCore::GBACore *>(activeCore_.get());
+			int slot = g_Config.iCurrentStateSlot;
+			if (gba && gba->SaveStateToFile(slot)) {
+				g_OSD.Show(OSDType::MESSAGE_SUCCESS, StringFromFormat("GBA state saved (slot %d)", slot + 1), 2.0f);
+			} else {
+				g_OSD.Show(OSDType::MESSAGE_WARNING, "GBA save state failed", 3.0f);
+			}
+			return true;
+		}
+		if (key.keyCode == NKCODE_F3) {
+			NOTICE_LOG(Log::System, "[GBA] F3 pressed — direct load state");
+			EmuCore::GBACore *gba = static_cast<EmuCore::GBACore *>(activeCore_.get());
+			int slot = g_Config.iCurrentStateSlot;
+			if (gba && gba->LoadStateFromFile(slot)) {
+				g_OSD.Show(OSDType::MESSAGE_SUCCESS, StringFromFormat("GBA state loaded (slot %d)", slot + 1), 2.0f);
+			} else {
+				g_OSD.Show(OSDType::MESSAGE_WARNING, StringFromFormat("No GBA save state in slot %d", slot + 1), 2.0f);
+			}
+			return true;
+		}
 	}
 
 	return g_controlMapper.Key(key);

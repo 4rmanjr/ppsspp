@@ -635,14 +635,19 @@ std::string GBACore::GetSavePrefix(const std::string &title_in, const std::strin
 }
 
 bool GBACore::SaveStateToFile(int slot) {
-	if (!core_) return false;
+	if (!core_) {
+		WARN_LOG(Log::SaveState, "[GBA] SaveStateToFile: core_ is null");
+		return false;
+	}
 
 	std::string prefix = GetSavePrefix();
 	Path dir = GetSysDirectory(DIRECTORY_SAVESTATE);
 	std::string filename = StringFromFormat("GBA_%s_%d.ppst", prefix.c_str(), slot);
 	Path path = dir / filename;
+	NOTICE_LOG(Log::SaveState, "[GBA] SaveStateToFile: prefix='%s' path='%s'", prefix.c_str(), path.c_str());
 
-	File::CreateFullPath(path);
+	// Parent directory (PPSSPP_STATE/) already exists from PSP usage.
+	// Don't call CreateFullPath(path) — it creates FILENAME as a directory.
 
 	size_t size = GetStateSize();
 	if (size == 0) {
