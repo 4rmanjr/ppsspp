@@ -465,9 +465,17 @@ void GBACore::GetMixedAudio(int32_t *buffer, size_t *stereoPairs) {
 		float left = (float)audioBuffer_[i * 2];
 		float right = (float)audioBuffer_[i * 2 + 1];
 
-		// DC blocking filter (SkyEmu-inspired)
+		// DC blocking filter — first-order IIR high-pass (SkyEmu reference)
+		// y[n] = x[n] - dcCap[n-1]
+		// dcCap[n] = (x[n] - y[n]) * 0.996
 		float outL = left - dcCapL_;
 		float outR = right - dcCapR_;
+
+		// Safety clamp (SkyEmu: reset if capacitor drifted beyond ±2.0)
+		if (!(dcCapL_ < 2.0f && dcCapL_ > -2.0f)) dcCapL_ = 0.0f;
+		if (!(dcCapR_ < 2.0f && dcCapR_ > -2.0f)) dcCapR_ = 0.0f;
+
+		// Update capacitor: tracks DC offset with 0.996 decay
 		dcCapL_ = (left - outL) * 0.996f;
 		dcCapR_ = (right - outR) * 0.996f;
 
