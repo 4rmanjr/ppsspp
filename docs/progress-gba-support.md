@@ -21,14 +21,14 @@
 
 | Item | Status | Terakhir Diverifikasi |
 |------|--------|----------------------|
-| **Video rendering** | ✅ **WORKING** — Breath of Fire render correctly | 2026-06-21 |
+| **Video rendering (gambar)** | 🟡 **KELUAR tapi warna biru/ungu** — color format issue | 2026-06-21 |
 | **Input (keyboard)** | ✅ **WORKING** — A/S/Z/X/Space/arrows | 2026-06-21 |
 | **Save memory (SRAM)** | ✅ **WORKING** — auto-load/flash via mGBA | 2026-06-21 |
 | **ESC pause menu** | ✅ **WORKING** — pause muncul saat ESC | 2026-06-21 |
-| **Speed control** | ✅ **WORKING** — Tab (fast fwd), Backspace (toggle speed) | 2026-06-21 |
-| **Audio** | 🟡 **BERSUARA tapi masih kasar** — belum optimal | 2026-06-21 |
-| **Save state (F1/F3)** | 🟡 **Kode siap, perlu runtime test** | Belum dites |
-| **Load state** | 🟡 **Kode siap, perlu runtime test** | Belum dites |
+| **Speed control** | ❌ **TIDAK ADA EFEK** — Tab/Backspace tidak respon | 2026-06-21 |
+| **Audio** | 🟡 **BERSUARA tapi masih kasar** — crackling | 2026-06-21 |
+| **Save state (F1/F3)** | ❌ **TIDAK BEKERJA** — tombol tidak respon di GBA mode | 2026-06-21 |
+| **Config isolation** | ❌ **TIDAK BEKERJA** — setting tidak terisolasi per-core | 2026-06-21 |
 
 ---
 
@@ -103,7 +103,7 @@
 
 ## 🟡 Diketahui Bermasalah
 
-### 1. Audio: Suara masih kasar (krackling) — PRIORITAS TINGGI
+### 1. Audio: Suara masih kasar (crackling) — 🔴 PRIORITAS TINGGI
 **Gejala:** Suara game keluar tapi terdengar kasar/crackling, kurang jernih.
 **Riwayat investigasi:**
 
@@ -116,24 +116,58 @@
 | 5 | Speed control fix (ClearAudio antar frame) | 🟡 Sedikit membaik |
 
 **Teori saat ini:**
-- Masalah **bukan** dari speed control (frame rate normal 1x)
+- Masalah **bukan** dari speed control
 - Masalah **bukan** dari kualitas resampler (sinc = kualitas tinggi)
-- Kemungkinan: **SOUNDBIAS oversampling** (65536 Hz) → sinc downsampling ke 44100 Hz masih memperkenalkan artifact
-- Atau: **Aliasing dari square wave harmonics** — GBA PSG menghasilkan square wave dengan harmonic hingga frekuensi sangat tinggi, dan sinc resampler mungkin tidak cukup curam lowpassnya
+- Kemungkinan: **SOUNDBIAS oversampling** (65536 Hz) → sinc downsampling ke 44100 Hz masih ada artifact
+- Atau: **Aliasing dari square wave harmonics** — PSG square wave harmonics tinggi
 
-**Referensi:**
-- [ ] Investigasi: apakah sinc width mGBA cukup? Coba naikkan resolution/width parameter sinc
-- [ ] Tambah low-pass FIR filter di 18 kHz sebelum resample (seperti GBA hardware asli)
-- [ ] Bandingkan output audio dengan mGBA standalone (SDL frontend) sebagai baseline
+---
 
-### 2. Save State / Load State — BELUM DI-TEST
-**Gejala:** Belum pernah runtime test
-- File path: `PSP/PPSSPP_STATE/GBA/<prefix>_N.gbast`
-- Menggunakan hotkey F1-F4 (sama dengan PSP mode)
-- Perlu test dengan user
+### 2. Video: Warna kebiru-biruan / ungu — 🔴 PRIORITAS TINGGI
+**Gejala:** Gambar game muncul tapi dengan tint biru/ungu, warna tidak akurat.
+**Lokasi kode:** Konversi XBGR8 → RGBA8888 di `GBACore::RunFrame()`
 
-### 3. Android Build — BELUM DIMULAI
-- Menunggu audio selesai + save state test
+```cpp
+// Kode saat ini:
+uint8_t r = c & 0xFF;
+uint8_t g = (c >> 8) & 0xFF;
+uint8_t b = (c >> 16) & 0xFF;
+uint8_t a = (c >> 24) & 0xFF;
+videoBuffer_[y * GBA_WIDTH + x] = (a << 24) | (r << 16) | (g << 8) | b;
+```
+
+Asumsi: mGBA output `mColor` format XBGR8 → konversi seperti di atas.
+Kenyataan: Mungkin format `mColor` berbeda (ABGR, BGRA, atau RGB565 tergantung backend).
+
+---
+
+### 3. Speed Control: Tab/Backspace tidak ada efek — 🟡 SEDANG
+**Gejala:** Menekan Tab (fast forward) atau Backspace (toggle speed) tidak mengubah kecepatan game.
+**Lokasi kode:** `UI/EmuScreen.cpp` — `UpdateGBA()`
+
+Kemungkinan penyebab:
+- `PSP_CoreParameter().fastForward` tidak di-set untuk GBA mode (VIRTKEY handler mungkin skip GBA)
+- Atau: update loop tidak memproses key event dengan benar untuk GBA
+
+---
+
+### 4. Save State: F1/F3 tidak berfungsi — 🟡 SEDANG
+**Gejala:** Menekan F1 (save) atau F3 (load) tidak melakukan apa-apa di GBA mode.
+**Lokasi kode:** `UI/EmuScreen.cpp` — VIRTKEY handler untuk save/load
+
+VIRTKEY handler mungkin melempar ke PSP save state system, bukan GBACore.
+
+---
+
+### 5. Config Isolation: Setting tidak terisolasi per-core — 🟡 SEDANG
+**Gejala:** Pengaturan yang diubah (misal filter, resolusi) diterapkan ke semua game,
+tidak peduli PSP atau GBA.
+**Lokasi kode:** `EmuCore/Config.cpp` — per-core config
+
+---
+
+### 6. Android Build — BELUM DIMULAI
+- Menunggu audio fix + video color fix + save state fix
 - Integrasi ndk-build (Android.mk) untuk mgba + EmuCore
 
 ---
@@ -182,6 +216,10 @@ Observasi:
 | 14 | #ifdef clutter | 45 #ifdefs | IsGBA() pattern | P2 |
 | 15 | Save state in EmuScreen | Logic campur | Move to GBACore | P3 |
 | **16** | **Audio crackling (current)** | ??? | **Belum fixed** | 🔴 |
+| **17** | **Video warna biru/ungu** | Mungkin format mColor berbeda (ABGR vs XBGR) | **Belum fixed** | 🔴 |
+| **18** | **Speed control tidak berefek** | VIRTKEY handler mungkin skip GBA | **Belum fixed** | 🟡 |
+| **19** | **Save state F1/F3 tidak kerja** | Handler lempar ke PSP system | **Belum fixed** | 🟡 |
+| **20** | **Config tidak terisolasi** | Per-core config belum jalan | **Belum fixed** | 🟡 |
 
 ---
 
