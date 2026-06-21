@@ -79,7 +79,7 @@ private:
 	uint32_t rawVideoBuffer_[GBA_WIDTH * GBA_HEIGHT]{};
 
 	// Audio constants
-	static constexpr size_t AUDIO_BUF_SIZE = 2048;
+	static constexpr size_t AUDIO_BUF_SIZE = 4096;
 	static constexpr int GBA_NATIVE_RATE = 32768;  // mGBA core default
 	static constexpr int TARGET_RATE = 44100;       // PPSSPP mixer rate
 
