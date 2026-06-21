@@ -180,6 +180,11 @@ void MainScreen::CreateRecentTab() {
 		tabRecentGames->OnHighlight.Handle(this, &MainScreen::OnGameHighlight);
 	}
 
+	// [PPSSPP-FORK] MultiCore: separator before GBA section
+	if (g_recentFiles.HasAny() && g_recentFilesGBA.HasAny()) {
+		scrollView->Add(new Spacer(new LinearLayoutParams(FILL_PARENT, 8.0f)));
+	}
+
 	// [PPSSPP-FORK] MultiCore: GBA Recent Games
 	if (g_recentFilesGBA.HasAny()) {
 		GameBrowser *tabRecentGBA = new GameBrowser(GetRequesterToken(),
