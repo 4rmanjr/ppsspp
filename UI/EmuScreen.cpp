@@ -1432,32 +1432,67 @@ void EmuScreen::UpdateGBA() {
 		readyToFinishBoot_ = false;
 	}
 
-	activeCore_->RunFrame();
+	// Speed control
+	static double lastFrameTime = 0.0;
+	double now = time_now_d();
 
-	// Push resampled audio (32768→44100 Hz, int32 format)
-	static constexpr int MAX_AUDIO_PAIRS = 735;
-	int32_t audioBuf32[MAX_AUDIO_PAIRS * 2];
-	size_t stereoPairs = 0;
-	EmuCore::GBACore *gba = static_cast<EmuCore::GBACore *>(activeCore_.get());
-	gba->GetMixedAudio(audioBuf32, &stereoPairs);
+	int fpsLimit = 60;
+	bool fastForward = PSP_CoreParameter().fastForward;
+	FPSLimit limitMode = PSP_CoreParameter().fpsLimit;
 
-	static int audioDebug = 0;
-	if (++audioDebug <= 5 || audioDebug % 180 == 0) {
-		NOTICE_LOG(Log::System, "[GBA] Audio frame %d: stereoPairs=%zu", audioDebug, stereoPairs);
-	}
-	if (stereoPairs > 0) {
-		System_AudioPushSamples(audioBuf32, (int)stereoPairs, 1.0f);
+	if (limitMode == FPSLimit::CUSTOM1) {
+		fpsLimit = g_Config.iFpsLimit1;
+	} else if (limitMode == FPSLimit::CUSTOM2) {
+		fpsLimit = g_Config.iFpsLimit2;
 	}
 
-	// Forward input
-	uint32_t pspButtons = __CtrlPeekButtons();
-	static int inputDebug = 0;
-	if (++inputDebug <= 5 || inputDebug % 180 == 0) {
-		NOTICE_LOG(Log::System, "[GBA] Input frame %d: pspButtons=0x%04X", inputDebug, pspButtons);
-	}
-	activeCore_->SetKeys(pspButtons);
+	double targetInterval = 1.0 / fpsLimit;
+	int framesToRun = 0;
 
-	// Pause handling
+	if (fastForward) {
+		framesToRun = g_Config.bRenderDuplicateFrames ? 3 : 8;
+	} else if (targetInterval <= 0.0 || (now - lastFrameTime) >= targetInterval * 0.95) {
+		framesToRun = 1;
+		lastFrameTime = now;
+	}
+
+		if (framesToRun > 0) {
+		EmuCore::GBACore *gba = static_cast<EmuCore::GBACore *>(activeCore_.get());
+		static constexpr int MAX_AUDIO_PAIRS = 735;
+		int32_t audioBuf32[MAX_AUDIO_PAIRS * 2];
+
+		for (int f = 0; f < framesToRun; f++) {
+			activeCore_->RunFrame();
+
+			// Only push audio for the LAST frame
+			// Intermediate frames: clear resampler to prevent accumulation + crackling
+			if (f == framesToRun - 1) {
+				size_t stereoPairs = 0;
+				gba->GetMixedAudio(audioBuf32, &stereoPairs);
+
+				static int audioDebug = 0;
+				if (++audioDebug <= 5 || audioDebug % 180 == 0) {
+					NOTICE_LOG(Log::System, "[GBA] Audio frame %d: stereoPairs=%zu frames=%d", audioDebug, stereoPairs, framesToRun);
+				}
+				if (stereoPairs > 0) {
+					System_AudioPushSamples(audioBuf32, (int)stereoPairs, 1.0f);
+				}
+			} else {
+				// Discard audio from intermediate frames (fast forward / frame skipping)
+				gba->ClearAudio();
+			}
+		}
+
+		// Forward input (apply same keys to all frames)
+		uint32_t pspButtons = __CtrlPeekButtons();
+		static int inputDebug = 0;
+		if (++inputDebug <= 5 || inputDebug % 180 == 0) {
+			NOTICE_LOG(Log::System, "[GBA] Input frame %d: pspButtons=0x%04X", inputDebug, pspButtons);
+		}
+		activeCore_->SetKeys(pspButtons);
+	}
+
+	// Pause handling	// Pause handling
 	if (g_controlMapper.PollPauseTrigger()) {
 		NOTICE_LOG(Log::System, "[GBA] PollPauseTrigger=true");
 		pauseTrigger_ = true;
@@ -1474,7 +1509,6 @@ void EmuScreen::UpdateGBA() {
 	backButton_->SetVisibility(UI::V_GONE);
 }
 
-// [PPSSPP-FORK] MultiCore: render one GBA frame
 ScreenRenderFlags EmuScreen::RenderGBA(ScreenRenderFlags screenRenderFlags) {
 	Draw::DrawContext *draw = screenManager()->getDrawContext();
 	if (!draw) return screenRenderFlags;

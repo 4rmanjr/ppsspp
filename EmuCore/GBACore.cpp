@@ -23,6 +23,7 @@
 #include <mgba/core/config.h>
 #include <mgba-util/vfs.h>
 #include <mgba-util/audio-buffer.h>
+#include <mgba-util/audio-resampler.h>
 
 namespace EmuCore {
 
@@ -82,7 +83,15 @@ GBACore::GBACore() {
 		core_->setVideoBuffer(core_, (mColor *)rawVideoBuffer_, GBA_WIDTH);
 		// [PPSSPP-FORK] MultiCore: init directory set for save memory
 		mDirectorySetInit(&core_->dirs);
-		INFO_LOG(Log::System, "[GBA] Core initialized");
+
+		// [PPSSPP-FORK] MultiCore: init sinc resampler (32768 -> 44100 Hz)
+		resampleDest_ = reinterpret_cast<struct mAudioBuffer*>(new char[sizeof(struct mAudioBuffer)]);
+		mAudioBufferInit(static_cast<struct mAudioBuffer*>(resampleDest_), AUDIO_BUF_SIZE, 2);
+		resampler_ = reinterpret_cast<struct mAudioResampler*>(new char[sizeof(struct mAudioResampler)]);
+		mAudioResamplerInit(static_cast<struct mAudioResampler*>(resampler_), mINTERPOLATOR_SINC);
+		mAudioResamplerSetDestination(static_cast<struct mAudioResampler*>(resampler_), static_cast<struct mAudioBuffer*>(resampleDest_), TARGET_RATE);
+
+		INFO_LOG(Log::System, "[GBA] Core initialized with sinc resampler");
 	} else {
 		ERROR_LOG(Log::System, "[GBA] Failed to create core");
 	}
@@ -92,6 +101,12 @@ GBACore::~GBACore() {
 	if (core_) {
 		// [PPSSPP-FORK] MultiCore: flush and close save memory directories
 		mDirectorySetDeinit(&core_->dirs);
+		mAudioResamplerDeinit(static_cast<struct mAudioResampler*>(resampler_));
+		delete[] static_cast<char*>(resampler_);
+		resampler_ = nullptr;
+		mAudioBufferDeinit(static_cast<struct mAudioBuffer*>(resampleDest_));
+		delete[] static_cast<char*>(resampleDest_);
+		resampleDest_ = nullptr;
 		core_->deinit(core_);
 		INFO_LOG(Log::System, "[GBA] Core deinitialized, save flushed");
 		core_ = nullptr;
@@ -196,24 +211,41 @@ void GBACore::RunFrame() {
 			vdebugCount, rawVideoBuffer_[0], videoBuffer_[0]);
 	}
 
-	// Capture audio from mGBA's internal audio buffer
-	struct mAudioBuffer *audio = core_->getAudioBuffer(core_);
-	if (audio) {
-		size_t available = mAudioBufferAvailable(audio);
-		audioStereoPairs_ = 0;
-		if (available > 0) {
-			// Limit to our buffer (in stereo frames)
-			size_t toRead = (available < AUDIO_BUF_SIZE) ? available : AUDIO_BUF_SIZE;
+	// Resample audio from mGBA's internal buffer (32768 Hz) to PPSSPP rate (44100 Hz)
+	// Uses mGBA's own sinc resampler for high quality anti-aliased conversion
+	struct mAudioBuffer *src = core_->getAudioBuffer(core_);
+	if (src) {
+		size_t available = mAudioBufferAvailable(src);
+		prevAvailable_ = available;
 
-			// mAudioBufferRead returns stereo frames read
-			size_t read = mAudioBufferRead(audio, audioBuffer_, toRead);
-			// Store as bytes for GetAudioSamples (backward compat)
-			audioAvailable_ = read * 2 * sizeof(int16_t);
-			// Store native stereo pair count for GetMixedAudio
+		if (available > 0) {
+			// Query actual GBA sample rate from core
+			if (core_->audioSampleRate) {
+				coreSampleRate_ = core_->audioSampleRate(core_);
+			}
+
+			// Set resampler source: core's audio buffer at GBA rate, consume=true
+			mAudioResamplerSetSource(static_cast<struct mAudioResampler*>(resampler_), src, (double)coreSampleRate_, true);
+
+			// Process resampler: reads from core buffer, writes sinc-interpolated output to dest
+			mAudioResamplerProcess(static_cast<struct mAudioResampler*>(resampler_));
+
+			// Read resampled output (44100 Hz) into our buffer
+			size_t outAvail = mAudioBufferAvailable(static_cast<struct mAudioBuffer*>(resampleDest_));
+			if (outAvail > AUDIO_BUF_SIZE) outAvail = AUDIO_BUF_SIZE;
+
+			size_t read = mAudioBufferRead(static_cast<struct mAudioBuffer*>(resampleDest_), audioBuffer_, outAvail);
 			audioStereoPairs_ = read;
-		} else {
-			// No audio available this frame — reset both counters
-			audioAvailable_ = 0;
+
+			// Debug: print resampler stats
+			static int audioDbg = 0;
+			if (++audioDbg <= 3 || audioDbg % 300 == 0) {
+				NOTICE_LOG(Log::System, "[GBA] Audio frame %d: coreAvail=%zu coreRate=%u outPairs=%zu first=[%d,%d] last=[%d,%d]",
+					audioDbg, available, coreSampleRate_, read,
+					audioBuffer_[0], audioBuffer_[1],
+					read > 0 ? audioBuffer_[(read-1)*2] : 0,
+					read > 0 ? audioBuffer_[(read-1)*2+1] : 0);
+			}
 		}
 	}
 }
@@ -389,57 +421,82 @@ int GBACore::GetAudioSampleRate() const {
 }
 
 void GBACore::GetAudioSamples(int16_t *buffer, size_t *samples) {
-	size_t toCopy = (audioAvailable_ < *samples) ? audioAvailable_ : *samples;
-	memcpy(buffer, audioBuffer_, toCopy);
-	*samples = toCopy;
-	audioAvailable_ = 0;
+	// Audio is now converted via GetMixedAudio — this stub maintains vtable compat
+	*samples = 0;
+}
+
+void GBACore::ClearAudio() {
+	// Discard all pending audio: both resampler dest buffer and core source buffer
+	// Used during fast forward to prevent audio accumulation between frames
+	struct mAudioBuffer *src = core_->getAudioBuffer(core_);
+	if (src) {
+		mAudioBufferClear(src);
+	}
+	size_t avail = mAudioBufferAvailable(static_cast<struct mAudioBuffer*>(resampleDest_));
+	if (avail > 0) {
+		mAudioBufferClear(static_cast<struct mAudioBuffer*>(resampleDest_));
+	}
+	audioStereoPairs_ = 0;
 }
 
 void GBACore::GetMixedAudio(int32_t *buffer, size_t *stereoPairs) {
 	if (!buffer || !stereoPairs) return;
 
-	size_t nativePairs = audioStereoPairs_;
-	if (nativePairs == 0 || nativePairs > AUDIO_BUF_SIZE) {
-		// No audio this frame — return silence
-		static constexpr int TARGET_PAIRS = TARGET_RATE / 60;  // 735
-		memset(buffer, 0, TARGET_PAIRS * 2 * sizeof(int32_t));
-		*stereoPairs = TARGET_PAIRS;
-		return;
-	}
-
 	static constexpr int TARGET_PAIRS = TARGET_RATE / 60;  // 735 at 44100Hz 60fps
 	*stereoPairs = TARGET_PAIRS;
 
-	if (nativePairs == TARGET_PAIRS) {
-		// Same count, simple int16→int32 conversion
-		for (size_t i = 0; i < nativePairs * 2; i++) {
-			buffer[i] = ((int32_t)audioBuffer_[i]) << 16;
-		}
-	} else {
-		// Linear interpolation from nativePairs → TARGET_PAIRS
-		// This handles the 32768 Hz → 44100 Hz resample (~546 → 735 stereo pairs)
-		float ratio = (float)nativePairs / (float)TARGET_PAIRS;
-		for (size_t o = 0; o < TARGET_PAIRS; o++) {
-			float inPos = (float)o * ratio;
-			size_t inIdx = (size_t)inPos;
-			float frac = inPos - (float)inIdx;
-			size_t nextIdx = (inIdx + 1 < nativePairs) ? inIdx + 1 : inIdx;
+	size_t pairs = audioStereoPairs_;
+	if (pairs > AUDIO_BUF_SIZE) pairs = AUDIO_BUF_SIZE;
 
-			// Left channel
-			float left = (float)audioBuffer_[inIdx * 2] * (1.0f - frac)
-				       + (float)audioBuffer_[nextIdx * 2] * frac;
-			// Right channel
-			float right = (float)audioBuffer_[inIdx * 2 + 1] * (1.0f - frac)
-				        + (float)audioBuffer_[nextIdx * 2 + 1] * frac;
+	if (pairs == 0) {
+		memset(buffer, 0, TARGET_PAIRS * 2 * sizeof(int32_t));
+		return;
+	}
 
-			buffer[o * 2]     = ((int32_t)((int16_t)left)) << 16;
-			buffer[o * 2 + 1] = ((int32_t)((int16_t)right)) << 16;
+	// Audio already sinc-resampled to 44100 Hz by mGBA resampler
+	// Just apply DC blocking filter + convert int16 -> int32
+	size_t toCopy = (pairs < (size_t)TARGET_PAIRS) ? pairs : (size_t)TARGET_PAIRS;
+	size_t i;
+	for (i = 0; i < toCopy; i++) {
+		float left = (float)audioBuffer_[i * 2];
+		float right = (float)audioBuffer_[i * 2 + 1];
+
+		// DC blocking filter (SkyEmu-inspired)
+		float outL = left - dcCapL_;
+		float outR = right - dcCapR_;
+		dcCapL_ = (left - outL) * 0.996f;
+		dcCapR_ = (right - outR) * 0.996f;
+
+		if (outL > 32767.0f) outL = 32767.0f;
+		if (outL < -32768.0f) outL = -32768.0f;
+		if (outR > 32767.0f) outR = 32767.0f;
+		if (outR < -32768.0f) outR = -32768.0f;
+
+		buffer[i * 2]     = ((int32_t)((int16_t)outL)) << 16;
+		buffer[i * 2 + 1] = ((int32_t)((int16_t)outR)) << 16;
+	}
+
+	// Pad remaining slots if fewer than target
+	if (toCopy < (size_t)TARGET_PAIRS && toCopy > 0) {
+		int32_t padL = buffer[(toCopy - 1) * 2];
+		int32_t padR = buffer[(toCopy - 1) * 2 + 1];
+		for (i = toCopy; i < (size_t)TARGET_PAIRS; i++) {
+			buffer[i * 2] = padL;
+			buffer[i * 2 + 1] = padR;
 		}
+	}
+
+	// Debug: log resampler output stats
+	static int audioMixFrame = 0;
+	if (++audioMixFrame <= 3 || audioMixFrame % 300 == 0) {
+		NOTICE_LOG(Log::System, "[GBA] Audio mix frame %d: pairs=%zu firstOut=[%d,%d] lastOut=[%d,%d]",
+			audioMixFrame, pairs,
+			buffer[0] >> 16, buffer[1] >> 16,
+			buffer[(TARGET_PAIRS - 1) * 2] >> 16, buffer[(TARGET_PAIRS - 1) * 2 + 1] >> 16);
 	}
 
 	// Mark as consumed
 	audioStereoPairs_ = 0;
-	audioAvailable_ = 0;
 }
 
 void GBACore::SetKeys(uint32_t keys) {

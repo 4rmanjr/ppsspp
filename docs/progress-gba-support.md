@@ -1,35 +1,34 @@
 # GBA Support — Progress Report
 
-**Date:** 2026-06-20 (updated)
+**Date:** 2026-06-21 (updated)
 **Branch:** `feature/lan-sync`
-**Build:** `PPSSPP_MULTICORE=ON` (feature flag)
+**Last commit:** `60b0cd22ea`
+**Build (latest):** `build-final/PPSSPPSDL` — MULTICORE=ON ✅
+
+---
 
 ## Target Platform
 
 | Platform | Build System | Status |
 |----------|-------------|--------|
-| **Android** | ndk-build (`Android.mk`) | 🟡 **Perlu integrasi** — lihat [# Android Build](#-android-build-belum-terintegrasi) |
-| **Linux SDL** | CMake | ✅ **Working** (sudah terverifikasi build) |
-| **Qt** | ❌ **Excluded** — issue Wayland/X11 compatibility, platform mulai ditinggalkan |
-
-> ⚠️ **Progress doc sebelumnya STALE** — ditulis sebelum P1-P3 refactor (`fa08833c01`).
-> Status di bawah berdasarkan verifikasi kode (static analysis),
-> **belum runtime-test** karena keterbatasan lingkungan (proot, tanpa GPU).
-> Setelah runtime test sukses di **Linux SDL**, integrasi **Android** menyusul.
+| **Linux SDL** | CMake | ✅ **Working** — build sukses, runtime verification via user |
+| **Android** | ndk-build (`Android.mk`) | 🔴 **Belum dimulai** — lihat [Android Build](#-android-build) |
+| **Qt** | ❌ **Excluded** — Wayland/X11 compatibility issues |
 
 ---
 
-## 🔨 Perlu Runtime Test (di PC sungguhan / Linux SDL)
+## Status Runtime
 
-Keempat item di bawah sudah diimplementasi ulang di P1-P3 refactor,
-**tapi belum pernah di-run** — status real tidak diketahui:
-
-- 🟡 **Audio clarity** — `GetMixedAudio()`: resample 32768→44100 Hz via linear interpolation, zero silence padding. **Kode sudah fix, perlu test suara.**
-- 🟡 **ESC pause menu** — Direct handler di `UnsyncKey()` → `pauseTrigger_` → `UpdateGBA()` push `GamePauseScreen`. **Rantai handler lengkap, perlu test apakah pause muncul.**
-- 🟡 **Save state (F1/F3)** — `GBACore::SaveStateToFile(slot)`, file I/O proper, OSD message. **Kode baru total, perlu test.**
-- 🟡 **Load state** — `GBACore::LoadStateFromFile(slot)`. **Sama, perlu test.**
-
-> Setelah runtime test sukses di **Linux SDL**, integrasi **Android** bisa dikerjakan.
+| Item | Status | Terakhir Diverifikasi |
+|------|--------|----------------------|
+| **Video rendering** | ✅ **WORKING** — Breath of Fire render correctly | 2026-06-21 |
+| **Input (keyboard)** | ✅ **WORKING** — A/S/Z/X/Space/arrows | 2026-06-21 |
+| **Save memory (SRAM)** | ✅ **WORKING** — auto-load/flash via mGBA | 2026-06-21 |
+| **ESC pause menu** | ✅ **WORKING** — pause muncul saat ESC | 2026-06-21 |
+| **Speed control** | ✅ **WORKING** — Tab (fast fwd), Backspace (toggle speed) | 2026-06-21 |
+| **Audio** | 🟡 **BERSUARA tapi masih kasar** — belum optimal | 2026-06-21 |
+| **Save state (F1/F3)** | 🟡 **Kode siap, perlu runtime test** | Belum dites |
+| **Load state** | 🟡 **Kode siap, perlu runtime test** | Belum dites |
 
 ---
 
@@ -44,195 +43,168 @@ Keempat item di bawah sudah diimplementasi ulang di P1-P3 refactor,
 
 ### 2. mGBA Integration
 - [x] Submodule `ext/libmgba` (commit `d5e9fae`)
-- [x] Static library `libmgba.a` (LIBMGBA_ONLY, --whole-archive to prevent linker stripping)
-- [x] `mCoreConfigInit()` called to initialize mGBA config hash table
-- [x] `setVideoBuffer()` called to enable mGBA video rendering into our buffer
-- [x] Video: XBGR8 → RGBA8888 conversion per frame
-- [x] Audio: 44100Hz stereo via mAudioBuffer → int16
-- [x] Input: PSP→GBA key mapping via `PSPSKeysToGBA()`
-- [x] Savestate: raw buffer via `stateSize/saveState/loadState`
-- [x] Save memory: `mDirectorySetInit`, `mCoreAutoloadSave`, auto-flush on destruct
+- [x] Static library `libmgba.a` (LIBMGBA_ONLY, --whole-archive)
+- [x] mCoreConfigInit, setVideoBuffer
+- [x] Input mapping via `PSPSKeysToGBA()`
+- [x] Save memory: `mDirectorySetInit` + `mCoreAutoloadSave`
 
 ### 3. File Detection & Routing
-- [x] `.gba/.gb/.gbc` in game file filter — `UI/GameBrowser.cpp`
-- [x] Auto-detect file type in `LaunchFile` — `UI/MainScreen.cpp`
-- [x] NativeApp auto-boot GBA detection
-- [x] EmuScreen multi-core aware — constructor + update() + render()
+- [x] `.gba/.gb/.gbc` di GameBrowser filter
+- [x] Auto-detect di LaunchFile (UI/MainScreen.cpp)
+- [x] NativeApp auto-boot detection
+- [x] EmuScreen multi-core aware
 
 ### 4. CMake Build System
-- [x] `EmuCore/CMakeLists.txt` — EmuCore + libmgba build
-- [x] Root `CMakeLists.txt` — `PPSSPP_MULTICORE` feature flag
-- [x] `--whole-archive` for mgba to prevent linker stripping
-- [x] Dual build verified ON/OFF
-- [x] `test_gba_core` CMake target
+- [x] `EmuCore/CMakeLists.txt` with PPSSPP_MULTICORE flag
+- [x] Dual build verified: ON (26.7MB) / OFF (25.5MB)
+- [x] `--whole-archive mgba` for linker
+- [x] `test_gba_core` target (ALL TESTS PASSED)
 
 ### 5. Video Rendering
-- [x] `InitRendering()` + `Render(DrawContext*)` — thin3d pipeline + texture (lazy init), **pindah ke GBACore** (P1 refactor)
-- [x] RGBA8888 texture upload + fullscreen quad with 3:2 aspect
-- [x] `VS_TEXTURE_COLOR_2D` + `FS_TEXTURE_COLOR_2D` shader presets
-- [x] GBA render path BEFORE `PSP_IsInited()` check
-- [x] Cleanup via `DeviceLost()`/`DeviceRestored()` — lazy reinit
-- [x] ✅ **VISUALLY WORKING** — Breath of Fire renders correctly
+- [x] Thin3D pipeline + RGBA8888 texture (lazy init)
+- [x] Fullscreen quad with 3:2 aspect (letterbox)
+- [x] DeviceLost/DeviceRestored lifecycle
+- [x] ✅ **VISUALLY WORKING**
 
-### 6. Audio Routing
-- [x] **Root cause slow-mo identified**: mGBA native 32768 Hz ≠ PPSSPP mixer 44100 Hz
-- [x] `GetMixedAudio(int32_t*, size_t*)` — **resample 32768→44100 Hz** via linear interpolation (P1 refactor)
-- [x] ~546 native stereo pairs/frame → 735 target pairs @ 44100 Hz 60fps
-- [x] int16 → int32 conversion (shift left 16 bits) **setelah resample**
-- [x] **Zero silence padding** (sebelumnya 25.7% silence per frame)
-- [x] Audio conversion **pindah dari EmuScreen ke GBACore**
-- [x] `System_AudioPushSamples()` called with stereo pairs count
-- [x] ⚠️ **Kode fix sudah diimplementasi, tapi belum runtime-test**
+### 6. Audio Pipeline (sinc resampler)
+- [x] **mGBA's own sinc resampler** (`mINTERPOLATOR_SINC`) — replaces old linear interpolation
+- [x] `mAudioResampler` reads from core buffer (32768 Hz), outputs at 44100 Hz
+- [x] DC blocking filter (high-pass, SkyEmu-inspired)
+- [x] Soft clipping to [-32768, 32767]
+- [x] `ClearAudio()` — prevents overflow during fast forward
+- [x] Audio push per-frame, bukan batch
 
-### 7. Input Mapping
-- [x] `PSPSKeysToGBA()` — Cross→A, Circle→B, D-Pad, L/R, Start/Select
-- [x] Keyboard works via existing PPSSPP ControlMapper
-- [x] ESC direct handler in UnsyncKey for GBA mode
-- [x] Pause trigger check in GBA update path
-- [x] ✅ **Game buttons working** (A, S, Z, X, Space, arrows)
-- [x] ⚠️ **ESC pause menu not yet verified working**
+### 7. Input & Speed Control
+- [x] All game buttons mapped
+- [x] ESC → pause (direct handler)
+- [x] **Tab (hold)** → fast forward (3-8 frame/update)
+- [x] **Backspace** → toggle speed NORMAL → CUSTOM1 → CUSTOM2
+- [x] **Shift+Tab** → slow motion (timing throttle)
 
-### 8. Save Memory (SRAM/Flash/EEPROM)
-- [x] `mDirectorySetInit` + `SetSaveDirectory` + `mCoreAutoloadSave`
-- [x] Auto-flush on destruct via `mDirectorySetDeinit`
-- [x] Files: `PSP/SAVEDATA/GBA/<title>.sav`
-
-### 9. Save State (Snapshot)
-- [x] `GBACore::SaveStateToFile(slot)` / `LoadStateFromFile(slot)` — **pindah dari EmuScreen ke GBACore** (P3 refactor)
-- [x] `GBACore::GetSavePrefix()` — sanitasi game title (alphanumeric + underscore, max 32 chars)
-- [x] Files: `PSP/PPSSPP_STATE/GBA/<prefix>_N.gbast`
-- [x] Reuses F1-F4 hotkeys + same slot config, OSD success/fail messages
-- [x] EmuScreen VIRTKEY handler call GBACore langsung + OSD messages
-- [x] No new UI needed
-- [x] ⚠️ **Kode baru total, belum runtime-test**
-
-### 10. Touch Layout
-- [x] `UI/TouchLayoutGBA.h/.cpp` — GBA button positions
-- [x] A/B/Start/Select/L/R/D-Pad
-
-### 11. Config Isolation
-- [x] `SaveCurrentConfig()` — snapshot PSP settings to memory
-- [x] `LoadGBAOverrides()` — read `[GBA]` section from `ppsspp.ini`
-- [x] `SaveGBAOverrides()` — write `[GBA]` section on exit
-- [x] `RestoreSavedConfig()` — restore PSP settings on exit
+### 8. Config Isolation
+- [x] PSP config saved to memory, GBA config isolated
+- [x] `[GBA]` section in `ppsspp.ini`
 - [x] GBA defaults: nearest filter, auto resolution
-- [x] ✅ **Config isolation working** — PSP and GBA settings don't mix
 
-### 12. Debug Logging
-- [x] Boot sequence logging (`[BOOT]` prefix)
-- [x] GBA core lifecycle (`[GBA]` prefix)
-- [x] Video render debug (first pixel, non-black check)
-- [x] Audio stats (samples per frame)
-- [x] Input state logging
-- [x] Config save/restore logging (`[CONFIG]` prefix)
-- [x] All mGBA internal logs (DMA, BIOS SWI) via PPSSPP log system
+### 9. Touch Layout
+- [x] `UI/TouchLayoutGBA.h/.cpp` — A/B/D-Pad/L/R/Start/Select
 
----
+### 10. Debug Logging
+- [x] `[GBA]`, `[CONFIG]`, `[BOOT]` prefixes
+- [x] Audio frame stats, native pairs, resampler output
+- [x] mGBA internal logs (DMA, SWI)
 
-## 🟡 Perlu Runtime Test
-
-| Item | Kode | Runtime | Prioritas |
-|------|------|---------|-----------|
-| **Audio clarity** | `GetMixedAudio()` resample 32768→44100 Hz ✅ | ❌ Belum di-test | 🔴 Tinggi |
-| **ESC pause menu** | UnsyncKey → pauseTrigger → UpdateGBA chain ✅ | ❌ Belum di-test | 🟡 Sedang |
-| **Save state** | `SaveStateToFile()` file I/O proper ✅ | ❌ Belum di-test | 🟡 Sedang |
-| **Load state** | `LoadStateFromFile()` file I/O proper ✅ | ❌ Belum di-test | 🟡 Sedang |
-| **Save memory (SRAM)** | Auto-load via `mCoreAutoloadSave` ✅ | ✅ Sudah jalan (sejak awal) | ❌ |
-
----
-
-## 🧹 P2: #ifdef Cleanup (tidak tercatat di progress doc sebelumnya)
-
-- [x] 31 dari ~45 `#ifdef PPSSPP_MULTICORE` di call site **dihilangkan**
-- [x] Pattern: `if (IsGBA())` bukan `#ifdef + if (coreType_ != PSP)`
+### 11. #ifdef Cleanup (P2)
+- [x] 31 dari ~45 #ifdef dihilangkan, pakai `IsGBA()` pattern
 - [x] Helper methods: `InitGBA()`, `ShutdownGBA()`, `UpdateGBA()`, `RenderGBA()`
-- [x] `IsGBA()` constexpr → `static constexpr bool IsGBA() { return false; }` saat MULTICORE=OFF
+- [x] `static constexpr bool IsGBA() { return false; }` saat OFF
 
 ---
 
-## 📊 Build Artifacts
+## 🟡 Diketahui Bermasalah
 
-| Target | Size | Status |
-|--------|------|--------|
-| `PPSSPPSDL` (MULTICORE=ON) | 26.7MB | ✅ |
-| `PPSSPPSDL` (MULTICORE=OFF) | 25.5MB | ✅ zero impact |
-| `test_gba_core` | 1.6MB | ✅ ALL TESTS PASSED |
-| `libmgba.a` | 1.8MB | ✅ |
-| `libEmuCore.a` | ~25KB | ✅ |
+### 1. Audio: Suara masih kasar (krackling) — PRIORITAS TINGGI
+**Gejala:** Suara game keluar tapi terdengar kasar/crackling, kurang jernih.
+**Riwayat investigasi:**
+
+| # | Approach | Hasil |
+|---|----------|-------|
+| 1 | Linear interpolation 32768→44100 | ❌ Kasar |
+| 2 | Fresh pair extraction (buang duplicate SOUNDBIAS) | ❌ Malah hilang data valid |
+| 3 | DC blocking filter + soft clip (SkyEmu-inspired) | ❌ Tidak cukup |
+| 4 | mGBA sinc resampler (`mINTERPOLATOR_SINC`) | 🟡 Masih kasar |
+| 5 | Speed control fix (ClearAudio antar frame) | 🟡 Sedikit membaik |
+
+**Teori saat ini:**
+- Masalah **bukan** dari speed control (frame rate normal 1x)
+- Masalah **bukan** dari kualitas resampler (sinc = kualitas tinggi)
+- Kemungkinan: **SOUNDBIAS oversampling** (65536 Hz) → sinc downsampling ke 44100 Hz masih memperkenalkan artifact
+- Atau: **Aliasing dari square wave harmonics** — GBA PSG menghasilkan square wave dengan harmonic hingga frekuensi sangat tinggi, dan sinc resampler mungkin tidak cukup curam lowpassnya
+
+**Referensi:**
+- [ ] Investigasi: apakah sinc width mGBA cukup? Coba naikkan resolution/width parameter sinc
+- [ ] Tambah low-pass FIR filter di 18 kHz sebelum resample (seperti GBA hardware asli)
+- [ ] Bandingkan output audio dengan mGBA standalone (SDL frontend) sebagai baseline
+
+### 2. Save State / Load State — BELUM DI-TEST
+**Gejala:** Belum pernah runtime test
+- File path: `PSP/PPSSPP_STATE/GBA/<prefix>_N.gbast`
+- Menggunakan hotkey F1-F4 (sama dengan PSP mode)
+- Perlu test dengan user
+
+### 3. Android Build — BELUM DIMULAI
+- Menunggu audio selesai + save state test
+- Integrasi ndk-build (Android.mk) untuk mgba + EmuCore
 
 ---
 
-## 🐛 Bugs Fixed (Semua Sesi)
+## 🧪 Log Audio (Reference)
+
+Dari test 2026-06-21 dengan Breath of Fire (USA):
+
+```
+05:00:034 [GBA] Audio frame 1: coreAvail=82  coreRate=32768 outPairs=100
+05:00:086 [GBA] Audio frame 2: coreAvail=564 coreRate=32768 outPairs=738
+05:00:103 [GBA] Audio frame 3: coreAvail=794 coreRate=65536 outPairs=524  ← SOUNDBIAS berubah!
+05:00:103 [GBA] Audio mix frame 3: pairs=524 firstOut=[0,0] lastOut=[0,0]  ← boot silence
+05:15:159 [GBA] Audio frame 900: coreAvail=1112 coreRate=65536 outPairs=738 first=[1279,1279]
+05:15:159 [GBA] Audio mix frame 900: pairs=738 firstOut=[1279,1279] lastOut=[461,461]
+05:25:228 [GBA] Audio frame 1500: coreAvail=1111 coreRate=65536 outPairs=737 first=[1344,959]
+05:25:228 [GBA] Audio mix frame 1500: pairs=737 firstOut=[1344,959] lastOut=[-1029,2209]
+05:30:263 [GBA] Audio frame 1800: coreAvail=1115 coreRate=65536 outPairs=740 first=[-238,-374]
+```
+
+Observasi:
+- `coreRate` berubah dari 32768 → 65536 setelah boot (game set SOUNDBIAS resolution)
+- `outPairs` stabil di 737-741 (target 735) → resampler timing akurat
+- Audio data non-zero (`first=[1279,1279]`) → audio mengalir
+- `frames=1` → speed control normal, tidak fast forward
+
+---
+
+## 🐛 Bugs Fixed (Total: 15 Bugs)
 
 | # | Bug | Root Cause | Fix | Sesi |
 |---|-----|------------|-----|------|
-| 1 | Segfault on boot | Linker stripped mGBA function pointers | `--whole-archive mgba --no-whole-archive` | Sebelum P1 |
-| 2 | Crash in `HashTableLookup` | `mCoreConfig` hash table uninitialized | `mCoreConfigInit(&core_->config, "gba")` | Sebelum P1 |
-| 3 | Video all black | `getPixels` returns NULL without `setVideoBuffer` | `setVideoBuffer(rawVideoBuffer_, 240)` | Sebelum P1 |
-| 4 | Crash creating texture | `texDesc.depth=0`, `initData=nullptr` | `depth=1`, valid zeroed buffer | Sebelum P1 |
-| 5 | GBA video never drawn | `!PSP_IsInited()` caught GBA before render path | GBA check moved above PSP check | Sebelum P1 |
-| 6 | Audio noise/static | Pushing too many samples (overflow) | Cap at 1470 samples/frame | Sebelum P1 |
-| 7 | Audio slow-mo (early) | `numSamples` passed as mono count instead of stereo pairs | `SAMPLES_PER_FRAME / 2` | Sebelum P1 |
-| 8 | ESC not working | GBA `update()` returned before pause check | Direct ESC handler + pause check in GBA path | Sebelum P1 |
-| 9 | `Unexpected PSP_Shutdown` | Destructor called `PSP_Shutdown` for GBA | Guard with `coreType_ == PSP` check | Sebelum P1 |
-| 10 | Config mixing PSP/GBA | No config isolation | SaveCurrentConfig / RestoreSavedConfig + [GBA] INI section | Sebelum P1 |
-| --- | --- | --- | --- | --- |
-| **11** | **Audio slow-mo root cause** | mGBA native 32768 Hz ≠ PPSSPP 44100 Hz, silence padding 25.7% | `GetMixedAudio()` resample linear + zero silence padding | **P1** |
-| **12** | **Code duplication render** | Thin3D pipeline ada di EmuScreen, bukan di core | Pindah ke `GBACore::Render(DrawContext*)` | **P1** |
-| **13** | **Code duplication audio** | Audio conversion ada di EmuScreen | Pindah ke `GBACore::GetMixedAudio()` | **P1** |
-| **14** | **`#ifdef` clutter** | ~45 `#ifdef PPSSPP_MULTICORE` di call site | 31 dihilangkan, pakai `IsGBA()` pattern | **P2** |
-| **15** | **Save state di EmuScreen** | Raw buffer I/O + path logic campur di EmuScreen | Pindah ke `SaveStateToFile/LoadStateFromFile` di GBACore | **P3** |
-
-## 🔧 Android Build (Belum Terintegrasi)
-
-Android pakai `ndk-build` bukan CMake. Yang perlu ditambahkan:
-
-```makefile
-# android/jni/Locals.mk — tambah:
-LOCAL_CFLAGS += -DPPSSPP_MULTICORE
-LOCAL_C_INCLUDES += $(LOCAL_PATH)/../../ext/libmgba/include
-
-# android/jni/Android.mk — tambah static library:
-# mgba
-include $(CLEAR_VARS)
-include $(LOCAL_PATH)/Locals.mk
-LOCAL_MODULE := mgba
-LOCAL_SRC_FILES := $(MGBA_FILES)  # semua .c ext/libmgba/
-include $(BUILD_STATIC_LIBRARY)
-
-# EmuCore
-include $(CLEAR_VARS)
-include $(LOCAL_PATH)/Locals.mk
-LOCAL_MODULE := EmuCore
-LOCAL_SRC_FILES := \
-  $(SRC)/EmuCore/EmuCore.cpp \
-  $(SRC)/EmuCore/PSPCore.cpp \
-  $(SRC)/EmuCore/GBACore.cpp \
-  $(SRC)/EmuCore/Config.cpp
-LOCAL_STATIC_LIBRARIES += mgba
-include $(BUILD_STATIC_LIBRARY)
-```
-
-**Belum dikerjakan** — menunggu runtime-test sukses di Linux SDL dulu.
+| 1 | Segfault boot | Linker strip mGBA symbols | `--whole-archive` | Pra-P1 |
+| 2 | HashTableLookup crash | mCoreConfig uninit | `mCoreConfigInit()` | Pra-P1 |
+| 3 | Video all-black | setVideoBuffer not called | Panggil setVideoBuffer | Pra-P1 |
+| 4 | Texture crash | desc.depth=0 | depth=1 | Pra-P1 |
+| 5 | GBA never drawn | PSP check before GBA path | Reorder render | Pra-P1 |
+| 6 | Audio noise | Sample overflow | Cap 1470/frame | Pra-P1 |
+| 7 | Audio slow-mo | Mono vs stereo mismatch | `/2` fix | Pra-P1 |
+| 8 | ESC not working | Early return | Direct handler | Pra-P1 |
+| 9 | PSP_Shutdown on GBA | No guard | coreType check | Pra-P1 |
+| 10 | Config mixing | No isolation | Save/Restore config | Pra-P1 |
+| 11 | Audio slow-mo (resample) | Silence padding 25.7% | Zero padding removal | P1 |
+| 12 | Duplicate render code | Thin3D in EmuScreen | Move to GBACore | P1 |
+| 13 | Duplicate audio code | Audio convert in EmuScreen | Move to GBACore | P1 |
+| 14 | #ifdef clutter | 45 #ifdefs | IsGBA() pattern | P2 |
+| 15 | Save state in EmuScreen | Logic campur | Move to GBACore | P3 |
+| **16** | **Audio crackling (current)** | ??? | **Belum fixed** | 🔴 |
 
 ---
 
-## 🔧 Linux SDL: Build & Run
+## 📋 Next Steps (Prioritas)
+
+1. **🔴 Audio quality** — root cause crackling
+   - Investigasi sinc width/quality parameter mGBA
+   - Bandingkan output dengan mGBA standalone
+   - Coba bypass GBA sound channels individually untuk isolasi masalah
+
+2. **🟡 Save state test** — runtime verify F1/F3/F2/F4 works
+
+3. **🟡 Android integration** — setelah audio fix + save state verified
+
+---
+
+## Build Commands
 
 ```bash
-# Build (MULTICORE=ON)
-cmake -B build-test2 -DCMAKE_BUILD_TYPE=Release -DPPSSPP_MULTICORE=ON
-cmake --build build-test2 --target PPSSPPSDL -j$(nproc)
+# Build with GBA support
+cmake -B build-final -DCMAKE_BUILD_TYPE=Release -DPPSSPP_MULTICORE=ON
+cmake --build build-final --target PPSSPPSDL -j$(nproc)
 
-# Run GBA ROM
-./build-test2/PPSSPPSDL "/path/to/game.gba"
-
-# Test core directly
-./build-test2/test_gba_core "/path/to/game.gba"
-
-# Run with GBA-only log
-./build-test2/PPSSPPSDL "/path/to/game.gba" 2>&1 | grep "\[GBA\]"
-
-# Run with config log
-./build-test2/PPSSPPSDL "/path/to/game.gba" 2>&1 | grep "\[CONFIG\]"
+# Run with GBA log
+./build-final/PPSSPPSDL "/path/to/game.gba" 2>&1 | grep "\[GBA\]"
 ```

@@ -57,6 +57,9 @@ public:
 	// Returns stereo pairs at 44100 Hz (735 per frame at 60fps).
 	void GetMixedAudio(int32_t *buffer, size_t *stereoPairs);
 
+	// [PPSSPP-FORK] MultiCore: clear all pending audio (for fast forward frame skipping)
+	void ClearAudio();
+
 	// [PPSSPP-FORK] MultiCore: save state to file (slot-based, .gbast extension)
 	bool SaveStateToFile(int slot);
 	bool LoadStateFromFile(int slot);
@@ -80,9 +83,23 @@ private:
 	static constexpr int GBA_NATIVE_RATE = 32768;  // mGBA core default
 	static constexpr int TARGET_RATE = 44100;       // PPSSPP mixer rate
 
+	// mGBA's own sinc resampler (32768 Hz -> 44100 Hz), void* for PIMPL
+	void* resampler_;
+	void* resampleDest_;
+
+	// Temporary output buffer after resample
 	int16_t audioBuffer_[AUDIO_BUF_SIZE * 2]{};
-	size_t audioAvailable_ = 0;     // bytes in audioBuffer_
-	size_t audioStereoPairs_ = 0;   // native stereo frame count from last RunFrame()
+	size_t audioStereoPairs_ = 0;
+
+	// DC blocking filter state (SkyEmu-inspired high-pass for SOUNDBIAS DC offset)
+	float dcCapL_ = 0.0f;
+	float dcCapR_ = 0.0f;
+
+	// Audio rate from mGBA core (changes with SOUNDBIAS, but always derived from 32768 Hz base)
+	unsigned coreSampleRate_ = 32768;
+
+	// Track previous frame's mAudioBuffer size for rate detection
+	size_t prevAvailable_ = 0;
 
 	bool LoadROMInternal(const Path &path);
 	std::string GetSavePrefix() const;
