@@ -2,7 +2,7 @@
 
 **Date:** 2026-06-22
 **Branch:** `feature/lan-sync`
-**Last commit:** `92e779c` — Plan: GBA Settings Screen
+**Last commit:** `d70ebc4` — Mark GBA implementation plan ✅
 **Build:** `build-final/PPSSPPSDL` — MULTICORE=ON ✅
 
 ---
@@ -154,6 +154,20 @@ g_recentFilesN64.Add(filename.ToString());
 
 Selesai. `CreateRecentTab()`, `HasSpecialFiles()`, `DisplayTopBar()`
 otomatis iterasi registry — tidak perlu edit lagi.
+
+## Upcoming Plans (Belum Dikerjakan)
+
+| Plan | Tasks | Spec |
+|------|-------|------|
+| **GBA Settings Screen** | 24 task `[ ]` | `docs/superpowers/specs/2026-06-22-gba-settings-screen-design.md` |
+| GBA Display Layout | (bagian dari GBA Settings Screen) | Aspect ratio + integer scaling |
+
+Cara mulai eksekusi:
+
+```bash
+cd docs/superpowers/plans/
+# Buka 2026-06-22-gba-settings-screen.md, mulai dari Task 1
+```
 
 ## Build & Run
 
