@@ -16,6 +16,18 @@ namespace EmuCore {
 
 class GBACore : public Core {
 public:
+	// GBA button bit indices (from mgba/internal/gba/input.h)
+	static constexpr uint32_t GBA_BIT_A      = 1 << 0;
+	static constexpr uint32_t GBA_BIT_B      = 1 << 1;
+	static constexpr uint32_t GBA_BIT_SELECT = 1 << 2;
+	static constexpr uint32_t GBA_BIT_START  = 1 << 3;
+	static constexpr uint32_t GBA_BIT_RIGHT  = 1 << 4;
+	static constexpr uint32_t GBA_BIT_LEFT   = 1 << 5;
+	static constexpr uint32_t GBA_BIT_UP     = 1 << 6;
+	static constexpr uint32_t GBA_BIT_DOWN   = 1 << 7;
+	static constexpr uint32_t GBA_BIT_R      = 1 << 8;
+	static constexpr uint32_t GBA_BIT_L      = 1 << 9;
+
 	GBACore();
 	~GBACore() override;
 
@@ -32,6 +44,8 @@ public:
 	void GetAudioSamples(int16_t *buffer, size_t *samples) override;
 
 	void SetKeys(uint32_t keys) override;
+	// [PPSSPP-FORK] MultiCore: set GBA keys with PSP buttons + GBA VIRTKEY bits combined
+	void SetKeys(uint32_t pspKeys, uint32_t gbaVirtKeys);
 	uint32_t GetKeys() const override;
 
 	size_t GetStateSize() const override;

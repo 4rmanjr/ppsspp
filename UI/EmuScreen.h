@@ -183,6 +183,11 @@ private:
 
 	std::vector<VirtKey> queuedVirtKeys_;
 
+	// [PPSSPP-FORK] MultiCore: accumulated GBA VIRTKEY state (independent of PSP buttons)
+#ifdef PPSSPP_MULTICORE
+	uint32_t gbaVirtKeys_ = 0;
+#endif
+
 	ImGuiContext *ctx_ = nullptr;
 
 	bool frameStep_ = false;

@@ -810,6 +810,18 @@ void EmuScreen::OnVKey(VirtKey virtualKeyCode, bool down) {
 	auto sc = GetI18NCategory(I18NCat::SCREEN);
 	auto mc = GetI18NCategory(I18NCat::MAPPABLECONTROLS);
 
+	// [PPSSPP-FORK] MultiCore: accumulate GBA VIRTKEY state
+#ifdef PPSSPP_MULTICORE
+	if (virtualKeyCode >= VIRTKEY_GBA_FIRST && virtualKeyCode <= VIRTKEY_GBA_RIGHT) {
+		if (down) {
+			gbaVirtKeys_ |= (1u << (virtualKeyCode - VIRTKEY_GBA_FIRST));
+		} else {
+			gbaVirtKeys_ &= ~(1u << (virtualKeyCode - VIRTKEY_GBA_FIRST));
+		}
+		return;
+	}
+#endif
+
 	switch (virtualKeyCode) {
 	case VIRTKEY_FASTFORWARD:
 		if (down && !NetworkWarnUserIfOnlineAndCantSpeed() && !bootPending_) {
@@ -1563,9 +1575,16 @@ void EmuScreen::UpdateGBA() {
 		uint32_t pspButtons = __CtrlPeekButtons();
 		static int inputDebug = 0;
 		if (++inputDebug <= 5 || inputDebug % 180 == 0) {
-			NOTICE_LOG(Log::System, "[GBA] Input frame %d: pspButtons=0x%04X", inputDebug, pspButtons);
+			NOTICE_LOG(Log::System, "[GBA] Input frame %d: pspButtons=0x%04X, gbaVirtKeys=0x%04X", inputDebug, pspButtons, gbaVirtKeys_);
 		}
-		activeCore_->SetKeys(pspButtons);
+		// [PPSSPP-FORK] MultiCore: merge PSP buttons with GBA VIRTKEY bits
+#ifdef PPSSPP_MULTICORE
+		if (gbaVirtKeys_) {
+			EmuCore::GBACore *gba = static_cast<EmuCore::GBACore *>(activeCore_.get());
+			gba->SetKeys(pspButtons, gbaVirtKeys_);
+		} else
+#endif
+			activeCore_->SetKeys(pspButtons);
 	}
 
 

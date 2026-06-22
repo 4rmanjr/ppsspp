@@ -44,18 +44,7 @@ static constexpr uint32_t PSP_CTRL_RIGHT     = 0x0020;
 static constexpr uint32_t PSP_CTRL_LTRIGGER  = 0x0100;
 static constexpr uint32_t PSP_CTRL_RTRIGGER  = 0x0200;
 
-// GBA key bit indices (from mgba/internal/gba/input.h)
-static constexpr uint32_t GBA_BIT_A      = 1 << 0;
-static constexpr uint32_t GBA_BIT_B      = 1 << 1;
-static constexpr uint32_t GBA_BIT_SELECT = 1 << 2;
-static constexpr uint32_t GBA_BIT_START  = 1 << 3;
-static constexpr uint32_t GBA_BIT_RIGHT  = 1 << 4;
-static constexpr uint32_t GBA_BIT_LEFT   = 1 << 5;
-static constexpr uint32_t GBA_BIT_UP     = 1 << 6;
-static constexpr uint32_t GBA_BIT_DOWN   = 1 << 7;
-static constexpr uint32_t GBA_BIT_R      = 1 << 8;
-static constexpr uint32_t GBA_BIT_L      = 1 << 9;
-
+// GBA_BIT_* constants now in GBACore.h (public)
 uint32_t GBACore::PSPSKeysToGBA(uint32_t pspKeys) {
 	uint32_t gbaKeys = 0;
 	if (pspKeys & PSP_CTRL_CROSS)    gbaKeys |= GBA_BIT_A;
@@ -569,6 +558,14 @@ void GBACore::SetKeys(uint32_t keys) {
 	if (core_) {
 		// Convert PSP key bitmask to GBA key bitmask transparently
 		uint32_t gbaKeys = PSPSKeysToGBA(keys);
+		core_->setKeys(core_, gbaKeys);
+	}
+}
+
+// [PPSSPP-FORK] MultiCore: merge PSP buttons with GBA VIRTKEY bits
+void GBACore::SetKeys(uint32_t pspKeys, uint32_t gbaVirtKeys) {
+	if (core_) {
+		uint32_t gbaKeys = PSPSKeysToGBA(pspKeys) | gbaVirtKeys;
 		core_->setKeys(core_, gbaKeys);
 	}
 }
