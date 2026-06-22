@@ -424,6 +424,15 @@ void NativeInit(int argc, const char *argv[], const char *savegame_dir, const ch
 
 	// [PPSSPP-FORK] MultiCore: register recent files grouping for all emulator cores
 	// Adding a new core = just add one Register() call here + Add() in InitXXX.
+	auto pspFilter = +[](const std::string &path) -> bool {
+		// Exclude GBA/GB extensions from PSP section (safety net for migration edge cases)
+		size_t dot = path.rfind('.');
+		if (dot != std::string::npos) {
+			std::string_view ext(path.data() + dot, path.size() - dot);
+			return ext != ".gba" && ext != ".gb" && ext != ".gbc";
+		}
+		return true;
+	};
 	{
 		auto &reg = EmuCore::RecentFilesRegistry::Get();
 		reg.Register(EmuCore::RecentFilesEntry{
@@ -432,7 +441,7 @@ void NativeInit(int argc, const char *argv[], const char *savegame_dir, const ch
 			"Recent",
 			"RECENT",
 			&g_recentFiles,
-			nullptr,
+			pspFilter,
 			"",
 		});
 		reg.Register(EmuCore::RecentFilesEntry{
