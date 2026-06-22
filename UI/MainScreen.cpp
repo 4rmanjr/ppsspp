@@ -169,29 +169,35 @@ void MainScreen::CreateRecentTab() {
 
 	// PSP Recent Games
 	if (g_recentFiles.HasAny()) {
-		GameBrowser *tabRecentGames = new GameBrowser(GetRequesterToken(),
+		int pspCount = 0;
+		for (const auto &f : g_recentFiles.GetRecentFiles()) {
+			size_t dot = f.rfind('.');
+			if (dot != std::string::npos) {
+				std::string_view ext(f.data() + dot, f.size() - dot);
+				if (ext != ".gba" && ext != ".gb" && ext != ".gbc")
+					pspCount++;
+			}
+		}
+		std::string sectionTitle = StringFromFormat("PSP GAMES (%d)", pspCount);
+		CollapsibleSection *section = scrollView->Add(new CollapsibleSection(sectionTitle, new LinearLayoutParams(FILL_PARENT, WRAP_CONTENT)));
+		GameBrowser *tabRecentGames = section->Add(new GameBrowser(GetRequesterToken(),
 			Path("!RECENT"), BrowseFlags::NONE, portrait, &g_Config.bGridView1, screenManager(), "", "",
-			new LinearLayoutParams(FILL_PARENT, WRAP_CONTENT));
+			new LinearLayoutParams(FILL_PARENT, WRAP_CONTENT)));
 		tabRecentGames->SetSearchBar(search);
-		scrollView->Add(tabRecentGames);
 		gameBrowsers_.push_back(tabRecentGames);
 		tabRecentGames->OnChoice.Handle(this, &MainScreen::OnGameSelectedInstant);
 		tabRecentGames->OnHoldChoice.Handle(this, &MainScreen::OnGameSelected);
 		tabRecentGames->OnHighlight.Handle(this, &MainScreen::OnGameHighlight);
 	}
 
-	// [PPSSPP-FORK] MultiCore: separator before GBA section
-	if (g_recentFiles.HasAny() && g_recentFilesGBA.HasAny()) {
-		scrollView->Add(new Spacer(new LinearLayoutParams(FILL_PARENT, 8.0f)));
-	}
-
 	// [PPSSPP-FORK] MultiCore: GBA Recent Games
 	if (g_recentFilesGBA.HasAny()) {
-		GameBrowser *tabRecentGBA = new GameBrowser(GetRequesterToken(),
+		std::string sectionTitle = StringFromFormat("GBA GAMES (%d)", (int)g_recentFilesGBA.GetRecentFiles().size());
+		CollapsibleSection *section = scrollView->Add(new CollapsibleSection(sectionTitle, new LinearLayoutParams(FILL_PARENT, WRAP_CONTENT)));
+		GameBrowser *tabRecentGBA = section->Add(new GameBrowser(GetRequesterToken(),
 			Path("!RECENT_GBA"), BrowseFlags::NONE, portrait, &g_Config.bGridView1, screenManager(), "", "",
-			new LinearLayoutParams(FILL_PARENT, WRAP_CONTENT));
+			new LinearLayoutParams(FILL_PARENT, WRAP_CONTENT)));
 		tabRecentGBA->SetSearchBar(search);
-		scrollView->Add(tabRecentGBA);
 		gameBrowsers_.push_back(tabRecentGBA);
 		tabRecentGBA->OnChoice.Handle(this, &MainScreen::OnGameSelectedInstant);
 		tabRecentGBA->OnHoldChoice.Handle(this, &MainScreen::OnGameSelected);

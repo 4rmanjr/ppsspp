@@ -133,10 +133,12 @@ static AVIDump avi;
 
 extern bool g_TakeScreenshot;
 
+#ifdef PPSSPP_MULTICORE
 // [PPSSPP-FORK] MultiCore: GBA mode globals for cross-screen access (pause menu save/load)
 bool g_gbaModeActive = false;
 EmuCore::Core *g_activeCore = nullptr;
 std::string g_gbaSavePrefix;
+#endif
 
 static void AssertCancelCallback(const char *message, void *userdata) {
 	NOTICE_LOG(Log::CPU, "Broke after assert: %s", message);
@@ -1283,6 +1285,7 @@ bool EmuScreen::UnsyncKey(const KeyInput &key) {
 		return true;
 	}
 
+#ifdef PPSSPP_MULTICORE
 	// [PPSSPP-FORK] MultiCore: direct save/load handler for GBA mode
 	if (IsGBA() && (key.flags & KeyInputFlags::DOWN)) {
 		if (key.keyCode == NKCODE_F1) {
@@ -1308,6 +1311,7 @@ bool EmuScreen::UnsyncKey(const KeyInput &key) {
 			return true;
 		}
 	}
+#endif
 
 	return g_controlMapper.Key(key);
 }

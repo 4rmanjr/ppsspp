@@ -208,7 +208,9 @@ private:
 bool MustRunBehind();
 bool ShouldRunBehind();
 
+#ifdef PPSSPP_MULTICORE
 // [PPSSPP-FORK] MultiCore: GBA mode globals for cross-screen access (pause menu save/load)
 extern bool g_gbaModeActive;
 extern EmuCore::Core *g_activeCore;
 extern std::string g_gbaSavePrefix;
+#endif

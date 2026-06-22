@@ -646,6 +646,13 @@ bool GameBrowser::HasSpecialFiles(std::vector<Path> &filenames) {
 	if (path_.GetPath().ToString() == "!RECENT") {
 		filenames.clear();
 		for (auto &str : g_recentFiles.GetRecentFiles()) {
+			// [PPSSPP-FORK] MultiCore: filter out GBA files (belongs to separate GBA list)
+			size_t dot = str.rfind('.');
+			if (dot != std::string::npos) {
+				std::string_view ext(str.data() + dot, str.size() - dot);
+				if (ext == ".gba" || ext == ".gb" || ext == ".gbc")
+					continue;
+			}
 			filenames.emplace_back(str);
 		}
 		return true;
