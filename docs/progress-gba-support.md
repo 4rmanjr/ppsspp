@@ -2,7 +2,7 @@
 
 **Date:** 2026-06-22
 **Branch:** `feature/lan-sync`
-**Last commit:** `4846451c` — GBACore.h include fix, PSP filter lambda
+**Last commit:** `15f03b6` — GBA key mapping via VIRTKEY_GBA_*
 **Build:** `build-final/PPSSPPSDL` — MULTICORE=ON ✅
 
 ---
@@ -103,8 +103,25 @@ Bug: R↔B terbalik (little-endian byte order). Fix: `(B<<16)|(G<<8)|R`.
 | Data loss cascade (FIXED) | ✅ | GBA recent kosong → `g_Config.Save()` timpa INI → `[GBA Recent]` section hilang. Fix: `FillSync()` cegah data kosong |
 | RecentFilesRegistry | ✅ **SELESAI** | Registry terpusat — tambah core baru = 1 Register() call + InitXXX() Add() |
 | Game icon/cover | ❌ | GBA tidak punya cover download |
-| Key mapping terpisah | 🟡 | Plan siap — GBA VIRTKEY, belum diimplement |
+| Key mapping terpisah | ✅ **SELESAI** | VIRTKEY_GBA_* (0x40000040+), default keyboard mappings, save/load INI |
 | Android build | 🔴 | Belum dimulai |
+
+---
+
+## Key Mapping — VIRTKEY_GBA_*
+
+| VIRTKEY | Default Keyboard | GBA Bit |
+|---------|-----------------|---------|
+| `VIRTKEY_GBA_A` | Z | A |
+| `VIRTKEY_GBA_B` | X | B |
+| `VIRTKEY_GBA_L` | A | L |
+| `VIRTKEY_GBA_R` | S | R |
+| `VIRTKEY_GBA_START` | Space | Start |
+| `VIRTKEY_GBA_SELECT` | Shift | Select |
+| `VIRTKEY_GBA_UP/DOWN/LEFT/RIGHT` | Arrow keys | D-Pad |
+
+Mapping bisa diubah di **Control Mapping** screen — VIRTKEY_GBA_* muncul otomatis.
+Mapping tidak mengganggu PSP keys.
 
 ---
 
