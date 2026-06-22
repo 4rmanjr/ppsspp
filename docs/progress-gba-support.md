@@ -2,7 +2,7 @@
 
 **Date:** 2026-06-22
 **Branch:** `feature/lan-sync`
-**Last commit:** `a3b4753adf` — grouping PSP+GBA Recent fix, ScrollView wrapper
+**Last commit:** `704f15c` — RecentFilesRegistry: extensible grouping architecture
 **Build:** `build-final/PPSSPPSDL` — MULTICORE=ON ✅
 
 ---
@@ -101,11 +101,40 @@ Bug: R↔B terbalik (little-endian byte order). Fix: `(B<<16)|(G<<8)|R`.
 | Clear Recent tidak clear GBA (FIXED) | ✅ | `OnRecentClearClick` + `RestoreSettingsBits::RECENT` hanya clear PSP. Fix: tambah `g_recentFilesGBA.Clear()` |
 | Race condition GBA recent (FIXED) | ✅ | Thread belum proses Load → HasAny=false + Save timpa INI. Fix: `FillSync()` synchronous fill |
 | Data loss cascade (FIXED) | ✅ | GBA recent kosong → `g_Config.Save()` timpa INI → `[GBA Recent]` section hilang. Fix: `FillSync()` cegah data kosong |
+| RecentFilesRegistry | ✅ **SELESAI** | Registry terpusat — tambah core baru = 1 Register() call + InitXXX() Add() |
 | Game icon/cover | ❌ | GBA tidak punya cover download |
 | Key mapping terpisah | 🟡 | Plan siap — GBA VIRTKEY, belum diimplement |
 | Android build | 🔴 | Belum dimulai |
 
 ---
+
+## Adding Future Cores (Recent Files Grouping)
+
+`RecentFilesRegistry` (`EmuCore/RecentFilesRegistry.h/.cpp`) adalah registry terpusat
+untuk recent files grouping. Setiap emulator core cukup mendaftarkan diri:
+
+```cpp
+// Di NativeApp.cpp, setelah EnsureThread
+auto &reg = EmuCore::RecentFilesRegistry::Get();
+reg.Register(EmuCore::RecentFilesEntry{
+    (int)EmuCore::Type::N64,   // coreType dari EmuCore::Type
+    "N64",                     // displayName → "N64 GAMES (N)"
+    "N64 Recent",              // iniSection → [N64 Recent] di ppsspp.ini
+    "RECENT_N64",              // specialPath → GameBrowser path "!RECENT_N64"
+    &g_recentFilesN64,         // manager → RecentFilesManager global
+    nullptr,                   // filter → opsional, nullptr = tampilkan semua
+    ".n64:.z64:.v64",          // extensions → untuk DetectType
+});
+```
+
+Lalu di `InitN64()`:
+
+```cpp
+g_recentFilesN64.Add(filename.ToString());
+```
+
+Selesai. `CreateRecentTab()`, `HasSpecialFiles()`, `DisplayTopBar()`
+otomatis iterasi registry — tidak perlu edit lagi.
 
 ## Build & Run
 
