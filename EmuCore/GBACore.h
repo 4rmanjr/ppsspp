@@ -113,8 +113,10 @@ private:
 	size_t audioStereoPairs_ = 0;
 
 	// DC blocking filter state (SkyEmu-inspired high-pass for SOUNDBIAS DC offset)
-	float dcCapL_ = 0.0f;
+	float dcCapL_ = 0.0f;     // Used by GetMixedAudio (EMA tracker)
 	float dcCapR_ = 0.0f;
+	float dcCapRawL_ = 0.0f;  // Used by GetRawAudio (self-decay capacitor)
+	float dcCapRawR_ = 0.0f;
 
 	// Audio rate from mGBA core (changes with SOUNDBIAS, but always derived from 32768 Hz base)
 	unsigned coreSampleRate_ = 32768;

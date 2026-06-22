@@ -235,12 +235,14 @@ void GBACore::RunFrame() {
 			mAudioResamplerProcess(static_cast<struct mAudioResampler*>(resampler_));
 
 			// Drain excess source audio, but PRESERVE lowWaterMark samples for resampler state
-			// Resampler leaves timestamp at ~lowWaterMark (8), expects those source frames next frame
+			// Resampler leaves timestamp at ~lowWaterMark (~16), expects those source frames next frame
 			// If we drain everything, timestamp goes out of sync -> audio artifacts
+			// IMPORTANT: LOW_WATER must match r->lowWaterMark (sinc width), not hardcoded!
 			size_t remaining = mAudioBufferAvailable(src);
-			static constexpr size_t LOW_WATER = 8;
-			if (remaining > LOW_WATER + 4) {  // only if more than lowWaterMark + margin
-				size_t toDrain = remaining - LOW_WATER;
+			auto *r = static_cast<struct mAudioResampler*>(resampler_);
+			size_t lowWater = (size_t)r->lowWaterMark;
+			if (remaining > lowWater + 4) {  // only if more than lowWaterMark + margin
+				size_t toDrain = remaining - lowWater;
 				int16_t drainBuf[64];
 				while (toDrain > 0) {
 					size_t chunk = toDrain > 64 ? 64 : toDrain;
@@ -455,6 +457,11 @@ void GBACore::ClearAudio() {
 		mAudioBufferClear(src);
 	}
 	mAudioBufferClear(static_cast<struct mAudioBuffer*>(resampleDest_));
+	// [PPSSPP-FORK] MultiCore: reset resampler timestamp agar tidak stale
+	// setelah frame skip. Tanpa reset, timestamp ≈ lowWaterMark (16) menyebabkan
+	// sample pertama source baru dilewati → discontinuity/click.
+	auto *r = static_cast<struct mAudioResampler*>(resampler_);
+	r->timestamp = 0.0;
 	audioStereoPairs_ = 0;
 }
 
@@ -471,11 +478,12 @@ const int16_t *GBACore::GetRawAudio(size_t *stereoPairs) {
 		float left = (float)audioBuffer_[i * 2];
 		float right = (float)audioBuffer_[i * 2 + 1];
 
-		// DC blocking filter (SkyEmu-inspired)
-		float outL = left - dcCapL_;
-		float outR = right - dcCapR_;
-		dcCapL_ = (left - outL) * 0.996f;
-		dcCapR_ = (right - outR) * 0.996f;
+		// DC blocking filter (SkyEmu-inspired) — uses dedicated dcCapRaw to avoid
+		// state corruption with GetMixedAudio's EMA tracker (dcCapL_/dcCapR_).
+		float outL = left - dcCapRawL_;
+		float outR = right - dcCapRawR_;
+		dcCapRawL_ = (left - outL) * 0.996f;
+		dcCapRawR_ = (right - outR) * 0.996f;
 
 		if (outL > 32767.0f) outL = 32767.0f;
 		if (outL < -32768.0f) outL = -32768.0f;
