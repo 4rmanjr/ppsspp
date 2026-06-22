@@ -417,6 +417,11 @@ void NativeInit(int argc, const char *argv[], const char *savegame_dir, const ch
 
 	g_recentFiles.EnsureThread();
 
+#ifdef PPSSPP_MULTICORE
+	// [PPSSPP-FORK] MultiCore: ensure GBA recent file processing thread
+	g_recentFilesGBA.EnsureThread();
+#endif
+
 	// Make sure UI state is MENU.
 	ResetUIState();
 

@@ -20,6 +20,7 @@ Semua aturan detail ada di `docs/agents/`:
 | [multi-core-development.md](docs/agents/multi-core-development.md) | Aturan khusus multi-emulator (GBA, future cores) |
 | [code-standards.md](docs/agents/code-standards.md) | Standar kode C++, platform, dsb |
 | [feature-template.md](docs/agents/feature-template.md) | Panduan menambah fitur baru |
+| [progress-gba-support.md](docs/progress-gba-support.md) | Progress & status fitur GBA support |
 
 ## Aturan Global
 
