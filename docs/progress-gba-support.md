@@ -2,7 +2,7 @@
 
 **Date:** 2026-06-22
 **Branch:** `feature/lan-sync`
-**Last commit:** `15f03b6` — GBA key mapping via VIRTKEY_GBA_*
+**Last commit:** `92e779c` — Plan: GBA Settings Screen
 **Build:** `build-final/PPSSPPSDL` — MULTICORE=ON ✅
 
 ---
@@ -104,6 +104,8 @@ Bug: R↔B terbalik (little-endian byte order). Fix: `(B<<16)|(G<<8)|R`.
 | RecentFilesRegistry | ✅ **SELESAI** | Registry terpusat — tambah core baru = 1 Register() call + InitXXX() Add() |
 | Game icon/cover | ❌ | GBA tidak punya cover download |
 | Key mapping terpisah | ✅ **SELESAI** | VIRTKEY_GBA_* (0x40000040+), default keyboard mappings, save/load INI |
+| GBA Settings Screen | 📋 **PLAN** | `docs/superpowers/plans/2026-06-22-gba-settings-screen.md` — Controls, Display, Audio |
+| GBA Display Layout | 📋 **PLAN** | Aspect ratio + integer scaling di GBASettingsScreen |
 | Android build | 🔴 | Belum dimulai |
 
 ---
