@@ -4,10 +4,10 @@
 
 #pragma once
 
+#ifdef PPSSPP_MULTICORE
+
 #include "EmuCore/EmuCore.h"
 #include "Common/GPU/thin3d.h"
-
-#ifdef PPSSPP_MULTICORE
 
 // Forward declare mGBA types (included only in .cpp)
 struct mCore;
