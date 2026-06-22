@@ -32,6 +32,11 @@ public:
 	void EnsureThread();
 
 	std::vector<std::string> GetRecentFiles() const;
+
+	// [PPSSPP-FORK] MultiCore: synchronously fill recent files (bypass thread for initial load)
+#ifdef PPSSPP_MULTICORE
+	void FillSync(const std::vector<std::string> &files);
+#endif
 private:
 
 	enum class RecentCmd {

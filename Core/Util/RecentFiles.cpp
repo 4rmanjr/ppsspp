@@ -31,6 +31,14 @@ RecentFilesManager::~RecentFilesManager() {
 	}
 }
 
+// [PPSSPP-FORK] MultiCore: synchronous fill (bypasses thread for initial load)
+#ifdef PPSSPP_MULTICORE
+void RecentFilesManager::FillSync(const std::vector<std::string> &files) {
+	std::lock_guard<std::mutex> guard(recentLock_);
+	recentFiles_ = files;
+}
+#endif
+
 void RecentFilesManager::EnsureThread() {
 	if (thread_.joinable()) {
 		return;
@@ -186,6 +194,7 @@ void RecentFilesManager::ThreadFunc() {
 				}), recentFiles_.end());
 			}
 			recentFiles_.insert(recentFiles_.begin(), resolvedFilename);
+			NOTICE_LOG(Log::System, "[Recent Thread] Add processed: %s (total: %zu)", resolvedFilename.c_str(), recentFiles_.size());
 			if ((int)recentFiles_.size() > g_Config.iMaxRecent)
 				recentFiles_.resize(g_Config.iMaxRecent);
 			System_PostUIMessage(UIMessage::RECENT_FILES_CHANGED);

@@ -1458,6 +1458,24 @@ void Config::Load(const char *iniFileName, const char *controllerIniFilename) {
 			g_recentFilesGBA.Load(gbaRecent, iMaxRecent > 0 ? iMaxRecent : 50);
 		}
 	}
+
+	// [PPSSPP-FORK] MultiCore: fill GBA recent synchronously so UI can access immediately
+	// (background thread may not have processed async Load yet)
+	{
+		std::vector<std::string> gbaSync;
+		Section *gbaSection = iniFile.GetOrCreateSection("GBA Recent");
+		int maxGBA = iMaxRecent > 0 ? iMaxRecent : 50;
+		for (int i = 0; i < maxGBA; i++) {
+			char keyName[64];
+			std::string fileName;
+			snprintf(keyName, sizeof(keyName), "FileName%d", i);
+			if (gbaSection->Get(keyName, &fileName) && !fileName.empty()) {
+				gbaSync.push_back(fileName);
+			}
+		}
+		g_recentFilesGBA.FillSync(gbaSync);
+		NOTICE_LOG(Log::System, "[MultiCore] GBA recent sync-fill: %zu entries", gbaSync.size());
+	}
 #endif
 
 	// Time tracking
@@ -1877,6 +1895,10 @@ void Config::RestoreDefaults(RestoreSettingsBits whatToRestore, bool log) {
 
 		if (whatToRestore & RestoreSettingsBits::RECENT) {
 			g_recentFiles.Clear();
+			// [PPSSPP-FORK] MultiCore: also clear GBA recent files
+#ifdef PPSSPP_MULTICORE
+			g_recentFilesGBA.Clear();
+#endif
 			currentDirectory = defaultCurrentDirectory;
 		}
 	}

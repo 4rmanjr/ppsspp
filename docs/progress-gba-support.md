@@ -1,8 +1,8 @@
 # GBA Support — Progress Report
 
-**Date:** 2026-06-22 (updated)
+**Date:** 2026-06-22
 **Branch:** `feature/lan-sync`
-**Last commit:** `5e3b5e5` — save state fix: CreateFullPath bug
+**Last commit:** `a3b4753adf` — grouping PSP+GBA Recent fix, ScrollView wrapper
 **Build:** `build-final/PPSSPPSDL` — MULTICORE=ON ✅
 
 ---
@@ -31,7 +31,7 @@
 | **Save state thumbnail** | ✅ **WORKING** | `pngSave()` dari `videoBuffer_` ke `.jpg` (auto-detect) |
 | **Speed control** | ❌ **Belum test** | |
 | **Config isolation** | 🟡 **SEBAGIAN** | Boundary OK, UI settings masih campur |
-| **Recent tab** | ❌ **TIDAK BEKERJA** | GBA game tidak tercatat di Recent |
+| **Recent tab** | ✅ **WORKING** | PSP & GBA grouping: sync-fill + ScrollView wrapper fix |
 | **Game icon/cover** | ❌ **TIDAK TAMPIL** | PPSSPP download icon untuk PSP game ID |
 | **Android build** | 🔴 **Belum dimulai** | |
 
@@ -76,12 +76,14 @@ Bug: R↔B terbalik (little-endian byte order). Fix: `(B<<16)|(G<<8)|R`.
 ## Save State
 
 ### Format
+
 - **File:** `<SAVESTATE>/GBA_<gameCode>_<sanitizedTitle>_<slot>.ppst`
 - **Content:** Raw binary dari `core_->saveState()` (mGBA internal state)
 - **Size:** ~388KB (Breath of Fire)
 - **Trigger:** F1 (save), F3 (load), pause menu ScreenshotViewScreen
 
 ### Limitations
+
 - ❌ Main pause menu slot view (SaveSlotView) masih panggil PSP `SaveState::`
 - ❌ Tidak ada screenshot/thumbnail untuk GBA save state
 - ❌ Tidak ada undo save / rewind untuk GBA
@@ -94,7 +96,11 @@ Bug: R↔B terbalik (little-endian byte order). Fix: `(B<<16)|(G<<8)|R`.
 |-------|----------|------|
 | Config isolation (UI) | 🟡 | Setting PSP masih muncul di GBA mode |
 | Recent tab (GBA not added) | ✅ **SELESAI** | `g_recentFilesGBA.Add()` di InitGBA |
-| Recent tab (group per emulator) | 🟡 **SEBAGIAN** | Dua list terpisah, grouping + header masih WIP |
+| Recent tab (group per emulator) | ✅ **SELESAI** | 3 bugs fixed: race condition, data loss cascade, ScrollView single-child render |
+| ScrollView single-child render (FIXED) | ✅ | `ScrollView::Measure()` hanya render `views_[0]` — child ke-2 (GBA) tidak pernah di-layout. Fix: LinearLayout wrapper |
+| Clear Recent tidak clear GBA (FIXED) | ✅ | `OnRecentClearClick` + `RestoreSettingsBits::RECENT` hanya clear PSP. Fix: tambah `g_recentFilesGBA.Clear()` |
+| Race condition GBA recent (FIXED) | ✅ | Thread belum proses Load → HasAny=false + Save timpa INI. Fix: `FillSync()` synchronous fill |
+| Data loss cascade (FIXED) | ✅ | GBA recent kosong → `g_Config.Save()` timpa INI → `[GBA Recent]` section hilang. Fix: `FillSync()` cegah data kosong |
 | Game icon/cover | ❌ | GBA tidak punya cover download |
 | Key mapping terpisah | 🟡 | Plan siap — GBA VIRTKEY, belum diimplement |
 | Android build | 🔴 | Belum dimulai |

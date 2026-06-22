@@ -165,6 +165,10 @@ void MainScreen::CreateRecentTab() {
 	ScrollView *scrollView = tabContainer->Add(new ScrollView(ORIENT_VERTICAL, new LinearLayoutParams(FILL_PARENT, WRAP_CONTENT, 1.0f)));
 	scrollView->SetTag("MainScreenRecentGames");
 
+	// [PPSSPP-FORK] MultiCore: ScrollView hanya render child pertama.
+	// Gunakan LinearLayout wrapper untuk menampung multiple sections.
+	LinearLayout *wrapper = scrollView->Add(new LinearLayout(ORIENT_VERTICAL, new LinearLayoutParams(FILL_PARENT, WRAP_CONTENT)));
+
 	bool portrait = GetDeviceOrientation() == DeviceOrientation::Portrait;
 
 	// PSP Recent Games
@@ -179,7 +183,7 @@ void MainScreen::CreateRecentTab() {
 			}
 		}
 		std::string sectionTitle = StringFromFormat("PSP GAMES (%d)", pspCount);
-		CollapsibleSection *section = scrollView->Add(new CollapsibleSection(sectionTitle, new LinearLayoutParams(FILL_PARENT, WRAP_CONTENT)));
+		CollapsibleSection *section = wrapper->Add(new CollapsibleSection(sectionTitle, new LinearLayoutParams(FILL_PARENT, WRAP_CONTENT)));
 		GameBrowser *tabRecentGames = section->Add(new GameBrowser(GetRequesterToken(),
 			Path("!RECENT"), BrowseFlags::NONE, portrait, &g_Config.bGridView1, screenManager(), "", "",
 			new LinearLayoutParams(FILL_PARENT, WRAP_CONTENT)));
@@ -191,17 +195,22 @@ void MainScreen::CreateRecentTab() {
 	}
 
 	// [PPSSPP-FORK] MultiCore: GBA Recent Games
-	if (g_recentFilesGBA.HasAny()) {
-		std::string sectionTitle = StringFromFormat("GBA GAMES (%d)", (int)g_recentFilesGBA.GetRecentFiles().size());
-		CollapsibleSection *section = scrollView->Add(new CollapsibleSection(sectionTitle, new LinearLayoutParams(FILL_PARENT, WRAP_CONTENT)));
-		GameBrowser *tabRecentGBA = section->Add(new GameBrowser(GetRequesterToken(),
-			Path("!RECENT_GBA"), BrowseFlags::NONE, portrait, &g_Config.bGridView1, screenManager(), "", "",
-			new LinearLayoutParams(FILL_PARENT, WRAP_CONTENT)));
-		tabRecentGBA->SetSearchBar(search);
-		gameBrowsers_.push_back(tabRecentGBA);
-		tabRecentGBA->OnChoice.Handle(this, &MainScreen::OnGameSelectedInstant);
-		tabRecentGBA->OnHoldChoice.Handle(this, &MainScreen::OnGameSelected);
-		tabRecentGBA->OnHighlight.Handle(this, &MainScreen::OnGameHighlight);
+	{
+		bool gbaHasAny = g_recentFilesGBA.HasAny();
+		size_t gbaSize = g_recentFilesGBA.GetRecentFiles().size();
+		NOTICE_LOG(Log::System, "[GBA Recent Tab] HasAny=%d size=%zu", gbaHasAny ? 1 : 0, gbaSize);
+		if (gbaHasAny) {
+			std::string sectionTitle = StringFromFormat("GBA GAMES (%d)", (int)gbaSize);
+			CollapsibleSection *section = wrapper->Add(new CollapsibleSection(sectionTitle, new LinearLayoutParams(FILL_PARENT, WRAP_CONTENT)));
+			GameBrowser *tabRecentGBA = section->Add(new GameBrowser(GetRequesterToken(),
+				Path("!RECENT_GBA"), BrowseFlags::NONE, portrait, &g_Config.bGridView1, screenManager(), "", "",
+				new LinearLayoutParams(FILL_PARENT, WRAP_CONTENT)));
+			tabRecentGBA->SetSearchBar(search);
+			gameBrowsers_.push_back(tabRecentGBA);
+			tabRecentGBA->OnChoice.Handle(this, &MainScreen::OnGameSelectedInstant);
+			tabRecentGBA->OnHoldChoice.Handle(this, &MainScreen::OnGameSelected);
+			tabRecentGBA->OnHighlight.Handle(this, &MainScreen::OnGameHighlight);
+		}
 	}
 
 	tabHolder_->AddTab(mm->T("Recent"), ImageID::invalid(), tabContainer);
@@ -956,6 +965,10 @@ void GridSettingsPopupScreen::GridMinusClick(UI::EventParams &e) {
 
 void GridSettingsPopupScreen::OnRecentClearClick(UI::EventParams &e) {
 	g_recentFiles.Clear();
+	// [PPSSPP-FORK] MultiCore: also clear GBA recent files
+#ifdef PPSSPP_MULTICORE
+	g_recentFilesGBA.Clear();
+#endif
 	OnRecentChanged.Trigger(e);
 	TriggerFinish(DR_OK);
 }
