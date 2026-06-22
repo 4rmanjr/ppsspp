@@ -223,6 +223,10 @@ static const BindingCategory cats[] = {
 	{"Control modifiers", VIRTKEY_ANALOG_ROTATE_CW},
 	{"Emulator controls", VIRTKEY_FASTFORWARD},
 	{"Extended PSP controls", VIRTKEY_AXIS_RIGHT_Y_MAX},
+	// [PPSSPP-FORK] MultiCore: GBA-specific controls category
+#ifdef PPSSPP_MULTICORE
+	{"GBA controls", VIRTKEY_GBA_A},
+#endif
 	{},  // sentinel
 };
 
