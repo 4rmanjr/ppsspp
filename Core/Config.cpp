@@ -1400,19 +1400,62 @@ void Config::Load(const char *iniFileName, const char *controllerIniFilename) {
 
 #ifdef PPSSPP_MULTICORE
 	// [PPSSPP-FORK] MultiCore: migrate leaked GBA files from PSP recent to GBA recent
-	// (Files added to PSP list before the System.cpp guard existed)
+	// Read ini directly (GetRecentFiles() empty until bg thread starts in NativeApp.cpp)
 	if (iMaxRecent > 0) {
-		auto pspFiles = g_recentFiles.GetRecentFiles();
-		for (auto &f : pspFiles) {
-			size_t dot = f.rfind('.');
-			if (dot != std::string::npos) {
-				std::string_view ext(f.data() + dot, f.size() - dot);
-				if (ext == ".gba" || ext == ".gb" || ext == ".gbc") {
-					g_recentFiles.Remove(f);
-					g_recentFilesGBA.Add(f);
-					INFO_LOG(Log::System, "[MultiCore] Migrated leaked GBA entry from PSP recent to GBA: %s", f.c_str());
+		std::vector<std::string> pspOnly, gbaLeaked;
+		for (int i = 0; i < iMaxRecent; i++) {
+			char keyName[64];
+			std::string fileName;
+			snprintf(keyName, sizeof(keyName), "FileName%d", i);
+			if (recent->Get(keyName, &fileName) && !fileName.empty()) {
+				size_t dot = fileName.rfind('.');
+				if (dot != std::string::npos) {
+					std::string_view ext(fileName.data() + dot, fileName.size() - dot);
+					if (ext == ".gba" || ext == ".gb" || ext == ".gbc") {
+						gbaLeaked.push_back(fileName);
+						continue;
+					}
+				}
+				pspOnly.push_back(fileName);
+			}
+		}
+
+		if (!gbaLeaked.empty()) {
+			// Rebuild PSP ini section without GBA entries
+			recent->Clear();
+			for (size_t i = 0; i < pspOnly.size(); i++) {
+				char keyName[64];
+				snprintf(keyName, sizeof(keyName), "FileName%d", (int)i);
+				recent->Set(keyName, pspOnly[i]);
+			}
+			// Merge leaked GBA into GBA ini section (avoid duplicates)
+			for (auto &f : gbaLeaked) {
+				bool found = false;
+				for (int i = 0; i < (iMaxRecent > 0 ? iMaxRecent : 50); i++) {
+					char keyName[64];
+					std::string existing;
+					snprintf(keyName, sizeof(keyName), "FileName%d", i);
+					if (gbaRecent->Get(keyName, &existing) && existing == f) {
+						found = true;
+						break;
+					}
+				}
+				if (!found) {
+					for (int i = 0; i < (iMaxRecent > 0 ? iMaxRecent : 50); i++) {
+						char keyName[64];
+						std::string existing;
+						snprintf(keyName, sizeof(keyName), "FileName%d", i);
+						if (!gbaRecent->Get(keyName, &existing) || existing.empty()) {
+							gbaRecent->Set(keyName, f);
+							INFO_LOG(Log::System, "[MultiCore] Migrated leaked GBA entry from PSP recent to GBA: %s", f.c_str());
+							break;
+						}
+					}
 				}
 			}
+			// Re-queue Load with updated ini sections (wipes old queued commands)
+			g_recentFiles.Load(recent, iMaxRecent);
+			g_recentFilesGBA.Load(gbaRecent, iMaxRecent > 0 ? iMaxRecent : 50);
 		}
 	}
 #endif
