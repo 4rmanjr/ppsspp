@@ -45,6 +45,7 @@
 
 #ifdef PPSSPP_MULTICORE
 #include "EmuCore/EmuCore.h"
+#include "EmuCore/RecentFilesRegistry.h"
 #endif
 #include "UI/GameInfoCache.h"
 #include "UI/GameSettingsScreen.h"
@@ -171,46 +172,25 @@ void MainScreen::CreateRecentTab() {
 
 	bool portrait = GetDeviceOrientation() == DeviceOrientation::Portrait;
 
-	// PSP Recent Games
-	if (g_recentFiles.HasAny()) {
-		int pspCount = 0;
-		for (const auto &f : g_recentFiles.GetRecentFiles()) {
-			size_t dot = f.rfind('.');
-			if (dot != std::string::npos) {
-				std::string_view ext(f.data() + dot, f.size() - dot);
-				if (ext != ".gba" && ext != ".gb" && ext != ".gbc")
-					pspCount++;
-			}
-		}
-		std::string sectionTitle = StringFromFormat("PSP GAMES (%d)", pspCount);
-		CollapsibleSection *section = wrapper->Add(new CollapsibleSection(sectionTitle, new LinearLayoutParams(FILL_PARENT, WRAP_CONTENT)));
-		GameBrowser *tabRecentGames = section->Add(new GameBrowser(GetRequesterToken(),
-			Path("!RECENT"), BrowseFlags::NONE, portrait, &g_Config.bGridView1, screenManager(), "", "",
-			new LinearLayoutParams(FILL_PARENT, WRAP_CONTENT)));
-		tabRecentGames->SetSearchBar(search);
-		gameBrowsers_.push_back(tabRecentGames);
-		tabRecentGames->OnChoice.Handle(this, &MainScreen::OnGameSelectedInstant);
-		tabRecentGames->OnHoldChoice.Handle(this, &MainScreen::OnGameSelected);
-		tabRecentGames->OnHighlight.Handle(this, &MainScreen::OnGameHighlight);
-	}
+	// [PPSSPP-FORK] MultiCore: iterasi semua emulator core yang terdaftar di registry.
+	// Menambah core baru = register di NativeApp.cpp + selesai.
+	for (const auto &entry : EmuCore::RecentFilesRegistry::Get().GetAll()) {
+		RecentFilesManager *mgr = entry.manager;
+		if (!mgr || !mgr->HasAny())
+			continue;
 
-	// [PPSSPP-FORK] MultiCore: GBA Recent Games
-	{
-		bool gbaHasAny = g_recentFilesGBA.HasAny();
-		size_t gbaSize = g_recentFilesGBA.GetRecentFiles().size();
-		NOTICE_LOG(Log::System, "[GBA Recent Tab] HasAny=%d size=%zu", gbaHasAny ? 1 : 0, gbaSize);
-		if (gbaHasAny) {
-			std::string sectionTitle = StringFromFormat("GBA GAMES (%d)", (int)gbaSize);
-			CollapsibleSection *section = wrapper->Add(new CollapsibleSection(sectionTitle, new LinearLayoutParams(FILL_PARENT, WRAP_CONTENT)));
-			GameBrowser *tabRecentGBA = section->Add(new GameBrowser(GetRequesterToken(),
-				Path("!RECENT_GBA"), BrowseFlags::NONE, portrait, &g_Config.bGridView1, screenManager(), "", "",
-				new LinearLayoutParams(FILL_PARENT, WRAP_CONTENT)));
-			tabRecentGBA->SetSearchBar(search);
-			gameBrowsers_.push_back(tabRecentGBA);
-			tabRecentGBA->OnChoice.Handle(this, &MainScreen::OnGameSelectedInstant);
-			tabRecentGBA->OnHoldChoice.Handle(this, &MainScreen::OnGameSelected);
-			tabRecentGBA->OnHighlight.Handle(this, &MainScreen::OnGameHighlight);
-		}
+		int count = (int)mgr->GetRecentFiles().size();
+		std::string sectionTitle = StringFromFormat("%s GAMES (%d)", entry.displayName.c_str(), count);
+
+		CollapsibleSection *section = wrapper->Add(new CollapsibleSection(sectionTitle, new LinearLayoutParams(FILL_PARENT, WRAP_CONTENT)));
+		GameBrowser *browser = section->Add(new GameBrowser(GetRequesterToken(),
+			Path("!" + entry.specialPath), BrowseFlags::NONE, portrait, &g_Config.bGridView1, screenManager(), "", "",
+			new LinearLayoutParams(FILL_PARENT, WRAP_CONTENT)));
+		browser->SetSearchBar(search);
+		gameBrowsers_.push_back(browser);
+		browser->OnChoice.Handle(this, &MainScreen::OnGameSelectedInstant);
+		browser->OnHoldChoice.Handle(this, &MainScreen::OnGameSelected);
+		browser->OnHighlight.Handle(this, &MainScreen::OnGameHighlight);
 	}
 
 	tabHolder_->AddTab(mm->T("Recent"), ImageID::invalid(), tabContainer);
@@ -394,7 +374,19 @@ void MainScreen::CreateViews() {
 
 	tabHolder_->SetClip(true);
 
-	bool showRecent = g_Config.iMaxRecent > 0 || g_recentFilesGBA.HasAny();
+	// [PPSSPP-FORK] MultiCore: check registry for any core with recent files
+#ifdef PPSSPP_MULTICORE
+	bool anyCoreHasRecent = false;
+	for (const auto &e : EmuCore::RecentFilesRegistry::Get().GetAll()) {
+		if (e.manager && e.manager->HasAny()) {
+			anyCoreHasRecent = true;
+			break;
+		}
+	}
+	bool showRecent = g_Config.iMaxRecent > 0 || anyCoreHasRecent;
+#else
+	bool showRecent = g_Config.iMaxRecent > 0;
+#endif
 	bool hasStorageAccess = !System_GetPropertyBool(SYSPROP_SUPPORTS_PERMISSIONS) ||
 		System_GetPermissionStatus(SYSTEM_PERMISSION_STORAGE) == PERMISSION_STATUS_GRANTED;
 	bool storageIsTemporary = IsTempPath(GetSysDirectory(DIRECTORY_SAVEDATA)) && !confirmedTemporary_;
@@ -417,7 +409,13 @@ void MainScreen::CreateViews() {
 			remoteBrowser->SetHomePath(remotePath);
 		}
 
-		if (g_recentFiles.HasAny() || g_recentFilesGBA.HasAny()) {
+		// [PPSSPP-FORK] MultiCore: check registry for any cores with recent files
+#ifdef PPSSPP_MULTICORE
+		bool setRecent = anyCoreHasRecent;
+#else
+		bool setRecent = g_recentFiles.HasAny();
+#endif
+		if (setRecent) {
 			tabHolder_->SetCurrentTab(std::clamp(g_Config.iDefaultTab, 0, g_Config.bRemoteTab ? 3 : 2), true);
 		} else if (g_Config.iMaxRecent > 0) {
 			tabHolder_->SetCurrentTab(1, true);	

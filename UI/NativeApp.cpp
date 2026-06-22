@@ -129,6 +129,7 @@
 
 #ifdef PPSSPP_MULTICORE
 #include "EmuCore/EmuCore.h"
+#include "EmuCore/RecentFilesRegistry.h"
 #endif
 
 #include "UI/GameInfoCache.h"
@@ -420,6 +421,30 @@ void NativeInit(int argc, const char *argv[], const char *savegame_dir, const ch
 #ifdef PPSSPP_MULTICORE
 	// [PPSSPP-FORK] MultiCore: ensure GBA recent file processing thread
 	g_recentFilesGBA.EnsureThread();
+
+	// [PPSSPP-FORK] MultiCore: register recent files grouping for all emulator cores
+	// Adding a new core = just add one Register() call here + Add() in InitXXX.
+	{
+		auto &reg = EmuCore::RecentFilesRegistry::Get();
+		reg.Register(EmuCore::RecentFilesEntry{
+			(int)EmuCore::Type::PSP,
+			"PSP",
+			"Recent",
+			"RECENT",
+			&g_recentFiles,
+			nullptr,
+			"",
+		});
+		reg.Register(EmuCore::RecentFilesEntry{
+			(int)EmuCore::Type::GBA,
+			"GBA",
+			"GBA Recent",
+			"RECENT_GBA",
+			&g_recentFilesGBA,
+			nullptr,
+			".gba:.gb:.gbc",
+		});
+	}
 #endif
 
 	// Make sure UI state is MENU.

@@ -46,6 +46,11 @@
 #include "UI/Background.h"
 #include "Core/Config.h"
 #include "Common/Data/Text/I18n.h"
+
+// [PPSSPP-FORK] MultiCore: recent files registry for extensible grouping
+#ifdef PPSSPP_MULTICORE
+#include "EmuCore/RecentFilesRegistry.h"
+#endif
 #include "Core/Util/DarwinFileSystemServices.h" // For the browser
 
 static void DrawIconWithText(UIContext &dc, ImageID image, std::string_view text, const Bounds &bounds, bool gridStyle, const UI::Style &style) {
@@ -639,32 +644,47 @@ void GameBrowser::PinToggleClick(UI::EventParams &e) {
 }
 
 bool GameBrowser::DisplayTopBar() {
-	return path_.GetPath().ToString() != "!RECENT" && path_.GetPath().ToString() != "!RECENT_GBA";
+	std::string pathStr = path_.GetPath().ToString();
+
+	// [PPSSPP-FORK] MultiCore: check registry for special paths
+#ifdef PPSSPP_MULTICORE
+	if (EmuCore::RecentFilesRegistry::Get().FindBySpecialPath(pathStr))
+		return false;
+#else
+	if (pathStr == "!RECENT")
+		return false;
+#endif
+	return true;
 }
 
 bool GameBrowser::HasSpecialFiles(std::vector<Path> &filenames) {
-	if (path_.GetPath().ToString() == "!RECENT") {
+	// [PPSSPP-FORK] MultiCore: registry-based lookup — adding a new core = register once.
+	// Fallback to hardcoded PSP check for non-MULTICORE build and backward compat.
+	std::string pathStr = path_.GetPath().ToString();
+
+#ifdef PPSSPP_MULTICORE
+	{
+		const auto *entry = EmuCore::RecentFilesRegistry::Get().FindBySpecialPath(pathStr);
+		if (entry && entry->manager) {
+			filenames.clear();
+			for (auto &str : entry->manager->GetRecentFiles()) {
+				if (entry->filter && !entry->filter(str))
+					continue;
+				filenames.emplace_back(str);
+			}
+			return true;
+		}
+	}
+#else
+	// PSP-only fallback (non-MULTICORE build)
+	if (pathStr == "!RECENT") {
 		filenames.clear();
 		for (auto &str : g_recentFiles.GetRecentFiles()) {
-			// [PPSSPP-FORK] MultiCore: filter out GBA files (belongs to separate GBA list)
-			size_t dot = str.rfind('.');
-			if (dot != std::string::npos) {
-				std::string_view ext(str.data() + dot, str.size() - dot);
-				if (ext == ".gba" || ext == ".gb" || ext == ".gbc")
-					continue;
-			}
 			filenames.emplace_back(str);
 		}
 		return true;
 	}
-	// [PPSSPP-FORK] MultiCore: GBA recent files from separate list
-	if (path_.GetPath().ToString() == "!RECENT_GBA") {
-		filenames.clear();
-		for (auto &str : g_recentFilesGBA.GetRecentFiles()) {
-			filenames.emplace_back(str);
-		}
-		return true;
-	}
+#endif
 	return false;
 }
 

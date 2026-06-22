@@ -24,6 +24,7 @@ if(PPSSPP_MULTICORE)
         PSPCore.cpp
         GBACore.cpp
         Config.cpp
+        RecentFilesRegistry.cpp
     )
 
     target_include_directories(EmuCore PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
