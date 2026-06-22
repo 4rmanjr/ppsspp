@@ -2,7 +2,7 @@
 
 **Date:** 2026-06-22
 **Branch:** `feature/lan-sync`
-**Last commit:** `704f15c` — RecentFilesRegistry: extensible grouping architecture
+**Last commit:** `4846451c` — GBACore.h include fix, PSP filter lambda
 **Build:** `build-final/PPSSPPSDL` — MULTICORE=ON ✅
 
 ---
