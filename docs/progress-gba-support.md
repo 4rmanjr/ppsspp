@@ -127,6 +127,70 @@ Mapping tidak mengganggu PSP keys.
 
 ---
 
+## Compliance Gap: LAN Sync Feature 🚨
+
+Berbeda dengan GBA yang **patuh 100%** terhadap aturan fork (`PPSSPP_MULTICORE`, `[PPSSPP-FORK]` markers, file di `EmuCore/`),
+**LAN Sync melanggar hampir semua aturan** dari `AGENTS.md` dan `docs/agents/fork-maintenance.md`.
+
+### 🔴 Pelanggaran
+
+| # | Aturan | Pelanggaran |
+|---|--------|-------------|
+| 1 | File kustom di direktori non-inti | **4 file di `Core/`** — `Core/SaveStateLANSync.h/.cpp`, `Core/LANSyncConfig.h/.cpp` (terlarang) |
+| 2 | Feature flag sendiri | **Tidak ada.** `PPSSPP_LANSYNC` tidak pernah didefinisikan atau dicek — always-on |
+| 3 | `[PPSSPP-FORK]` marker di setiap file | **25+ file tanpa marker** — semua file `*LANSync*`, `Common/Net/*`, platform backends |
+| 4 | Dual-build verification (ON/OFF) | **Mustahil.** Tanpa flag, tidak bisa build tanpa LAN Sync |
+
+### 🔴 Detail File di Core/ (Terlarang)
+
+```
+Core/SaveStateLANSync.h
+Core/SaveStateLANSync.cpp
+Core/LANSyncConfig.h
+Core/LANSyncConfig.cpp
+```
+
+Harusnya dipindah ke direktori sendiri (misal `LANSync/`) seperti `EmuCore/` untuk GBA.
+
+### 🔴 File Lain Tanpa Marker
+
+- `SDL/SDLLANSync.cpp/.h`
+- `SDL/LinuxLANSync.cpp/.h`
+- `UI/LANSyncSettings.cpp/.h`
+- `Windows/WinLANSync.cpp/.h`
+- `macOS/CocoaLANSync.mm/.h`
+- `macOS/MacLANSync.h/.mm`
+- `android/jni/AndroidLANSync.cpp/.h`
+- `android/src/.../LANSync*.java`
+- `Common/Net/` — 34 file (MDNS, TLS, HTTP, UDP, WebSocket, PlatformKeyStore, Resolve, URL, dll)
+
+### 🔴 Common/Net/ — Asal Usul Tidak Jelas
+
+34 file di `Common/Net/` tidak punya `[PPSSPP-FORK]` marker.
+Tidak bisa dibedakan mana dari upstream dan mana tambahan fork tanpa cek git history manual.
+Ini risiko saat merge upstream: conflict tidak terdeteksi.
+
+### Akar Masalah
+
+LAN Sync dibangun **sebelum** aturan fork (`AGENTS.md`) dirumuskan.
+Waktu GBA dikerjakan, aturan sudah ada — makanya GBA patuh.
+
+### Perlukah Diperbaiki?
+
+✅ **Iya**, kalau mau:
+- Bisa merge upstream tanpa conflict tak terduga
+- Build bisa disable LAN Sync (`-DPPSSPP_LANSYNC=OFF`)
+- Kode fork jelas terbedakan dari upstream
+
+Refactor yang dibutuhkan:
+1. Pindah file dari `Core/` ke `LANSync/`
+2. Tambah `PPSSPP_LANSYNC` flag di CMake
+3. Wrap semua kode dengan `#ifdef PPSSPP_LANSYNC`
+4. Tambah `[PPSSPP-FORK] LANSync:` marker di semua file
+5. Verifikasi build ON/OFF
+
+---
+
 ## Adding Future Cores (Recent Files Grouping)
 
 `RecentFilesRegistry` (`EmuCore/RecentFilesRegistry.h/.cpp`) adalah registry terpusat
