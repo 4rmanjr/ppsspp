@@ -1,8 +1,8 @@
 # GBA Support — Progress Report
 
-**Date:** 2026-06-22
+**Date:** 2026-06-23
 **Branch:** `feature/lan-sync`
-**Last commit:** `d70ebc4` — Mark GBA implementation plan ✅
+**Last commit:** `8e4cc56` — Fix texture filtering + volume not applied from settings ✅
 **Build:** `build-final/PPSSPPSDL` — MULTICORE=ON ✅
 
 ---
@@ -30,7 +30,8 @@
 | **Save state (pause menu)** | ✅ **WORKING** | SaveSlotView + ScreenshotViewScreen redirect ke GBACore |
 | **Save state thumbnail** | ✅ **WORKING** | `pngSave()` dari `videoBuffer_` ke `.jpg` (auto-detect) |
 | **Speed control** | ❌ **Belum test** | |
-| **Config isolation** | 🟡 **SEBAGIAN** | Boundary OK, UI settings masih campur |
+| **GBA Settings Screen** | ✅ **SELESAI** | Controls, Display, Audio — tidak ganggu PSP |
+| **Config isolation** | ✅ **SELESAI** | GBA punya settings screen sendiri, Control Mapping filter PSP sections |
 | **Recent tab** | ✅ **WORKING** | PSP & GBA grouping: sync-fill + ScrollView wrapper fix |
 | **Game icon/cover** | ❌ **TIDAK TAMPIL** | PPSSPP download icon untuk PSP game ID |
 | **Android build** | 🔴 **Belum dimulai** | |
@@ -120,7 +121,7 @@ Bug: R↔B terbalik (little-endian byte order). Fix: `(B<<16)|(G<<8)|R`.
 
 | Issue | Priority | Note |
 |-------|----------|------|
-| Config isolation (UI) | 🟡 | Setting PSP masih muncul di GBA mode |
+| Config isolation (UI) | ✅ **SELESAI** | GBA Settings Screen sendiri, Control Mapping filter sections |
 | Recent tab (GBA not added) | ✅ **SELESAI** | `g_recentFilesGBA.Add()` di InitGBA |
 | Recent tab (group per emulator) | ✅ **SELESAI** | 3 bugs fixed: race condition, data loss cascade, ScrollView single-child render |
 | ScrollView single-child render (FIXED) | ✅ | `ScrollView::Measure()` hanya render `views_[0]` — child ke-2 (GBA) tidak pernah di-layout. Fix: LinearLayout wrapper |
@@ -130,8 +131,8 @@ Bug: R↔B terbalik (little-endian byte order). Fix: `(B<<16)|(G<<8)|R`.
 | RecentFilesRegistry | ✅ **SELESAI** | Registry terpusat — tambah core baru = 1 Register() call + InitXXX() Add() |
 | Game icon/cover | ❌ | GBA tidak punya cover download |
 | Key mapping terpisah | ✅ **SELESAI** | VIRTKEY_GBA_* (0x40000040+), default keyboard mappings, save/load INI |
-| GBA Settings Screen | 📋 **PLAN** | `docs/superpowers/plans/2026-06-22-gba-settings-screen.md` — Controls, Display, Audio |
-| GBA Display Layout | 📋 **PLAN** | Aspect ratio + integer scaling di GBASettingsScreen |
+| GBA Settings Screen | ✅ **SELESAI** | `docs/superpowers/plans/2026-06-22-gba-settings-screen.md` — 9 tasks, Controls+Display+Audio |
+| GBA Display Layout | ✅ **SELESAI** | Aspect ratio + integer scaling via GetRenderRect |
 | Android build | 🔴 | Belum dimulai |
 
 ---
