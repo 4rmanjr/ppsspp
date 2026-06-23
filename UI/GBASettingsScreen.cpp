@@ -9,6 +9,8 @@
 #include "Common/UI/PopupScreens.h"
 #include "Common/Data/Text/I18n.h"
 #include "UI/ControlMappingScreen.h"
+#include "UI/CoreTouchLayoutScreen.h"
+#include "EmuCore/Config.h"
 
 using namespace UI;
 
@@ -26,6 +28,9 @@ void GBASettingsScreen::CreateViews() {
 	list->Add(new ItemHeader(co->T("Controls")));
 	list->Add(new Choice(co->T("Control Mapping")))->OnClick.Add([this](EventParams &) {
 		screenManager()->push(new ControlMappingScreen(gamePath_));
+	});
+	list->Add(new Choice(co->T("Customize On-Screen Controls")))->OnClick.Add([this](EventParams &) {
+		screenManager()->push(new CoreTouchLayoutScreen(gamePath_, EmuCore::Type::GBA));
 	});
 
 	// === Display ===

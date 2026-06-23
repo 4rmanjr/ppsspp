@@ -2,7 +2,8 @@
 
 **Date:** 2026-06-23
 **Branch:** `feature/lan-sync`
-**Last commit:** `8e4cc56` — Fix texture filtering + volume not applied from settings ✅
+**Last commit:** `be8e59c` — Fix crash from uninitialized mStandardLogger logFile pointer ✅
+**Uncommitted work:** 10 files changed (+860/-199) — Android build files, CoreTouchConfig, audio bridge, intent filter
 **Build:** `build-final/PPSSPPSDL` — MULTICORE=ON ✅
 
 ---
@@ -12,7 +13,7 @@
 | Platform | Build System | Status |
 |----------|-------------|--------|
 | **Linux SDL** | CMake | ✅ **Working** — build + runtime verified |
-| **Android** | ndk-build | 🔴 **Belum dimulai** |
+| **Android** | ndk-build + Gradle→CMake | 🟡 **In Progress** — build files updated, mGBA cross-compile BLOCKED (no NDK env) |
 | **Qt** | ❌ **Excluded** — Wayland/X11 issues |
 
 ---
@@ -34,7 +35,7 @@
 | **Config isolation** | ✅ **SELESAI** | GBA punya settings screen sendiri, Control Mapping filter PSP sections |
 | **Recent tab** | ✅ **WORKING** | PSP & GBA grouping: sync-fill + ScrollView wrapper fix |
 | **Game icon/cover** | ❌ **TIDAK TAMPIL** | PPSSPP download icon untuk PSP game ID |
-| **Android build** | 🔴 **Belum dimulai** | |
+| **Android build** | 🟡 **In Progress** | Build files updated (`Android.mk`, `Locals.mk`), mGBA cross-compile BLOCKED (no NDK env) |
 
 ---
 
@@ -133,7 +134,13 @@ Bug: R↔B terbalik (little-endian byte order). Fix: `(B<<16)|(G<<8)|R`.
 | Key mapping terpisah | ✅ **SELESAI** | VIRTKEY_GBA_* (0x40000040+), default keyboard mappings, save/load INI |
 | GBA Settings Screen | ✅ **SELESAI** | `docs/superpowers/plans/2026-06-22-gba-settings-screen.md` — 9 tasks, Controls+Display+Audio |
 | GBA Display Layout | ✅ **SELESAI** | Aspect ratio + integer scaling via GetRenderRect |
-| Android build | 🔴 | Belum dimulai |
+| Log suppression crash (FIXED) | ✅ | `malloc` → `calloc` — uninitialized `logFile` caused segfault on mGBA log |
+| Android build | 🟡 | ndk-build files updated (`Android.mk`, `Locals.mk`) — mGBA cross-compile via Gradle→CMake **BLOCKED** (no NDK env) |
+| Android intent filter | ✅ | `.gba/.gb/.gbc` added to `AndroidManifest.xml` |
+| Android audio bridge | ✅ | Conditional path via PPSSPP mixer (`int16→int32 → System_AudioPushSamples`) |
+| Per-core touch config | ✅ | `CoreTouchConfig` system — migrated from `TouchLayoutGBA`, centralized di `EmuCore/Config.h/.cpp` |
+| CoreTouchLayoutScreen | ✅ | NEW — per-core touch button editor (`UI/CoreTouchLayoutScreen.h/.cpp`) |
+| Type::COUNT | ✅ | Sentry added ke `EmuCore::EmuCore.h` untuk array indexing |
 
 ---
 

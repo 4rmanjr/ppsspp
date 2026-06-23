@@ -105,6 +105,24 @@
                 <data android:pathPattern=".*\\..*\\..*\\.CHD" />
                 <data android:pathPattern=".*\\.ppdmp" />
                 <data android:pathPattern=".*\\.pbp" />
+                <data android:pathPattern=".*\\.gba" />
+                <data android:pathPattern=".*\\..*\\.gba" />
+                <data android:pathPattern=".*\\..*\\..*\\.gba" />
+                <data android:pathPattern=".*\\.GBA" />
+                <data android:pathPattern=".*\\..*\\.GBA" />
+                <data android:pathPattern=".*\\..*\\..*\\.GBA" />
+                <data android:pathPattern=".*\\.gb" />
+                <data android:pathPattern=".*\\..*\\.gb" />
+                <data android:pathPattern=".*\\..*\\..*\\.gb" />
+                <data android:pathPattern=".*\\.GB" />
+                <data android:pathPattern=".*\\..*\\.GB" />
+                <data android:pathPattern=".*\\..*\\..*\\.GB" />
+                <data android:pathPattern=".*\\.gbc" />
+                <data android:pathPattern=".*\\..*\\.gbc" />
+                <data android:pathPattern=".*\\..*\\..*\\.gbc" />
+                <data android:pathPattern=".*\\.GBC" />
+                <data android:pathPattern=".*\\..*\\.GBC" />
+                <data android:pathPattern=".*\\..*\\..*\\.GBC" />
             </intent-filter>
         </activity>
         <meta-data android:name="isGame" android:value="true" />

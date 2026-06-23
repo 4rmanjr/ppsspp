@@ -917,6 +917,11 @@ LOCAL_SRC_FILES := \
   $(SRC)/android/jni/AndroidVulkanContext.cpp \
   $(SRC)/android/jni/AndroidAudio.cpp \
   $(SRC)/android/jni/OpenSLContext.cpp \
+  $(SRC)/EmuCore/EmuCore.cpp \
+  $(SRC)/EmuCore/PSPCore.cpp \
+  $(SRC)/EmuCore/GBACore.cpp \
+  $(SRC)/EmuCore/Config.cpp \
+  $(SRC)/EmuCore/RecentFilesRegistry.cpp \
   $(SRC)/UI/ImDebugger/ImDebugger.cpp \
   $(SRC)/UI/ImDebugger/ImGe.cpp \
   $(SRC)/UI/ImDebugger/ImConsole.cpp \
@@ -960,6 +965,7 @@ LOCAL_SRC_FILES := \
   $(SRC)/UI/GPUDriverTestScreen.cpp \
   $(SRC)/UI/TiltAnalogSettingsScreen.cpp \
   $(SRC)/UI/TouchControlLayoutScreen.cpp \
+  $(SRC)/UI/CoreTouchLayoutScreen.cpp \
   $(SRC)/UI/TouchControlVisibilityScreen.cpp \
   $(SRC)/UI/BaseScreens.cpp \
   $(SRC)/UI/Background.cpp \
@@ -972,7 +978,9 @@ LOCAL_SRC_FILES := \
   $(SRC)/UI/Theme.cpp \
   $(SRC)/UI/UIAtlas.cpp \
   $(SRC)/UI/CustomButtonMappingScreen.cpp \
-  $(SRC)/UI/RetroAchievementScreens.cpp
+  $(SRC)/UI/RetroAchievementScreens.cpp \
+  $(SRC)/UI/GBASettingsScreen.cpp \
+  $(SRC)/UI/TouchLayoutGBA.cpp
 
 ifneq ($(SKIPAPP),1)
   include $(BUILD_SHARED_LIBRARY)

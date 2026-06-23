@@ -1709,6 +1709,8 @@ list(APPEND NativeAppSource
 	UI/TiltAnalogSettingsScreen.cpp
 	UI/TouchControlLayoutScreen.h
 	UI/TouchControlLayoutScreen.cpp
+	UI/CoreTouchLayoutScreen.h
+	UI/CoreTouchLayoutScreen.cpp
 	UI/TouchControlVisibilityScreen.h
 	UI/TouchControlVisibilityScreen.cpp
 	UI/GamepadEmu.h

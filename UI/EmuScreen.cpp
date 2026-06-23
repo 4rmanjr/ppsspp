@@ -1422,11 +1422,13 @@ static UI::AnchorLayoutParams *AnchorInCorner(const Bounds &bounds, int corner, 
 void EmuScreen::AddGBATouchButtons(const Bounds &bounds, DeviceOrientation orientation) {
 	using namespace UI;
 	bool portrait = (orientation == DeviceOrientation::Portrait);
-	const auto &gbaBtns = TouchLayoutGBA::GetLayout(portrait);
+	const auto &cfg = EmuCore::GetTouchConfig(coreType_, portrait);
 	const ImageID roundImg = ImageID("I_ROUND");
-	for (const auto &btn : gbaBtns) {
+	for (int i = 0; i < cfg.count; i++) {
+		const auto &btn = cfg.buttons[i];
+		if (!btn.visible) continue;
 		ImageID icon;
-		switch (btn.pspButton) {
+		switch (btn.keyCode) {
 			case CTRL_CROSS:   icon = ImageID("I_CROSS");   break;
 			case CTRL_CIRCLE:  icon = ImageID("I_CIRCLE");  break;
 			case CTRL_START:   icon = ImageID("I_START");   break;
@@ -1438,7 +1440,7 @@ void EmuScreen::AddGBATouchButtons(const Bounds &bounds, DeviceOrientation orien
 		float cx = btn.x * bounds.w;
 		float cy = btn.y * bounds.h;
 		root_->Add(new PSPButton(
-			btn.pspButton,
+			btn.keyCode,
 			std::string("GBA_") + btn.label,
 			roundImg,
 			ImageID("I_ROUND"),
@@ -1456,6 +1458,7 @@ void EmuScreen::InitGBA(const Path &filename) {
 	INFO_LOG(Log::System, "[GBA] EmuScreen created for GBA core, file: %s", filename.c_str());
 
 	EmuCore::LoadConfig(EmuCore::Type::GBA);
+	EmuCore::LoadTouchConfig(EmuCore::Type::GBA);
 
 	// [PPSSPP-FORK] MultiCore: prevent PPSSPP autosave from overwriting PSP settings
 	g_Config.bSaveSettings = false;
@@ -1553,7 +1556,8 @@ void EmuScreen::UpdateGBA() {
 					NOTICE_LOG(Log::System, "[GBA] Audio frame %d: stereoPairs=%zu frames=%d", audioDebug, stereoPairs, framesToRun);
 				}
 				if (stereoPairs > 0 && audio16) {
-					// Direct SDL output: bypass PPSSPP StereoResampler
+#if !defined(MOBILE_DEVICE)
+					// Desktop (SDL): direct push bypasses PPSSPP StereoResampler
 					// audio16 is native int16 data (SDL expects S16 format)
 					SDL_AudioStream *s = GetSDLAudioStream();
 					if (s) {
@@ -1565,6 +1569,18 @@ void EmuScreen::UpdateGBA() {
 							NOTICE_LOG(Log::System, "[GBA] SDL audio: pushed=%zu queued=%d", stereoPairs, queued);
 						}
 					}
+#else
+					// Android: route through PPSSPP mixer (OpenSL/AAudio picks it up)
+					{
+						int32_t mixedBuf[AUDIO_BUF_SIZE * 2];
+						size_t mixedPairs = stereoPairs > AUDIO_BUF_SIZE ? AUDIO_BUF_SIZE : stereoPairs;
+						for (size_t i = 0; i < mixedPairs; i++) {
+							mixedBuf[i * 2] = (int32_t)audio16[i * 2];
+							mixedBuf[i * 2 + 1] = (int32_t)audio16[i * 2 + 1];
+						}
+						System_AudioPushSamples(mixedBuf, (int)mixedPairs, 1.0f);
+					}
+#endif
 				}
 			} else {
 				gba->ClearAudio();

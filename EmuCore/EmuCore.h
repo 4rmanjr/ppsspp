@@ -19,6 +19,7 @@ namespace EmuCore {
 enum class Type {
 	PSP,
 	GBA,
+	COUNT,
 };
 
 // Detect emulator core type based on file extension.
