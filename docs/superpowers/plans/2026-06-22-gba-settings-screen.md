@@ -402,3 +402,247 @@ git add docs/progress-gba-support.md
 git commit -m "[docs] Update progress: GBA Settings Screen ✅"
 git push origin feature/lan-sync
 ```
+
+---
+
+### Task 6: Filter Control Mapping sections in GBA mode
+
+**Problem:** Opening Control Mapping from GBA Settings menu shows all PSP sections (Standard PSP controls, Control modifiers, Extended PSP controls) which are irrelevant for GBA.
+
+**Solution:** Skip PSP-only sections when `g_gbaModeActive`, show only Emulator controls + GBA controls.
+
+**Files:**
+- Modify: `UI/ControlMappingScreen.cpp`
+
+- [ ] **Step 1: Add EmuScreen.h include**
+
+```cpp
+// [PPSSPP-FORK] MultiCore: check GBA mode to filter PSP-only sections
+#include "UI/EmuScreen.h"
+```
+
+- [ ] **Step 2: Wrap PSP-only sections in `!g_gbaModeActive` check**
+
+Change the `cats[]` array initialization. Since it's static const and checked at compile time, instead add a runtime filter in `CreateContentViews()`:
+
+```cpp
+for (size_t i = 0; i < numMappableKeys; i++) {
+    // [PPSSPP-FORK] MultiCore: skip PSP-only categories in GBA mode
+#ifdef PPSSPP_MULTICORE
+    if (g_gbaModeActive && cats[curCat + 1].firstKey <= VIRTKEY_AXIS_RIGHT_Y_MAX) {
+        curCat++;
+        continue;
+    }
+#endif
+    ...
+}
+```
+
+Or simpler: check the category range in the loop and skip PSP-only categories.
+
+- [ ] **Step 3: Build & verify**
+
+```bash
+cmake --build build-final --target PPSSPPSDL -j$(nproc) 2>&1 | tail -5
+```
+
+Expected: Build success.
+
+- [ ] **Step 4: Runtime verify**
+
+Buka GBA ROM → ESC → GBA Settings → Control Mapping — cuma liat "Emulator controls" + "GBA controls".
+Buka PSP ROM → Settings → Control Mapping — semua sections normal.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add UI/ControlMappingScreen.cpp
+git commit -m "[ui] Filter PSP-only Control Mapping sections in GBA mode"
+```
+
+---
+
+### Task 7: Fix left panel items in GBA Control Mapping mode
+
+**Problem:** Left panel menu items (Clear All, Show PSP, combo settings) are PSP-centric, misleading, or dangerous in GBA mode.
+
+**Audit:**
+
+| Menu | Issue in GBA mode |
+|------|-------------------|
+| **Clear All** | 🚨 Wipes PSP mapping permanently. User expects only GBA mapping cleared. |
+| **Default All** | ⚠️ Resets PSP + GBA. Default keyboard map lacks VIRTKEY_GBA_* entries, but GBA still works via PSP→GBA conversion. Acceptable. |
+| **Autoconfigure** | 🟡 PSP pad detection only. Harmless (hidden unless pad connected). |
+| **Show PSP** | 🟡 Label says "PSP" misleading in GBA mode. Opens VisualMappingScreen showing all keys. |
+| **Allow combo mappings** | 🟡 PSP-centric (L+R+Start=menu). Hide in GBA mode. |
+| **Strict combo input order** | 🟡 PSP-centric. Hide in GBA mode. |
+
+**Files:**
+- Modify: `UI/ControlMappingScreen.cpp`
+
+- [ ] **Step 1: Hide combo settings in GBA mode**
+
+Wrap combo checkboxes with `!g_gbaModeActive`:
+```cpp
+#ifdef PPSSPP_MULTICORE
+if (!g_gbaModeActive) {
+#endif
+	parent->Add(new CheckBox(&g_Config.bAllowMappingCombos, km->T("Allow combo mappings")));
+	parent->Add(new CheckBox(&g_Config.bStrictComboOrder, km->T("Strict combo input order")));
+#ifdef PPSSPP_MULTICORE
+}
+#endif
+```
+
+- [ ] **Step 2: Fix "Show PSP" label in GBA mode**
+
+Change label dynamically:
+```cpp
+parent->Add(new Choice(km->T(g_gbaModeActive ? "Show Key Map" : "Show PSP")))->OnClick.Add(...);
+```
+Note: "Show Key Map" must exist in KEYMAPPING i18n strings or fallback gracefully.
+
+- [ ] **Step 3: Add confirmation to Clear All in GBA mode**
+
+Instead of direct `ClearAllMappings()`, use `TriggerFinish` or system notice warning user. Or wrap with confirmation screen. Simpler: use `g_OSD.Show()` warning after clear or skip entirely.
+
+Actually, simplest safe approach: **hide Clear All in GBA mode** to avoid accidental PSP mapping wipe. User can switch to PSP mode to Clear All if truly needed.
+
+- [ ] **Step 4: Build & verify**
+
+```bash
+cmake --build build-final --target PPSSPPSDL -j$(nproc) 2>&1 | tail -5
+```
+
+Expected: Build success.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add UI/ControlMappingScreen.cpp
+git commit -m "[ui] Fix left panel items in GBA Control Mapping mode"
+```
+```
+
+---
+
+### Task 8: Use PopupMultiChoice for GBA display settings
+
+**Problem:** Aspect Ratio (0-3) and Texture Filtering (0-1) use `PopupSliderChoice` which shows raw numbers instead of readable labels. User awam bingung.
+
+**Solution:** Replace `PopupSliderChoice` with `PopupMultiChoice` for enum-based settings.
+
+**Files:**
+- Modify: `UI/GBASettingsScreen.cpp`
+
+- [ ] **Step 1: Replace Aspect Ratio slider with PopupMultiChoice**
+
+```cpp
+static const char *aspectOptions[] = {"3:2", "16:9", "1:1", "Stretch"};
+list->Add(new PopupMultiChoice(&g_Config.iGBAAspectRatio, gs->T("Aspect Ratio"), aspectOptions, 0, 4, I18NCat::GRAPHICS, screenManager()));
+```
+
+Result: shows "3:2", "16:9", "1:1", "Stretch" instead of "0", "1", "2", "3".
+
+- [ ] **Step 2: Replace Texture Filtering slider with PopupMultiChoice**
+
+```cpp
+static const char *filterOptions[] = {"Nearest", "Linear"};
+list->Add(new PopupMultiChoice(&g_Config.iGBATexFiltering, gs->T("Texture Filtering"), filterOptions, 0, 2, I18NCat::GRAPHICS, screenManager()));
+```
+
+Result: shows "Nearest" / "Linear" instead of "0" / "1".
+
+- [ ] **Step 3: Build & verify**
+
+```bash
+cmake --build build-final --target PPSSPPSDL -j$(nproc) 2>&1 | tail -5
+```
+
+Expected: Build success.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add UI/GBASettingsScreen.cpp
+git commit -m "[ui] Use PopupMultiChoice for GBA display enum settings"
+```
+```
+
+---
+
+### Task 9: Fix runtime bugs — Texture Filtering + Volume not applied
+
+**Problem 1 — Texture Filtering setting tidak dipakai:**
+`InitRendering()` hardcodes `TextureFilter::NEAREST` tanpa baca `g_Config.iGBATexFiltering`.
+
+**Problem 2 — Volume setting tidak dipakai:**
+`GetRawAudio()` dan `GetMixedAudio()` tidak pernah apply `fGBAVolume` multiplier.
+
+**Files:**
+- Modify: `EmuCore/GBACore.cpp`
+
+- [ ] **Step 1: Fix InitRendering to read iGBATexFiltering**
+
+In `InitRendering()`, change sampler creation to read config:
+
+```cpp
+// Sampler — use config texture filtering
+SamplerStateDesc samplerDesc{};
+if (g_Config.iGBATexFiltering == 0) {
+    samplerDesc.magFilter = TextureFilter::NEAREST;
+    samplerDesc.minFilter = TextureFilter::NEAREST;
+} else {
+    samplerDesc.magFilter = TextureFilter::LINEAR;
+    samplerDesc.minFilter = TextureFilter::LINEAR;
+}
+gbaSampler_ = draw->CreateSamplerState(samplerDesc);
+```
+
+- [ ] **Step 2: Fix audio pipeline to apply fGBAVolume**
+
+In `GetRawAudio()`, apply volume multiplier after DC filter:
+
+```cpp
+float outL = left - dcCapRawL_;
+float outR = right - dcCapRawR_;
+dcCapRawL_ = (left - outL) * 0.996f;
+dcCapRawR_ = (right - outR) * 0.996f;
+
+// [PPSSPP-FORK] MultiCore: apply GBA volume setting
+outL *= g_Config.fGBAVolume;
+outR *= g_Config.fGBAVolume;
+
+tempBuf[i * 2] = outL;
+tempBuf[i * 2 + 1] = outR;
+```
+
+Similarly in `GetMixedAudio()`:
+
+```cpp
+float outL = left - dcCapL_;
+float outR = right - dcCapR_;
+
+// [PPSSPP-FORK] MultiCore: apply GBA volume setting
+outL *= g_Config.fGBAVolume;
+outR *= g_Config.fGBAVolume;
+
+tempFloat[i * 2] = outL;
+tempFloat[i * 2 + 1] = outR;
+```
+
+- [ ] **Step 3: Build & verify**
+
+```bash
+cmake --build build-final --target PPSSPPSDL -j$(nproc) 2>&1 | tail -5
+```
+
+Expected: Build success.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add EmuCore/GBACore.cpp
+git commit -m "[gba] Fix texture filtering + volume not applied from settings"
+```
+```
