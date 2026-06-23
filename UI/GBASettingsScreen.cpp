@@ -6,6 +6,7 @@
 #include "Common/UI/Context.h"
 #include "Common/UI/ViewGroup.h"
 #include "Common/UI/View.h"
+#include "Common/UI/PopupScreens.h"
 #include "Common/Data/Text/I18n.h"
 #include "UI/ControlMappingScreen.h"
 
@@ -30,9 +31,11 @@ void GBASettingsScreen::CreateViews() {
 	// === Display ===
 	list->Add(new ItemHeader(gs->T("Display")));
 
-	list->Add(new PopupSliderChoice(&g_Config.iGBAAspectRatio, 0, 3, 0, gs->T("Aspect Ratio"), screenManager()));
+	static const char *aspectOptions[] = {"3:2", "16:9", "1:1", "Stretch"};
+	list->Add(new PopupMultiChoice(&g_Config.iGBAAspectRatio, gs->T("Aspect Ratio"), aspectOptions, 0, 4, I18NCat::GRAPHICS, screenManager()));
 
-	list->Add(new PopupSliderChoice(&g_Config.iGBATexFiltering, 0, 1, 1, gs->T("Texture Filtering"), screenManager()));
+	static const char *filterOptions[] = {"Nearest", "Linear"};
+	list->Add(new PopupMultiChoice(&g_Config.iGBATexFiltering, gs->T("Texture Filtering"), filterOptions, 0, 2, I18NCat::GRAPHICS, screenManager()));
 
 	list->Add(new CheckBox(&g_Config.bGBAIntegerScaling, gs->T("Integer Scaling")));
 
