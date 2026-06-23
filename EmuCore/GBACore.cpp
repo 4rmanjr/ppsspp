@@ -352,11 +352,16 @@ void GBACore::InitRendering(Draw::DrawContext *draw) {
 	NOTICE_LOG(Log::System, "[GBA] InitRendering START");
 	using namespace Draw;
 
-	// Sampler — nearest neighbor for pixel-perfect GBA graphics
-	SamplerStateDesc nearestDesc{};
-	nearestDesc.magFilter = TextureFilter::NEAREST;
-	nearestDesc.minFilter = TextureFilter::NEAREST;
-	gbaSampler_ = draw->CreateSamplerState(nearestDesc);
+	// [PPSSPP-FORK] MultiCore: sampler from config (nearest vs linear)
+	SamplerStateDesc samplerDesc{};
+	if (g_Config.iGBATexFiltering == 0) {
+		samplerDesc.magFilter = TextureFilter::NEAREST;
+		samplerDesc.minFilter = TextureFilter::NEAREST;
+	} else {
+		samplerDesc.magFilter = TextureFilter::LINEAR;
+		samplerDesc.minFilter = TextureFilter::LINEAR;
+	}
+	gbaSampler_ = draw->CreateSamplerState(samplerDesc);
 
 	// Shaders from presets (same ones used by UIContext)
 	ShaderModule *vs = draw->GetVshaderPreset(VS_TEXTURE_COLOR_2D);
@@ -577,6 +582,10 @@ const int16_t *GBACore::GetRawAudio(size_t *stereoPairs) {
 		dcCapRawL_ = (left - outL) * 0.996f;
 		dcCapRawR_ = (right - outR) * 0.996f;
 
+		// [PPSSPP-FORK] MultiCore: GBA volume setting
+		outL *= g_Config.fGBAVolume;
+		outR *= g_Config.fGBAVolume;
+
 		tempBuf[i * 2] = outL;
 		tempBuf[i * 2 + 1] = outR;
 	}
@@ -627,6 +636,10 @@ void GBACore::GetMixedAudio(int32_t *buffer, size_t *stereoPairs) {
 
 		float outL = left - dcCapL_;
 		float outR = right - dcCapR_;
+
+		// [PPSSPP-FORK] MultiCore: GBA volume setting
+		outL *= g_Config.fGBAVolume;
+		outR *= g_Config.fGBAVolume;
 
 		tempFloat[i * 2] = outL;
 		tempFloat[i * 2 + 1] = outR;
