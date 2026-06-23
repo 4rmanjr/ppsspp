@@ -39,6 +39,9 @@
 #include "Core/KeyMap.h"
 #include "Core/HLE/sceCtrl.h"
 #include "Core/Config.h"
+#ifdef PPSSPP_MULTICORE
+#include "UI/EmuScreen.h"
+#endif
 #include "UI/ControlMappingScreen.h"
 #include "UI/PopupScreens.h"
 #include "UI/JoystickHistoryView.h"
@@ -274,13 +277,21 @@ void ControlMappingScreen::CreateContentViews(UI::ViewGroup *parent) {
 	CollapsibleSection *curSection = nullptr;
 	for (size_t i = 0; i < numMappableKeys; i++) {
 		if (curCat < (int)ARRAY_SIZE(cats) && mappableKeys[i].key == cats[curCat + 1].firstKey) {
-			if (curCat >= 0) {
+			if (curCat >= 0 && curSection) {
 				curSection->SetOpenPtr(&categoryToggles_[curCat]);
 			}
 			curCat++;
+	#ifdef PPSSPP_MULTICORE
+			bool skipCat = g_gbaModeActive && (curCat <= 1 || curCat == 3);
+			if (skipCat) {
+				curSection = nullptr;
+				continue;
+			}
+	#endif
 			curSection = rootLayout->Add(new CollapsibleSection(km->T(cats[curCat].catName)));
 			curSection->SetSpacing(6.0f);
 		}
+		if (!curSection) continue;
 		SingleControlMapper *mapper = curSection->Add(
 			new SingleControlMapper(mappableKeys[i].key, mappableKeys[i].name, portrait, screenManager()));
 		mapper->SetTag(StringFromFormat("KeyMap%s", mappableKeys[i].name));
