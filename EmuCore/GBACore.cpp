@@ -7,6 +7,7 @@
 #ifdef PPSSPP_MULTICORE
 
 #include <cstring>
+#include <cstdlib>
 #include <fcntl.h>
 
 #include "Common/Log.h"
@@ -18,6 +19,7 @@
 #include "Core/Util/PathUtil.h"
 
 #include <mgba/core/core.h>
+#include <mgba/core/log.h>
 #include <mgba/gba/core.h>
 #include <mgba/core/interface.h>
 #include <mgba/core/directories.h>
@@ -125,6 +127,16 @@ GBACore::GBACore() {
 		mCoreConfigInit(&core_->config, "gba");
 
 		core_->init(core_);
+
+		// [PPSSPP-FORK] MultiCore: suppress mGBA internal logs (DMA, BIOS SWI, etc.)
+		static bool logFilterInited = false;
+		if (!logFilterInited) {
+			struct mLogFilter *filter = (struct mLogFilter *)malloc(sizeof(struct mLogFilter));
+			mLogFilterInit(filter);
+			filter->defaultLevels = mLOG_FATAL | mLOG_ERROR | mLOG_WARN | mLOG_GAME_ERROR;
+			mLogGetContext()->filter = filter;
+			logFilterInited = true;
+		}
 		core_->setAudioBufferSize(core_, AUDIO_BUF_SIZE);
 		core_->setAVStream(core_, nullptr);
 		// [PPSSPP-FORK] MultiCore: set video buffer so mGBA renders into our buffer

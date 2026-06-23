@@ -2027,7 +2027,7 @@ bool EmuScreen::ShouldRunEmulation(ScreenRenderMode mode) const {
 ScreenRenderFlags EmuScreen::PreRender(ScreenRenderMode mode) {
 	// [PPSSPP-FORK] MultiCore: skip PSP boot for non-PSP cores
 	if (IsGBA()) {
-		fprintf(stderr, "[MULTICORE] PreRender: non-PSP core, skipping ProcessGameBoot\n");
+		DEBUG_LOG(Log::System, "[MULTICORE] PreRender: non-PSP core, skipping ProcessGameBoot");
 	} else {
 		// If a boot is in progress, update it.
 		ProcessGameBoot(gamePath_);
