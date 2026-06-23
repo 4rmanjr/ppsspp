@@ -237,9 +237,15 @@ static const BindingCategory cats[] = {
 void ControlMappingScreen::CreateSettingsViews(UI::ViewGroup *parent) {
 	using namespace UI;
 	auto km = GetI18NCategory(I18NCat::KEYMAPPING);
-	parent->Add(new Choice(km->T("Clear All")))->OnClick.Add([](UI::EventParams &) {
-		KeyMap::ClearAllMappings();
-	});
+#ifdef PPSSPP_MULTICORE
+	if (!g_gbaModeActive) {
+#endif
+		parent->Add(new Choice(km->T("Clear All")))->OnClick.Add([](UI::EventParams &) {
+			KeyMap::ClearAllMappings();
+		});
+#ifdef PPSSPP_MULTICORE
+	}
+#endif
 	parent->Add(new Choice(km->T("Default All")))->OnClick.Add([](UI::EventParams &) {
 		KeyMap::RestoreDefault();
 	});
@@ -248,11 +254,21 @@ void ControlMappingScreen::CreateSettingsViews(UI::ViewGroup *parent) {
 	if (!KeyMap::HasBuiltinController(sysName) && KeyMap::GetSeenPads().size()) {
 		parent->Add(new Choice(km->T("Autoconfigure")))->OnClick.Handle(this, &ControlMappingScreen::OnAutoConfigure);
 	}
-	parent->Add(new Choice(km->T("Show PSP")))->OnClick.Add([this](UI::EventParams &params) {
+	parent->Add(new Choice(km->T(
+#ifdef PPSSPP_MULTICORE
+		g_gbaModeActive ? "Show Key Map" :
+#endif
+		"Show PSP")))->OnClick.Add([this](UI::EventParams &params) {
 		screenManager()->push(new VisualMappingScreen(gamePath_));
 	});
-	parent->Add(new CheckBox(&g_Config.bAllowMappingCombos, km->T("Allow combo mappings")));
-	parent->Add(new CheckBox(&g_Config.bStrictComboOrder, km->T("Strict combo input order")));
+#ifdef PPSSPP_MULTICORE
+	if (!g_gbaModeActive) {
+#endif
+		parent->Add(new CheckBox(&g_Config.bAllowMappingCombos, km->T("Allow combo mappings")));
+		parent->Add(new CheckBox(&g_Config.bStrictComboOrder, km->T("Strict combo input order")));
+#ifdef PPSSPP_MULTICORE
+	}
+#endif
 }
 
 std::string_view ControlMappingScreen::GetTitle() const {
