@@ -131,10 +131,13 @@ GBACore::GBACore() {
 		// [PPSSPP-FORK] MultiCore: suppress mGBA internal logs (DMA, BIOS SWI, etc.)
 		static bool logFilterInited = false;
 		if (!logFilterInited) {
+			struct mStandardLogger *stdlog = (struct mStandardLogger *)malloc(sizeof(struct mStandardLogger));
+			mStandardLoggerInit(stdlog);
 			struct mLogFilter *filter = (struct mLogFilter *)malloc(sizeof(struct mLogFilter));
 			mLogFilterInit(filter);
 			filter->defaultLevels = mLOG_FATAL | mLOG_ERROR | mLOG_WARN | mLOG_GAME_ERROR;
-			mLogGetContext()->filter = filter;
+			stdlog->d.filter = filter;
+			mLogSetDefaultLogger(&stdlog->d);
 			logFilterInited = true;
 		}
 		core_->setAudioBufferSize(core_, AUDIO_BUF_SIZE);
