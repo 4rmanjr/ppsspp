@@ -73,6 +73,7 @@
 
 #ifdef PPSSPP_MULTICORE
 #include "EmuCore/GBACore.h"
+#include "GBASettingsScreen.h"
 #endif
 #include "UI/MiscViews.h"
 #include "UI/AdhocServerScreen.h"
@@ -755,6 +756,12 @@ void GamePauseScreen::CreateViews() {
 		createGameConfig->SetEnabled(!bootPending_);
 	}
 
+#ifdef PPSSPP_MULTICORE
+	if (g_gbaModeActive) {
+		rightColumnItems->Add(new Choice(pa->T("GBA Settings"), ImageID("I_GEAR")))->OnClick.Handle(this, &GamePauseScreen::OnGBASettings);
+	}
+#endif
+
 	if (g_Config.bAchievementsEnable && Achievements::HasAchievementsOrLeaderboards()) {
 		rightColumnItems->Add(new Choice(ac->T("Achievements"), ImageID("I_ACHIEVEMENT")))->OnClick.Add([this](UI::EventParams &e) {
 			screenManager()->push(new RetroAchievementsListScreen(gamePath_));
@@ -886,6 +893,12 @@ void GamePauseScreen::AddExtraOptions(UI::ViewGroup *parent) {
 void GamePauseScreen::OnGameSettings(UI::EventParams &e) {
 	screenManager()->push(new GameSettingsScreen(gamePath_));
 }
+
+#ifdef PPSSPP_MULTICORE
+void GamePauseScreen::OnGBASettings(UI::EventParams &e) {
+	screenManager()->push(new GBASettingsScreen(gamePath_));
+}
+#endif
 
 void GamePauseScreen::OnState(UI::EventParams &e) {
 	TriggerFinish(DR_CANCEL);

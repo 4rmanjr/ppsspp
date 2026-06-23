@@ -1695,6 +1695,8 @@ list(APPEND NativeAppSource
 	UI/GameScreen.cpp
 	UI/GameSettingsScreen.h
 	UI/GameSettingsScreen.cpp
+	UI/GBASettingsScreen.h
+	UI/GBASettingsScreen.cpp
 	UI/LANPeerListScreen.h
 	UI/LANPeerListScreen.cpp
 	UI/DeveloperToolsScreen.h

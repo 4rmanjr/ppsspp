@@ -14,6 +14,7 @@
 #include "Common/StringUtils.h"
 #include "Common/File/FileUtil.h"
 #include "Core/System.h"
+#include "Core/Config.h"
 #include "Core/Util/PathUtil.h"
 
 #include <mgba/core/core.h>
@@ -417,6 +418,51 @@ void GBACore::ShutdownRendering() {
 	NOTICE_LOG(Log::System, "[GBA] ShutdownRendering — all GPU resources released");
 }
 
+void GBACore::GetRenderRect(float &x, float &y, float &w, float &h, float viewW, float viewH) const {
+	float gbaAspect = (float)GBA_WIDTH / (float)GBA_HEIGHT;
+	float viewAspect = viewW / viewH;
+
+	switch (g_Config.iGBAAspectRatio) {
+	case 0:  // 3:2 native
+		if (viewAspect > gbaAspect) {
+			h = viewH;
+			w = h * gbaAspect;
+		} else {
+			w = viewW;
+			h = w / gbaAspect;
+		}
+		break;
+	case 1:  // 16:9
+		if (viewAspect > 16.0f / 9.0f) {
+			h = viewH;
+			w = h * 16.0f / 9.0f;
+		} else {
+			w = viewW;
+			h = w / (16.0f / 9.0f);
+		}
+		break;
+	case 2:  // 1:1
+		w = h = std::min(viewW, viewH);
+		break;
+	case 3:  // Stretch
+		w = viewW;
+		h = viewH;
+		break;
+	}
+
+	// Integer scaling: snap to nearest multiple of GBA resolution
+	if (g_Config.bGBAIntegerScaling) {
+		int scaleW = (int)(w / GBA_WIDTH);
+		int scaleH = (int)(h / GBA_HEIGHT);
+		int scale = std::max(1, std::min(scaleW, scaleH));
+		w = (float)(GBA_WIDTH * scale);
+		h = (float)(GBA_HEIGHT * scale);
+	}
+
+	x = (viewW - w) / 2.0f;
+	y = (viewH - h) / 2.0f;
+}
+
 void GBACore::Render(Draw::DrawContext *draw) {
 	if (!draw || !core_)
 		return;
@@ -438,26 +484,11 @@ void GBACore::Render(Draw::DrawContext *draw) {
 	draw->BindSamplerStates(0, 1, samplers);
 	draw->BindTexture(0, gbaTexture_);
 
-	// Calculate viewport with correct GBA aspect (240:160 = 3:2)
+	// Calculate viewport from config-driven aspect ratio
 	int screenW = g_display.pixel_xres;
 	int screenH = g_display.pixel_yres;
-	float gbaAspect = (float)GBA_WIDTH / (float)GBA_HEIGHT;
-	float screenAspect = (float)screenW / (float)screenH;
-
 	float drawW, drawH, drawX, drawY;
-	if (screenAspect > gbaAspect) {
-		// Screen wider than GBA → letterbox left/right
-		drawH = (float)screenH;
-		drawW = drawH * gbaAspect;
-		drawX = (screenW - drawW) / 2.0f;
-		drawY = 0.0f;
-	} else {
-		// Screen taller than GBA → letterbox top/bottom
-		drawW = (float)screenW;
-		drawH = drawW / gbaAspect;
-		drawX = 0.0f;
-		drawY = (screenH - drawH) / 2.0f;
-	}
+	GetRenderRect(drawX, drawY, drawW, drawH, (float)screenW, (float)screenH);
 
 	using namespace Draw;
 

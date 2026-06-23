@@ -1399,6 +1399,15 @@ void Config::Load(const char *iniFileName, const char *controllerIniFilename) {
 	g_recentFilesGBA.Clean();
 
 #ifdef PPSSPP_MULTICORE
+	// [PPSSPP-FORK] MultiCore: load GBA display/audio settings
+	Section *gbaSettings = iniFile.GetOrCreateSection("GBA");
+	gbaSettings->Get("iGBAAspectRatio", &iGBAAspectRatio);
+	gbaSettings->Get("iGBATexFiltering", &iGBATexFiltering);
+	gbaSettings->Get("bGBAIntegerScaling", &bGBAIntegerScaling);
+	gbaSettings->Get("fGBAVolume", &fGBAVolume);
+#endif
+
+#ifdef PPSSPP_MULTICORE
 	// [PPSSPP-FORK] MultiCore: migrate leaked GBA files from PSP recent to GBA recent
 	// Read ini directly (GetRecentFiles() empty until bg thread starts in NativeApp.cpp)
 	if (iMaxRecent > 0) {
@@ -1604,6 +1613,15 @@ bool Config::Save(const char *saveReason) {
 		// [PPSSPP-FORK] MultiCore: save GBA recent files
 		Section *gbaRecent = iniFile.GetOrCreateSection("GBA Recent");
 		g_recentFilesGBA.Save(gbaRecent, 50);
+
+#ifdef PPSSPP_MULTICORE
+		// [PPSSPP-FORK] MultiCore: save GBA display/audio settings
+		Section *gbaSettings = iniFile.GetOrCreateSection("GBA");
+		gbaSettings->Set("iGBAAspectRatio", iGBAAspectRatio);
+		gbaSettings->Set("iGBATexFiltering", iGBATexFiltering);
+		gbaSettings->Set("bGBAIntegerScaling", bGBAIntegerScaling);
+		gbaSettings->Set("fGBAVolume", fGBAVolume);
+#endif
 
 		Section *pinnedPaths = iniFile.GetOrCreateSection("PinnedPaths");
 		pinnedPaths->Clear();

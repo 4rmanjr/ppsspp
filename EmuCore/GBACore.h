@@ -85,6 +85,9 @@ public:
 	static std::string GetSavePrefix(const std::string &title, const std::string &id);
 	std::string GetSavePrefix() const;
 
+	// [PPSSPP-FORK] MultiCore: calculate render rect from aspect ratio config
+	void GetRenderRect(float &x, float &y, float &w, float &h, float viewW, float viewH) const;
+
 private:
 	void CloseSaveMemory();
 	static constexpr int GBA_WIDTH = 240;

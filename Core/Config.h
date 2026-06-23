@@ -417,6 +417,14 @@ public:
 	bool bAudioMixWithOthers;
 	bool bAudioRespectSilentMode;
 
+	// [PPSSPP-FORK] MultiCore: GBA display and audio settings
+#ifdef PPSSPP_MULTICORE
+	int iGBAAspectRatio = 0;       // 0=3:2, 1=16:9, 2=1:1, 3=stretch
+	int iGBATexFiltering = 1;      // 0=nearest, 1=linear
+	bool bGBAIntegerScaling = false;
+	float fGBAVolume = 1.0f;
+#endif
+
 	// UI
 	bool bShowDebuggerOnLoad;
 	int iShowStatusFlags;

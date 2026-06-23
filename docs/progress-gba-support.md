@@ -249,8 +249,8 @@ otomatis iterasi registry — tidak perlu edit lagi.
 
 | Plan | Tasks | Spec |
 |------|-------|------|
-| **GBA Settings Screen** | 24 task `[ ]` | `docs/superpowers/specs/2026-06-22-gba-settings-screen-design.md` |
-| GBA Display Layout | (bagian dari GBA Settings Screen) | Aspect ratio + integer scaling |
+| **GBA Settings Screen** | ✅ **SELESAI** | Controls, Display, Audio — tidak ganggu PSP |
+| GBA Display Layout | ✅ (bagian dari GBA Settings Screen) | Aspect ratio + integer scaling |
 
 Cara mulai eksekusi:
 
