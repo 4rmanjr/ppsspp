@@ -26,7 +26,7 @@ void CoreTouchLayoutScreen::CreateViews() {
 	// Title
 	const char *coreName = EmuCore::GetConfigSection(coreType_);
 	root_->Add(new TextView(std::string("Customize ") + coreName + " Touch Layout", ALIGN_CENTER, false))
-		->SetFontPreset(UI::FontPreset::LARGE);
+		->SetTextSize(TextSize::Big);
 	root_->Add(new Spacer(new LinearLayoutParams(10.0f)));
 
 	// Button list — each button shows keyCode + position
@@ -45,13 +45,15 @@ void CoreTouchLayoutScreen::CreateViews() {
 
 	// Note
 	root_->Add(new TextView("Edit positions in ppsspp.ini section [" + std::string(EmuCore::GetTouchConfigSection(coreType_, false)) + "]", ALIGN_CENTER, false))
-		->SetFontPreset(UI::FontPreset::SMALL);
+		->SetTextSize(TextSize::Small);
 
 	// Reset button
 	root_->Add(new Button(co->T("Reset to Defaults")))->OnClick.Handle(this, &CoreTouchLayoutScreen::OnReset);
 
 	// Back button
-	root_->Add(new Button(di->T("Back")))->OnClick.Handle<UI::UIScreen>(this, &UIScreen::OnBack);
+	root_->Add(new Button(di->T("Back")))->OnClick.Add([this](EventParams &) {
+		TriggerFinish(DR_CANCEL);
+	});
 }
 
 void CoreTouchLayoutScreen::dialogFinished(const Screen *dialog, DialogResult result) {
@@ -67,9 +69,8 @@ void CoreTouchLayoutScreen::resized() {
 	RecreateViews();
 }
 
-UI::EventReturn CoreTouchLayoutScreen::OnReset(UI::EventParams &e) {
+void CoreTouchLayoutScreen::OnReset(UI::EventParams &e) {
 	EmuCore::InitDefaultTouchConfigs();
 	EmuCore::SaveTouchConfig(coreType_);
 	RecreateViews();
-	return UI::EVENT_DONE;
 }

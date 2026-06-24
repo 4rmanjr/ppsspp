@@ -16,6 +16,10 @@ if(PPSSPP_MULTICORE)
     set(USE_LZMA OFF CACHE BOOL "Disable LZMA" FORCE)
     set(DISABLE_FRONTENDS ON CACHE BOOL "Disable frontend builds" FORCE)
 
+    # Pre-set HAVE_CRC32 so mGBA uses zlib's crc32 instead of its own
+    # (avoids duplicate symbol at link time with PPSSPP's zlib)
+    set(HAVE_CRC32 ON CACHE INTERNAL "" FORCE)
+
     add_subdirectory(${CMAKE_SOURCE_DIR}/ext/libmgba ${CMAKE_BINARY_DIR}/ext/libmgba)
 
     # EmuCore static library
@@ -36,7 +40,7 @@ if(PPSSPP_MULTICORE)
 
     # mGBA include paths for EmuCore compilation
     # Must match mGBA library's compile definitions for ABI compatibility
-    target_compile_definitions(EmuCore PRIVATE ENABLE_VFS ENABLE_DIRECTORIES)
+    target_compile_definitions(EmuCore PRIVATE ENABLE_VFS ENABLE_VFS_FD ENABLE_DIRECTORIES)
     target_include_directories(EmuCore PRIVATE ${CMAKE_SOURCE_DIR}/ext/libmgba/include)
 
 endif()

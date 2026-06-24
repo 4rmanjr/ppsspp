@@ -12,6 +12,9 @@
 // Forward declare mGBA types (included only in .cpp)
 struct mCore;
 
+// Audio buffer size used by GBACore internals and external callers
+static constexpr size_t GBA_AUDIO_BUF_SIZE = 4096;
+
 namespace EmuCore {
 
 class GBACore : public Core {
@@ -102,7 +105,7 @@ private:
 	uint32_t rawVideoBuffer_[GBA_WIDTH * GBA_HEIGHT]{};
 
 	// Audio constants
-	static constexpr size_t AUDIO_BUF_SIZE = 4096;
+	static constexpr size_t AUDIO_BUF_SIZE = GBA_AUDIO_BUF_SIZE;
 	static constexpr int GBA_NATIVE_RATE = 32768;  // mGBA core default
 	static constexpr int TARGET_RATE = 44100;       // PPSSPP mixer rate
 	static constexpr int TARGET_PAIRS = TARGET_RATE / 60;  // 735 at 44100Hz 60fps

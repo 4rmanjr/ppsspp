@@ -1,10 +1,13 @@
 # GBA Support — Progress Report
 
-**Date:** 2026-06-23
+**Date:** 2026-06-24
 **Branch:** `feature/lan-sync`
 **Last commit:** `be8e59c` — Fix crash from uninitialized mStandardLogger logFile pointer ✅
-**Uncommitted work:** 10 files changed (+860/-199) — Android build files, CoreTouchConfig, audio bridge, intent filter
-**Build:** `build-final/PPSSPPSDL` — MULTICORE=ON ✅
+**Uncommitted work:** 16 files changed (+920/-220) — Android SAF ROM open, crash guard, gold multicore
+**Build Linux SDL:** `build-final/PPSSPPSDL` — MULTICORE=ON ✅ (no regression)
+**Build Android `normalRelease`:** ✅ (APK: 53MB, optimized `-O2`)
+**Build Android `goldRelease`:** ✅ (APK: 55MB, optimized `-O2`, +PPSSPP_MULTICORE)
+**Installed on device:** ✅ goldRelease (org.ppsspp.ppssppgold) — Infinix X6815D
 
 ---
 
@@ -13,7 +16,7 @@
 | Platform | Build System | Status |
 |----------|-------------|--------|
 | **Linux SDL** | CMake | ✅ **Working** — build + runtime verified |
-| **Android** | ndk-build + Gradle→CMake | 🟡 **In Progress** — build files updated, mGBA cross-compile BLOCKED (no NDK env) |
+| **Android** | Gradle→CMake | ✅ **SELESAI** — `normalRelease` + `goldRelease`, semua ABI, optimized `-O2` |
 | **Qt** | ❌ **Excluded** — Wayland/X11 issues |
 
 ---
@@ -35,7 +38,11 @@
 | **Config isolation** | ✅ **SELESAI** | GBA punya settings screen sendiri, Control Mapping filter PSP sections |
 | **Recent tab** | ✅ **WORKING** | PSP & GBA grouping: sync-fill + ScrollView wrapper fix |
 | **Game icon/cover** | ❌ **TIDAK TAMPIL** | PPSSPP download icon untuk PSP game ID |
-| **Android build** | 🟡 **In Progress** | Build files updated (`Android.mk`, `Locals.mk`), mGBA cross-compile BLOCKED (no NDK env) |
+| **Android build** | ✅ **SELESAI** | `normalRelease` (53MB) + `goldRelease` (55MB) — optimized, terinstall di device |
+| **Android gold → PPSSPP_MULTICORE** | ✅ | Ditambah `-DPPSSPP_MULTICORE=ON` di flavor gold |
+| **Speed control** | ❌ **Belum test** | |
+| **Game icon/cover** | ❌ **SKIP** | GBA tidak punya cover download (PPSSPP cari PSP game ID) — bukan bug |
+| **SaveSlotView GBA** | ❌ **Belum** | Masih panggil PSP `SaveState::` — perlu redirect |
 
 ---
 
@@ -54,20 +61,24 @@ mGBA core → [sinc resampler width=24, resolusi=16384] → int16 → DC filter 
 ### Audio Quality Improvements (2026-06-23)
 
 **Phase 1: Resolution & Rounding**
+
 - Sinc resolution: 8192 → 16384 (2x smoother interpolation curves)
 - Proper rounding: float→int16 conversion (±0.5) mengurangi quantization noise
 
 **Phase 2: SIMD Optimizations**
+
 - `ClampFloatToS16_SIMD()` helper dengan SSE2/ARM NEON/scalar fallback
 - GetRawAudio refactored: DC filter scalar + SIMD clamp
 - GetMixedAudio refactored: DC filter scalar + SIMD clamp
 - Performance: 4-8x faster clamping operations
 
 **Phase 3: Advanced Anti-Aliasing**
+
 - Sinc width: 16 → 24 (49-tap filter, better frequency response)
 - CPU cost: ~1.5x resampling (still <2% total CPU)
 
 **Expected results:**
+
 - Clearer high-frequency response (less "muddy" sound)
 - Lower noise floor on quiet passages
 - Reduced quantization artifacts
@@ -137,7 +148,13 @@ Bug: R↔B terbalik (little-endian byte order). Fix: `(B<<16)|(G<<8)|R`.
 | Log suppression crash (FIXED) | ✅ | `malloc` → `calloc` — uninitialized `logFile` caused segfault on mGBA log |
 | Android build | 🟡 | ndk-build files updated (`Android.mk`, `Locals.mk`) — mGBA cross-compile via Gradle→CMake **BLOCKED** (no NDK env) |
 | Android intent filter | ✅ | `.gba/.gb/.gbc` added to `AndroidManifest.xml` |
+| Android `armeabi-v7a` NEON (FIXED) | ✅ | `vcvtnq_s32_f32` only on ARMv8; guarded with `__aarch64__` |
 | Android audio bridge | ✅ | Conditional path via PPSSPP mixer (`int16→int32 → System_AudioPushSamples`) |
+| Android `normalRelease` | ✅ | 53MB, optimized, signed debug key |
+| Android `goldRelease` | ✅ | 55MB, +PPSSPP_MULTICORE, signed debug key, overwrite gold existing |
+| Android SAF URI (BUG FIX) | ✅ | `content://` → `Android_OpenContentUriFd()` + `VFileFromFD()` — di `EmuCore/GBACore.cpp` |
+| Android ROM gagal → crash (BUG FIX) | ✅ | Guard di `EmuScreen::InitGBA()` — jangan set mode GBA kalau ROM gagal load |
+| Android `ENABLE_VFS_FD` | ✅ | Required by `VFileFromFD()`, ditambah di `EmuCore/CMakeLists.txt` |
 | Per-core touch config | ✅ | `CoreTouchConfig` system — migrated from `TouchLayoutGBA`, centralized di `EmuCore/Config.h/.cpp` |
 | CoreTouchLayoutScreen | ✅ | NEW — per-core touch button editor (`UI/CoreTouchLayoutScreen.h/.cpp`) |
 | Type::COUNT | ✅ | Sentry added ke `EmuCore::EmuCore.h` untuk array indexing |
@@ -212,11 +229,13 @@ Waktu GBA dikerjakan, aturan sudah ada — makanya GBA patuh.
 ### Perlukah Diperbaiki?
 
 ✅ **Iya**, kalau mau:
+
 - Bisa merge upstream tanpa conflict tak terduga
 - Build bisa disable LAN Sync (`-DPPSSPP_LANSYNC=OFF`)
 - Kode fork jelas terbedakan dari upstream
 
 Refactor yang dibutuhkan:
+
 1. Pindah file dari `Core/` ke `LANSync/`
 2. Tambah `PPSSPP_LANSYNC` flag di CMake
 3. Wrap semua kode dengan `#ifdef PPSSPP_LANSYNC`
@@ -253,19 +272,61 @@ g_recentFilesN64.Add(filename.ToString());
 Selesai. `CreateRecentTab()`, `HasSpecialFiles()`, `DisplayTopBar()`
 otomatis iterasi registry — tidak perlu edit lagi.
 
-## Upcoming Plans (Belum Dikerjakan)
+## Upcoming Plans
 
-| Plan | Tasks | Spec |
-|------|-------|------|
-| **GBA Settings Screen** | ✅ **SELESAI** | Controls, Display, Audio — tidak ganggu PSP |
-| GBA Display Layout | ✅ (bagian dari GBA Settings Screen) | Aspect ratio + integer scaling |
+### ✅ Core GBA — SELESAI
 
-Cara mulai eksekusi:
+| Area | Status | Keterangan |
+|------|--------|------------|
+| Video rendering + Thin3D | ✅ | |
+| Audio pipeline (sinc+DC+SIMD) | ✅ | |
+| Keyboard input | ✅ | |
+| Save RAM (SRAM/flash) | ✅ | Auto-load via mGBA |
+| Save state (F1/F3 + pause menu) | ✅ | `.ppst` di `<SAVESTATE>/GBA_*` |
+| Save state thumbnail | ✅ | `pngSave()` dari `videoBuffer_` |
+| GBA Settings Screen | ✅ | Controls + Display + Audio |
+| Config isolation | ✅ | Tidak ganggu PSP |
+| Base UI (tabs, recent, game list) | ✅ | RecentFilesRegistry |
+| Touch layout (per-core) | ✅ | CoreTouchConfig + CoreTouchLayoutScreen |
+| **Android build** | ✅ | `normalRelease` + `goldRelease` — optimized, installed |
 
-```bash
-cd docs/superpowers/plans/
-# Buka 2026-06-22-gba-settings-screen.md, mulai dari Task 1
+### 🟢 Next Polish (Low Priority)
+
+| Item | Priority | Notes |
+|------|----------|-------|
+| **Speed control** | 🟢 Low | Coba test: turbo/slow-motion frame skip di GBA |
+| **SaveSlotView → GBA redirect** | 🟢 Low | Main pause menu slot view masih PSP-only |
+| **Game icon/cover** | ⚪️ **SKIP** | Bukan bug — GBA tidak punya cover download |
+
+### 🔴 Compliance Debt: LAN Sync
+
+**Blocker sebelum merge upstream.** LAN Sync melanggar aturan fork:
+
+| # | Action | Detail |
+|---|--------|--------|
+| 1 | Pindah file dari `Core/` | `Core/SaveStateLANSync.*`, `Core/LANSyncConfig.*` → `LANSync/` |
+| 2 | Tambah `PPSSPP_LANSYNC` flag | Di CMake, biar bisa disable |
+| 3 | Wrap kode dengan `#ifdef PPSSPP_LANSYNC` | Setiap tambahan di file upstream |
+| 4 | Tambah `[PPSSPP-FORK] LANSync:` marker | Semua file + file upstream yang disentuh |
+| 5 | Verifikasi dual-build | `-DPPSSPP_LANSYNC=ON` dan `=OFF` harus build |
+| 6 | Asal usul `Common/Net/` | 34 file tanpa marker — perlu audit git history |
+
+### 🚀 Future Cores (Contoh Pattern)
+
+```cpp
+auto &reg = EmuCore::RecentFilesRegistry::Get();
+reg.Register(EmuCore::RecentFilesEntry{
+    (int)EmuCore::Type::N64,
+    "N64",
+    "N64 Recent",
+    "RECENT_N64",
+    &g_recentFilesN64,
+    nullptr,
+    ".n64:.z64:.v64",
+});
 ```
+
+Tambah core baru = 1 `Register()` + 1 `InitXXX()` + `add_subdirectory` di CMake.
 
 ## Build & Run
 

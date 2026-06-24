@@ -1475,19 +1475,23 @@ void EmuScreen::InitGBA(const Path &filename) {
 		);
 		if (activeCore_->LoadROM(filename)) {
 			INFO_LOG(Log::System, "[GBA] ROM loaded, boot pending");
+			// [PPSSPP-FORK] MultiCore: set GBA mode globals AFTER core + ROM ready
+			g_gbaModeActive = true;
+			g_activeCore = activeCore_.get();
+			g_gbaSavePrefix = "GBA_" + gba->GetSavePrefix();
+			NOTICE_LOG(Log::System, "[GBA] Save prefix: %s", g_gbaSavePrefix.c_str());
 			// [PPSSPP-FORK] MultiCore: add to recent files
 			g_recentFilesGBA.Add(filename.ToString());
+			bootPending_ = true;
+		} else {
+			ERROR_LOG(Log::System, "[GBA] ROM failed to load, cancel");
+			activeCore_.reset();
+			g_gbaModeActive = false;
+			g_activeCore = nullptr;
 		}
-
-		// [PPSSPP-FORK] MultiCore: set GBA mode globals AFTER core + ROM ready
-		g_gbaModeActive = true;
-		g_activeCore = activeCore_.get();
-		g_gbaSavePrefix = "GBA_" + gba->GetSavePrefix();
-		NOTICE_LOG(Log::System, "[GBA] Save prefix: %s", g_gbaSavePrefix.c_str());
 	} else {
 		ERROR_LOG(Log::System, "[GBA] Failed to create core");
 	}
-	bootPending_ = true;
 }
 
 // [PPSSPP-FORK] MultiCore: cleanup GBA resources in destructor
@@ -1572,8 +1576,8 @@ void EmuScreen::UpdateGBA() {
 #else
 					// Android: route through PPSSPP mixer (OpenSL/AAudio picks it up)
 					{
-						int32_t mixedBuf[AUDIO_BUF_SIZE * 2];
-						size_t mixedPairs = stereoPairs > AUDIO_BUF_SIZE ? AUDIO_BUF_SIZE : stereoPairs;
+						int32_t mixedBuf[GBA_AUDIO_BUF_SIZE * 2];
+						size_t mixedPairs = stereoPairs > GBA_AUDIO_BUF_SIZE ? GBA_AUDIO_BUF_SIZE : stereoPairs;
 						for (size_t i = 0; i < mixedPairs; i++) {
 							mixedBuf[i * 2] = (int32_t)audio16[i * 2];
 							mixedBuf[i * 2 + 1] = (int32_t)audio16[i * 2 + 1];

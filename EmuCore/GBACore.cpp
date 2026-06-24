@@ -14,6 +14,7 @@
 #include "Common/System/Display.h"
 #include "Common/StringUtils.h"
 #include "Common/File/FileUtil.h"
+#include "Common/File/AndroidStorage.h"
 #include "Core/System.h"
 #include "Core/Config.h"
 #include "Core/Util/PathUtil.h"
@@ -61,12 +62,12 @@ static void ClampFloatToS16_SIMD(int16_t *out, const float *in, size_t count) {
 		if (v < -32768.0f) v = -32768.0f;
 		out[i] = (int16_t)(v + (v >= 0.0f ? 0.5f : -0.5f));
 	}
-#elif PPSSPP_ARCH(ARM_NEON)
+#elif PPSSPP_ARCH(ARM_NEON) && defined(__aarch64__)
 	size_t i = 0;
-	// NEON path: process 4 samples per iteration
+	// NEON path (ARM64): process 4 samples per iteration
 	for (; i + 4 <= count; i += 4) {
 		float32x4_t f = vld1q_f32(&in[i]);
-		int32x4_t i32 = vcvtnq_s32_f32(f);  // float→int32 with rounding
+		int32x4_t i32 = vcvtnq_s32_f32(f);  // float→int32 with rounding (ARMv8+)
 		int16x4_t i16 = vqmovn_s32(i32);     // saturating narrow to int16
 		vst1_s16(&out[i], i16);
 	}
@@ -194,7 +195,22 @@ bool GBACore::LoadROMInternal(const Path &path) {
 	INFO_LOG(Log::System, "[GBA] Loading ROM: %s", path.c_str());
 
 	// Open ROM file via mGBA's VFile
-	struct VFile *vf = VFileOpen(path.c_str(), O_RDONLY);
+	struct VFile *vf = nullptr;
+#if defined(__ANDROID__) && defined(ANDROID)
+	// Android SAF: content:// URIs can't use POSIX open, must use ContentResolver FD
+	if (path.ToString().find("content://") == 0) {
+		int fd = Android_OpenContentUriFd(path.ToString(), Android_OpenContentUriMode::READ);
+		if (fd >= 0) {
+			vf = VFileFromFD(fd);
+		} else {
+			ERROR_LOG(Log::System, "[GBA] Failed to open content URI via SAF: %s", path.c_str());
+		}
+	} else {
+		vf = VFileOpen(path.c_str(), O_RDONLY);
+	}
+#else
+	vf = VFileOpen(path.c_str(), O_RDONLY);
+#endif
 	if (!vf) {
 		ERROR_LOG(Log::System, "[GBA] Failed to open ROM file: %s", path.c_str());
 		return false;

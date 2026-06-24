@@ -2231,6 +2231,8 @@ endif()
 if(PPSSPP_MULTICORE)
 	# Propagate PPSSPP_MULTICORE globally so ALL targets can use it
 	add_definitions(-DPPSSPP_MULTICORE)
+	# native library (UI/, EmuScreen, CoreTouch) also needs PPSSPP_MULTICORE
+	target_compile_definitions(native PRIVATE PPSSPP_MULTICORE)
 endif()
 add_subdirectory(EmuCore)
 
@@ -2753,6 +2755,7 @@ endif()
 # [PPSSPP-FORK] MultiCore: link EmuCore to Core
 if(PPSSPP_MULTICORE AND TARGET EmuCore)
 	target_link_libraries(${CoreLibName} EmuCore)
+	target_compile_definitions(${CoreLibName} PRIVATE PPSSPP_MULTICORE)
 endif()
 
 target_compile_features(${CoreLibName} PUBLIC cxx_std_17)
