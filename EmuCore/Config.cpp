@@ -234,10 +234,10 @@ void ApplyGBADefaults() {
 	g_Config.iInternalResolution = 0;  // Auto
 	g_Config.iShowStatusFlags = 0;
 
-	// [PPSSPP-FORK] MultiCore: enable touch controls for GBA on mobile
-#if defined(MOBILE_DEVICE) && !defined(DESKTOP_BUILD)
+	// [PPSSPP-FORK] MultiCore: enable touch controls for GBA
+	// Always default to on for GBA (touch is primary input method).
+	// Desktop users can disable in GBA Settings screen.
 	g_Config.bShowTouchControls = true;
-#endif
 
 	NOTICE_LOG(Log::System, "[CONFIG] Applied GBA defaults (nearest filter, auto res, touch=%d)", g_Config.bShowTouchControls);
 }
@@ -275,15 +275,21 @@ void LoadConfig(Type coreType) {
 	NOTICE_LOG(Log::System, "[CONFIG] LoadConfig(GBA) — saving PSP config first");
 	SaveCurrentConfig();
 
-	// Always apply GBA defaults first, then override from saved [GBA] section
+	// Apply GBA defaults first
 	ApplyGBADefaults();
 
+	// Then load saved [GBA] overrides from INI (may exist from previous runs)
 	Path iniPath = GetSysDirectory(DIRECTORY_SYSTEM) / "ppsspp.ini";
 	IniFile ini;
 	if (ini.Load(iniPath)) {
 		NOTICE_LOG(Log::System, "[CONFIG] Config loaded, checking [GBA] section");
 		LoadGBAOverrides(ini);
 	}
+
+	// [PPSSPP-FORK] MultiCore: ALWAYS force touch controls ON for GBA
+	// Must be AFTER LoadGBAOverrides, which may read stale false from INI.
+	// Desktop users can disable via GBA Settings screen if needed.
+	g_Config.bShowTouchControls = true;
 }
 
 void SaveConfig(Type coreType) {

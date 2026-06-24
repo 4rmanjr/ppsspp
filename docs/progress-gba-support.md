@@ -157,6 +157,9 @@ Bug: R↔B terbalik (little-endian byte order). Fix: `(B<<16)|(G<<8)|R`.
 | Android `ENABLE_VFS_FD` | ✅ | Required by `VFileFromFD()`, ditambah di `EmuCore/CMakeLists.txt` |
 | Per-core touch config | ✅ | `CoreTouchConfig` system — migrated from `TouchLayoutGBA`, centralized di `EmuCore/Config.h/.cpp` |
 | CoreTouchLayoutScreen | ✅ | NEW — per-core touch button editor (`UI/CoreTouchLayoutScreen.h/.cpp`) |
+| Android virtual touch buttons | ❌ | Belum muncul. Root cause: `LoadGBAOverrides()` membaca `bShowTouchControls=0` dari INI `[GBA]` section (sisa build lama) dan menimpa `ApplyGBADefaults()`. Fix: force `bShowTouchControls=true` **setelah** INI overrides di `LoadConfig()`. APK sudah dibuild (`v1.20.4-610`) tapi belum terinstall — ADB connection ke Samsung A05s gagal. Perlu install manual atau reconnect. |
+| GBA landscape touch positions | 🟡 | Default sudah disesuaikan mirip PSP (D-Pad kiri bawah, A/B kanan bawah, L/R atas, Start/Select tengah bawah). Perlu verifikasi di device |
+| GBA portrait touch positions | 🟡 | Default disesuaikan. Layar game 3:2 di tengah saat portrait — wajar karena GBA aspect ratio lebih pendek dari phone modern. Touch buttons perlu di area aman |
 | Type::COUNT | ✅ | Sentry added ke `EmuCore::EmuCore.h` untuk array indexing |
 
 ---
