@@ -117,22 +117,26 @@ void GBALayoutView::CreateViews() {
 
 	auto &cfg = EmuCore::GetTouchConfigMutable(coreType_, portrait_);
 
-	const ImageID roundImg = ImageID("I_ROUND");
-	const ImageID rectImg = ImageID("I_RECT");
-	const ImageID shoulderImg = ImageID("I_SHOULDER");
+	const ImageID roundImg = g_Config.iTouchButtonStyle ? ImageID("I_ROUND_LINE") : ImageID("I_ROUND");
+	const ImageID rectImg = g_Config.iTouchButtonStyle ? ImageID("I_RECT_LINE") : ImageID("I_RECT");
+	const ImageID shoulderImg = g_Config.iTouchButtonStyle ? ImageID("I_SHOULDER_LINE") : ImageID("I_SHOULDER");
 
 	for (int i = 0; i < cfg.count; i++) {
 		auto &btn = cfg.buttons[i];
 		if (!btn.visible) continue;
 		ImageID icon;
 		switch (btn.keyCode) {
-		case CTRL_CROSS:   icon = ImageID("I_CROSS");   break;
-		case CTRL_CIRCLE:  icon = ImageID("I_CIRCLE");  break;
-		case CTRL_SELECT:  icon = ImageID("I_SELECT");  break;
-		case CTRL_START:   icon = ImageID("I_START");   break;
-		case CTRL_LTRIGGER:
-		case CTRL_RTRIGGER: icon = ImageID("I_R");      break;
-		default:           icon = ImageID("I_CROSS");   break;
+		case CTRL_CROSS:     icon = ImageID("I_CROSS");   break;
+		case CTRL_CIRCLE:    icon = ImageID("I_CIRCLE");  break;
+		case CTRL_SELECT:    icon = ImageID("I_SELECT");  break;
+		case CTRL_START:     icon = ImageID("I_START");   break;
+		case CTRL_LTRIGGER:  icon = ImageID("I_L");      break;
+		case CTRL_RTRIGGER:  icon = ImageID("I_R");      break;
+		case CTRL_UP:
+		case CTRL_DOWN:
+		case CTRL_LEFT:
+		case CTRL_RIGHT:     icon = ImageID("I_ARROW");   break;
+		default:             icon = ImageID("I_CROSS");   break;
 		}
 		ImageID bg = (btn.keyCode == CTRL_LTRIGGER || btn.keyCode == CTRL_RTRIGGER) ? shoulderImg : roundImg;
 		if (btn.keyCode == CTRL_SELECT || btn.keyCode == CTRL_START) bg = rectImg;

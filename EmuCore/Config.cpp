@@ -30,20 +30,20 @@ const char *GetTouchConfigSection(Type coreType, bool portrait) {
 // Default GBA touch layout — matches TouchLayoutGBA::GetLayout()
 void FillDefaultGBATouchLayout(CoreTouchConfig &cfg) {
 	cfg.Clear();
-	// D-Pad
-	cfg.Add(CTRL_UP,       0.05f, 0.35f, 0.08f, 0.08f, "\xe2\x96\xb2");  // ▲
-	cfg.Add(CTRL_DOWN,     0.05f, 0.50f, 0.08f, 0.08f, "\xe2\x96\xbc");  // ▼
-	cfg.Add(CTRL_LEFT,     0.00f, 0.43f, 0.07f, 0.08f, "\xe2\x97\x80");  // ◀
-	cfg.Add(CTRL_RIGHT,    0.10f, 0.43f, 0.07f, 0.08f, "\xe2\x96\xb6");  // ▶
-	// A & B buttons (GBA layout: A right, B left-down)
-	cfg.Add(CTRL_CROSS,    0.82f, 0.47f, 0.09f, 0.09f, "A");
-	cfg.Add(CTRL_CIRCLE,   0.73f, 0.38f, 0.09f, 0.09f, "B");
-	// L & R
-	cfg.Add(CTRL_LTRIGGER, 0.15f, 0.02f, 0.10f, 0.06f, "L");
-	cfg.Add(CTRL_RTRIGGER, 0.75f, 0.02f, 0.10f, 0.06f, "R");
-	// Start & Select
-	cfg.Add(CTRL_SELECT,   0.40f, 0.12f, 0.08f, 0.05f, "Select");
-	cfg.Add(CTRL_START,    0.52f, 0.12f, 0.08f, 0.05f, "Start");
+	// D-Pad — bottom-left (mirip PSP)
+	cfg.Add(CTRL_UP,       0.04f, 0.50f, 0.09f, 0.09f, "\xe2\x96\xb2");  // ▲
+	cfg.Add(CTRL_DOWN,     0.04f, 0.67f, 0.09f, 0.09f, "\xe2\x96\xbc");  // ▼
+	cfg.Add(CTRL_LEFT,     0.00f, 0.585f, 0.08f, 0.09f, "\xe2\x97\x80");  // ◀
+	cfg.Add(CTRL_RIGHT,    0.08f, 0.585f, 0.08f, 0.09f, "\xe2\x96\xb6");  // ▶
+	// A & B buttons — bottom-right, B left of A (GBA layout)
+	cfg.Add(CTRL_CROSS,    0.88f, 0.55f, 0.10f, 0.10f, "A");
+	cfg.Add(CTRL_CIRCLE,   0.79f, 0.45f, 0.10f, 0.10f, "B");
+	// L & R — top corners
+	cfg.Add(CTRL_LTRIGGER, 0.05f, 0.02f, 0.10f, 0.06f, "L");
+	cfg.Add(CTRL_RTRIGGER, 0.92f, 0.02f, 0.10f, 0.06f, "R");
+	// Start & Select — bottom-center
+	cfg.Add(CTRL_SELECT,   0.40f, 0.87f, 0.09f, 0.06f, "Select");
+	cfg.Add(CTRL_START,    0.55f, 0.87f, 0.09f, 0.06f, "Start");
 }
 
 void InitDefaultTouchConfigs() {
@@ -58,16 +58,20 @@ void InitDefaultTouchConfigs() {
 	{
 		auto &cfg = g_coreTouchPortrait[(int)Type::GBA];
 		cfg.Clear();
-		cfg.Add(CTRL_UP,       0.05f, 0.50f, 0.10f, 0.08f, "\xe2\x96\xb2");
-		cfg.Add(CTRL_DOWN,     0.05f, 0.68f, 0.10f, 0.08f, "\xe2\x96\xbc");
-		cfg.Add(CTRL_LEFT,     0.00f, 0.59f, 0.07f, 0.08f, "\xe2\x97\x80");
-		cfg.Add(CTRL_RIGHT,    0.13f, 0.59f, 0.07f, 0.08f, "\xe2\x96\xb6");
-		cfg.Add(CTRL_CROSS,    0.80f, 0.62f, 0.11f, 0.10f, "A");
-		cfg.Add(CTRL_CIRCLE,   0.68f, 0.52f, 0.11f, 0.10f, "B");
-		cfg.Add(CTRL_LTRIGGER, 0.10f, 0.02f, 0.12f, 0.06f, "L");
-		cfg.Add(CTRL_RTRIGGER, 0.78f, 0.02f, 0.12f, 0.06f, "R");
-		cfg.Add(CTRL_SELECT,   0.35f, 0.25f, 0.12f, 0.06f, "Select");
-		cfg.Add(CTRL_START,    0.53f, 0.25f, 0.12f, 0.06f, "Start");
+		// D-Pad — bottom-left
+		cfg.Add(CTRL_UP,       0.04f, 0.52f, 0.10f, 0.09f, "\xe2\x96\xb2");
+		cfg.Add(CTRL_DOWN,     0.04f, 0.72f, 0.10f, 0.09f, "\xe2\x96\xbc");
+		cfg.Add(CTRL_LEFT,     0.00f, 0.62f, 0.08f, 0.09f, "\xe2\x97\x80");
+		cfg.Add(CTRL_RIGHT,    0.09f, 0.62f, 0.08f, 0.09f, "\xe2\x96\xb6");
+		// A & B — bottom-right
+		cfg.Add(CTRL_CROSS,    0.87f, 0.60f, 0.12f, 0.11f, "A");
+		cfg.Add(CTRL_CIRCLE,   0.76f, 0.49f, 0.12f, 0.11f, "B");
+		// L & R — top
+		cfg.Add(CTRL_LTRIGGER, 0.06f, 0.02f, 0.12f, 0.06f, "L");
+		cfg.Add(CTRL_RTRIGGER, 0.82f, 0.02f, 0.12f, 0.06f, "R");
+		// Start & Select — bottom-center
+		cfg.Add(CTRL_SELECT,   0.35f, 0.88f, 0.11f, 0.06f, "Select");
+		cfg.Add(CTRL_START,    0.57f, 0.88f, 0.11f, 0.06f, "Start");
 	}
 	// PSP — leave empty, uses existing TouchControlConfig system
 }

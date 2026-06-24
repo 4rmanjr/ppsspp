@@ -1423,27 +1423,34 @@ void EmuScreen::AddGBATouchButtons(const Bounds &bounds, DeviceOrientation orien
 	using namespace UI;
 	bool portrait = (orientation == DeviceOrientation::Portrait);
 	const auto &cfg = EmuCore::GetTouchConfig(coreType_, portrait);
-	const ImageID roundImg = ImageID("I_ROUND");
+	const ImageID roundImg = g_Config.iTouchButtonStyle ? ImageID("I_ROUND_LINE") : ImageID("I_ROUND");
+	const ImageID rectImg = g_Config.iTouchButtonStyle ? ImageID("I_RECT_LINE") : ImageID("I_RECT");
+	const ImageID shoulderImg = g_Config.iTouchButtonStyle ? ImageID("I_SHOULDER_LINE") : ImageID("I_SHOULDER");
 	for (int i = 0; i < cfg.count; i++) {
 		const auto &btn = cfg.buttons[i];
 		if (!btn.visible) continue;
+		ImageID bgImg = roundImg;
 		ImageID icon;
 		switch (btn.keyCode) {
-			case CTRL_CROSS:   icon = ImageID("I_CROSS");   break;
-			case CTRL_CIRCLE:  icon = ImageID("I_CIRCLE");  break;
-			case CTRL_START:   icon = ImageID("I_START");   break;
-			case CTRL_SELECT:  icon = ImageID("I_SELECT");  break;
-			case CTRL_LTRIGGER:
-			case CTRL_RTRIGGER: icon = ImageID("I_L");     break;
-			default:           icon = ImageID("I_CROSS");   break;
+			case CTRL_CROSS:     icon = ImageID("I_CROSS");   break;
+			case CTRL_CIRCLE:    icon = ImageID("I_CIRCLE");  break;
+			case CTRL_START:     icon = ImageID("I_START");   bgImg = rectImg;  break;
+			case CTRL_SELECT:    icon = ImageID("I_SELECT");  bgImg = rectImg;  break;
+			case CTRL_LTRIGGER:  icon = ImageID("I_L");      bgImg = shoulderImg;  break;
+			case CTRL_RTRIGGER:  icon = ImageID("I_R");      bgImg = shoulderImg;  break;
+			case CTRL_UP:        icon = ImageID("I_ARROW");   break;
+			case CTRL_DOWN:      icon = ImageID("I_ARROW");   break;
+			case CTRL_LEFT:      icon = ImageID("I_ARROW");   break;
+			case CTRL_RIGHT:     icon = ImageID("I_ARROW");   break;
+			default:             icon = ImageID("I_CROSS");   break;
 		}
 		float cx = btn.x * bounds.w;
 		float cy = btn.y * bounds.h;
 		root_->Add(new PSPButton(
 			btn.keyCode,
 			std::string("GBA_") + btn.label,
-			roundImg,
-			ImageID("I_ROUND"),
+			bgImg,
+			bgImg,
 			icon,
 			0.8f,
 			new AnchorLayoutParams(cx, cy, UI::NONE, UI::NONE, Centering::Both)
