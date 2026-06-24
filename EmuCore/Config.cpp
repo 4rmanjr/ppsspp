@@ -75,38 +75,38 @@ void InitDefaultTouchConfigs() {
 void LoadTouchConfig(Type coreType) {
 	Path iniPath = GetSysDirectory(DIRECTORY_SYSTEM) / "ppsspp.ini";
 	IniFile ini;
+
+	// Always ensure defaults are populated in-memory
+	InitDefaultTouchConfigs();
+
 	if (!ini.Load(iniPath)) {
-		// No config file — use defaults
-		InitDefaultTouchConfigs();
+		// No config file — defaults already set above
 		return;
 	}
 
+	// Load landscape section
+	CoreTouchConfig &cfg = GetTouchConfigMutable(coreType, false);
 	const char *sectionName = GetTouchConfigSection(coreType, false);
 	const Section *sec = ini.GetSection(sectionName);
-	if (!sec) {
-		// Section missing — use defaults
-		InitDefaultTouchConfigs();
-		return;
-	}
-
-	CoreTouchConfig &cfg = GetTouchConfigMutable(coreType, false);
-	cfg.Clear();
-	for (int i = 0; i < MAX_TOUCH_BUTTONS; i++) {
-		char key[32];
-		snprintf(key, sizeof(key), "btn%d", i);
-		std::string val;
-		if (!sec->Get(key, &val)) break;
-		// Format: keyCode,x,y,w,h,label,visible
-		int kc = 0;
-		float x = 0, y = 0, w = 0, h = 0;
-		char label[16] = "";
-		int vis = 1;
-		if (sscanf(val.c_str(), "%d,%f,%f,%f,%f,%15[^,],%d", &kc, &x, &y, &w, &h, label, &vis) >= 6) {
-			cfg.Add(kc, x, y, w, h, label, vis != 0);
+	if (sec) {
+		cfg.Clear();
+		for (int i = 0; i < MAX_TOUCH_BUTTONS; i++) {
+			char key[32];
+			snprintf(key, sizeof(key), "btn%d", i);
+			std::string val;
+			if (!sec->Get(key, &val)) break;
+			int kc = 0;
+			float x = 0, y = 0, w = 0, h = 0;
+			char label[16] = "";
+			int vis = 1;
+			if (sscanf(val.c_str(), "%d,%f,%f,%f,%f,%15[^,],%d", &kc, &x, &y, &w, &h, label, &vis) >= 6) {
+				cfg.Add(kc, x, y, w, h, label, vis != 0);
+			}
 		}
 	}
+	// If section was empty/missing, in-memory defaults from InitDefaultTouchConfigs() remain intact
 
-	// Load portrait too
+	// Load portrait section
 	const char *sectionNameP = GetTouchConfigSection(coreType, true);
 	const Section *secP = ini.GetSection(sectionNameP);
 	CoreTouchConfig &cfgP = GetTouchConfigMutable(coreType, true);
@@ -230,7 +230,12 @@ void ApplyGBADefaults() {
 	g_Config.iInternalResolution = 0;  // Auto
 	g_Config.iShowStatusFlags = 0;
 
-	NOTICE_LOG(Log::System, "[CONFIG] Applied GBA defaults (nearest filter, auto res)");
+	// [PPSSPP-FORK] MultiCore: enable touch controls for GBA on mobile
+#if defined(MOBILE_DEVICE) && !defined(DESKTOP_BUILD)
+	g_Config.bShowTouchControls = true;
+#endif
+
+	NOTICE_LOG(Log::System, "[CONFIG] Applied GBA defaults (nearest filter, auto res, touch=%d)", g_Config.bShowTouchControls);
 }
 
 // Load GBA-specific config overrides from ppsspp.ini [GBA] section
@@ -266,16 +271,14 @@ void LoadConfig(Type coreType) {
 	NOTICE_LOG(Log::System, "[CONFIG] LoadConfig(GBA) — saving PSP config first");
 	SaveCurrentConfig();
 
-	Path iniPath = GetSysDirectory(DIRECTORY_SYSTEM) / "ppsspp.ini";
-	NOTICE_LOG(Log::System, "[CONFIG] Looking for config at: %s", iniPath.c_str());
+	// Always apply GBA defaults first, then override from saved [GBA] section
+	ApplyGBADefaults();
 
+	Path iniPath = GetSysDirectory(DIRECTORY_SYSTEM) / "ppsspp.ini";
 	IniFile ini;
 	if (ini.Load(iniPath)) {
 		NOTICE_LOG(Log::System, "[CONFIG] Config loaded, checking [GBA] section");
 		LoadGBAOverrides(ini);
-	} else {
-		NOTICE_LOG(Log::System, "[CONFIG] No config file, applying GBA defaults");
-		ApplyGBADefaults();
 	}
 }
 

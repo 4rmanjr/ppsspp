@@ -10,6 +10,8 @@
 #include "BaseScreens.h"
 #include "EmuCore/EmuCore.h"
 
+class GBALayoutView;
+
 class CoreTouchLayoutScreen : public UIBaseDialogScreen {
 public:
 	CoreTouchLayoutScreen(const Path &gamePath, EmuCore::Type coreType)
@@ -19,6 +21,7 @@ public:
 	void dialogFinished(const Screen *dialog, DialogResult result) override;
 	void onFinish(DialogResult reason) override;
 	void resized() override;
+	void update() override;
 
 	const char *tag() const override { return "CoreTouchLayout"; }
 
@@ -28,4 +31,6 @@ protected:
 
 private:
 	EmuCore::Type coreType_;
+	UI::ChoiceStrip *mode_ = nullptr;
+	GBALayoutView *layoutView_ = nullptr;
 };
