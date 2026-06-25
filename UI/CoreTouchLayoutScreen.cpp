@@ -118,7 +118,33 @@ bool GBALayoutView::Touch(const TouchInput &touch) {
 void GBALayoutView::Draw(UIContext &dc) {
 	using namespace UI;
 	dc.FillRect(Drawable(0x80000000), bounds_);
-	dc.Flush();
+
+	// Draw snap/grid lines when Garis Pinggir enabled
+	// [PPSSPP-FORK] GridLines: mirrors PSP SnapGrid drawing
+	if (g_Config.bTouchSnapToGrid && g_Config.iTouchSnapGridSize > 4) {
+		dc.Flush();
+		dc.BeginNoTex();
+		float xOff = bounds_.x;
+		float yOff = bounds_.y;
+		float w = bounds_.w;
+		float h = bounds_.h;
+		uint32_t gridColor = 0x3FFFFFFF;
+
+		// Center crosshair
+		dc.Draw()->vLine(w * 0.5f + xOff, yOff, yOff + h, gridColor);
+		dc.Draw()->hLine(xOff, h * 0.5f + yOff, xOff + w, gridColor);
+
+		// Grid lines
+		int spacing = g_Config.iTouchSnapGridSize;
+		for (float x = (int)(w * 0.5f) % spacing; x < w; x += spacing)
+			dc.Draw()->vLine(x + xOff, yOff, yOff + h, gridColor);
+		for (float y = (int)(h * 0.5f) % spacing; y < h; y += spacing)
+			dc.Draw()->hLine(xOff, y + yOff, xOff + w, gridColor);
+
+		dc.Flush();
+		dc.Begin();
+	}
+
 	AnchorLayout::Draw(dc);
 }
 

@@ -300,9 +300,11 @@ otomatis iterasi registry — tidak perlu edit lagi.
 | **Speed control** | 🟢 Low | Coba test: turbo/slow-motion frame skip di GBA |
 | **SaveSlotView → GBA redirect** | 🟢 Low | Main pause menu slot view masih PSP-only |
 | **Game icon/cover** | ⚪️ **SKIP** | Bukan bug — GBA tidak punya cover download |
-| **GBA touch layout editor parity** | ✅ **SELESAI** | CoreTouchLayoutScreen sekarang punya Move/Resize/Customize, Border checkbox, Snap/Grid, Reset. Cocok dengan PSP TouchControlLayoutScreen |
+| **GBA touch layout editor parity** | ✅ **SELESAI** | CoreTouchLayoutScreen: Move/Resize mode, Kustomisasi (popup visibility), Garis Pinggir checkbox + Kisi-kisi slider, Reset. Cocok dengan PSP — terkecuali Border (diganti Garis Pinggir untuk grid control) |
 | **Pause menu editor redirect** | ✅ **SELESAI** | Pause → Edit touch control layout sekarang buka CoreTouchLayoutScreen(GBA) bukan PSP |
 | **GBA root_ cleanup** | 🟢 Low | `CreateViews()` GBA path tambah DevMenu + Resume buttons yang seharusnya hanya muncul di pause. `children=15` — idealnya 10 touch buttons + overlay saat pause |
+| **Editor preview buttons hide** | 🟡 **BUG** | Tombol di preview `CoreTouchLayoutScreen` tiba-tiba hilang — kemungkinan `LoadTouchConfig()` `cfg.Clear()` hapus default saat INI section ada tapi kosong/korup. Workaround: Reset di editor. Perlu debug: cocokkan `cfg.count` dengan semestinya.
+| **Editor grid lines (Garis Pinggir)** | ✅ **FIXED (051b76d)** | Grid lines tidak muncul karena class `GBASnapGrid` terhapus saat rewrite. Fix: `vLine`/`hLine` langsung di `GBALayoutView::Draw()` saat `g_Config.bTouchSnapToGrid=true` |
 
 ### 🔴 Compliance Debt: LAN Sync
 
