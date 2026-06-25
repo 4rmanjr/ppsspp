@@ -26,7 +26,7 @@ public:
 
 	bool IsDownVisually() const override { return false; }
 	void Draw(UIContext &dc) override {
-		scale_ = g_layoutScale;
+		scale_ = btn_.w * g_layoutScale;
 		MultiTouchButton::Draw(dc);
 	}
 	void SavePosition() {
@@ -63,7 +63,7 @@ public:
 
 private:
 	void ClearControls();
-	void ToggleButtonVisibility(GBADragDrop *dd);
+
 	GBADragDrop *picked_ = nullptr;
 	float startObjX_ = -1.0f, startObjY_ = -1.0f;
 	float startDragX_ = -1.0f, startDragY_ = -1.0f;
@@ -97,10 +97,6 @@ bool GBALayoutView::Touch(const TouchInput &touch) {
 	if ((touch.flags & TouchInputFlags::DOWN) && !picked_) {
 		for (auto *c : controls_) {
 			if (c->Contains(touch.x, touch.y)) {
-				if (mode_ == 2) {
-					ToggleButtonVisibility(c);
-					return true;
-				}
 				picked_ = c;
 				startDragX_ = touch.x;
 				startDragY_ = touch.y;
@@ -119,24 +115,10 @@ bool GBALayoutView::Touch(const TouchInput &touch) {
 	return true;
 }
 
-void GBALayoutView::ToggleButtonVisibility(GBADragDrop *dd) {
-	dd->SetVisibleFlag(!dd->GetVisibleFlag());
-	ClearControls();
-	CreateViews();
-}
-
 void GBALayoutView::Draw(UIContext &dc) {
 	using namespace UI;
 	dc.FillRect(Drawable(0x80000000), bounds_);
 	dc.Flush();
-	// Draw snap grid or customize hints
-	if (mode_ == 2) {
-		// In customize mode, show a hint that tapping toggles visibility
-		char msg[64];
-		snprintf(msg, sizeof(msg), "Tap to toggle visibility");
-		dc.DrawText(msg, bounds_.centerX(), bounds_.y + 20, 0xFFFFFFFF, ALIGN_CENTER);
-		dc.Flush();
-	}
 	AnchorLayout::Draw(dc);
 }
 
@@ -160,7 +142,7 @@ void GBALayoutView::CreateViews() {
 
 	for (int i = 0; i < cfg.count; i++) {
 		auto &btn = cfg.buttons[i];
-		if (!btn.visible && mode_ != 2) continue;
+		if (!btn.visible) continue;
 		ImageID icon;
 		switch (btn.keyCode) {
 		case CTRL_CROSS:     icon = ImageID("I_CROSS");   break;
@@ -239,7 +221,6 @@ void CoreTouchLayoutScreen::CreateViews() {
 
 	EmuCore::LoadTouchConfig(coreType_);
 	const char *coreName = EmuCore::GetConfigSection(coreType_);
-	borderState_ = g_Config.iTouchButtonStyle != 0;
 	const Bounds &bounds = GetLayoutBounds(*screenManager()->getUIContext());
 	const float leftW = 200.0f;
 	g_layoutScale = 1.0f - (leftW + 10.0f) / std::max(bounds.w, 1.0f);
@@ -254,46 +235,41 @@ void CoreTouchLayoutScreen::CreateViews() {
 	auto *leftCol = leftScroll->Add(new LinearLayout(ORIENT_VERTICAL, new LinearLayoutParams(Margins(12.0f, 0.0f))));
 	leftCol->Add(new ItemHeader(std::string(coreName) + " Touch Layout"));
 
-	// Mode strip: Move / Resize / Customize
+	// Mode: Pindah / Atur Ulang Ukuran
 	mode_ = leftCol->Add(new ChoiceStrip(ORIENT_VERTICAL));
 	mode_->AddChoice(di->T("Move"), ImageID("I_MOVE"));
 	mode_->AddChoice(di->T("Resize"), ImageID("I_RESIZE"));
-	mode_->AddChoice(co->T("Customize"), ImageID("I_EDIT"));
 	mode_->SetSelection(0, false);
 	mode_->OnChoice.Add([this](EventParams &) {
 		if (layoutView_) layoutView_->mode_ = mode_->GetSelection();
 	});
 
-	// Border/Garis pinggir (toggles filled↔outline style)
-	{
-		bool initialBorder = g_Config.iTouchButtonStyle != 0;
-		CheckBox *border = new CheckBox(&borderState_, di->T("Border"));
-		border->OnClick.Add([this](EventParams &) {
-			g_Config.iTouchButtonStyle = borderState_ ? 1 : 0;
-			RecreateViews();
-		});
-		leftCol->Add(border);
-	}
+	// Kustomisasi — buka popup visibility
+	leftCol->Add(new Choice(co->T("Customize")))->OnClick.Add([this](EventParams &) {
+		screenManager()->push(new GBATouchVisibilityPopup(coreType_, false));
+	});
 
-	// Snap to Grid + Grid size
-	CheckBox *snap = new CheckBox(&g_Config.bTouchSnapToGrid, di->T("Snap"));
-	leftCol->Add(snap);
-	PopupSliderChoice *gridSize = new PopupSliderChoice(&g_Config.iTouchSnapGridSize, 2, 256, 64, di->T("Grid"), screenManager(), "");
+	// Garis Pinggir (Cek box) — default unceklist, enable/disable kisi-kisi
+	// [PPSSPP-FORK] GarisPinggir: maps to bTouchSnapToGrid
+	leftCol->Add(new CheckBox(&g_Config.bTouchSnapToGrid, "Garis Pinggir"));
+
+	// Kisi-kisi — enabled only if Garis Pinggir is checked
+	PopupSliderChoice *gridSize = new PopupSliderChoice(&g_Config.iTouchSnapGridSize, 2, 256, 64, "Kisi-kisi", screenManager(), "");
 	gridSize->SetEnabledPtr(&g_Config.bTouchSnapToGrid);
 	leftCol->Add(gridSize);
 
-	// Reset
+	// Atur Ulang
 	leftCol->Add(new Spacer(8.0f));
 	leftCol->Add(new Choice(di->T("Reset")))->OnClick.Handle(this, &CoreTouchLayoutScreen::OnReset);
 
-	// Back
+	// Kembali
 	leftCol->Add(new Choice(di->T("Back"), ImageID("I_NAVIGATE_BACK")))->OnClick.Add([this](EventParams &) {
 		EmuCore::SaveTouchConfig(coreType_);
 		TriggerFinish(DR_CANCEL);
 	});
 	leftScroll->SetShadows(false);
 
-	// Right column — interactive layout
+	// Panel kanan — preview layout
 	auto *rightCol = root_->Add(new LinearLayout(ORIENT_VERTICAL, new LinearLayoutParams(1.0f, Margins(0.0f, 12.0f, 12.0f, 12.0f))));
 	rightCol->Add(new TextView(di->T("Landscape")))->SetTextSize(TextSize::Small);
 	rightCol->Add(new Spacer(new LinearLayoutParams(1.0f)));

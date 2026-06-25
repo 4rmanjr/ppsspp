@@ -33,5 +33,5 @@ private:
 	EmuCore::Type coreType_;
 	UI::ChoiceStrip *mode_ = nullptr;
 	GBALayoutView *layoutView_ = nullptr;
-	bool borderState_ = false;  // shadow for iTouchButtonStyle (bool → int)
+
 };
