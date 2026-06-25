@@ -300,6 +300,8 @@ otomatis iterasi registry — tidak perlu edit lagi.
 | **Speed control** | 🟢 Low | Coba test: turbo/slow-motion frame skip di GBA |
 | **SaveSlotView → GBA redirect** | 🟢 Low | Main pause menu slot view masih PSP-only |
 | **Game icon/cover** | ⚪️ **SKIP** | Bukan bug — GBA tidak punya cover download |
+| **GBA touch layout editor parity** | ✅ **SELESAI** | CoreTouchLayoutScreen sekarang punya Move/Resize/Customize, Border checkbox, Snap/Grid, Reset. Cocok dengan PSP TouchControlLayoutScreen |
+| **Pause menu editor redirect** | ✅ **SELESAI** | Pause → Edit touch control layout sekarang buka CoreTouchLayoutScreen(GBA) bukan PSP |
 | **GBA root_ cleanup** | 🟢 Low | `CreateViews()` GBA path tambah DevMenu + Resume buttons yang seharusnya hanya muncul di pause. `children=15` — idealnya 10 touch buttons + overlay saat pause |
 
 ### 🔴 Compliance Debt: LAN Sync
