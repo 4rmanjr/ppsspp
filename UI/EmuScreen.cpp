@@ -1866,6 +1866,7 @@ void EmuScreen::update() {
 	// [PPSSPP-FORK] MultiCore: GBA emulation path
 #ifdef PPSSPP_MULTICORE
 	if (IsGBA() && activeCore_) {
+		UIScreen::update();
 		UpdateGBA();
 		return;
 	}
