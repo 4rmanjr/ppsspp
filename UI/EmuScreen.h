@@ -205,6 +205,7 @@ private:
 	EmuCore::Type coreType_ = EmuCore::Type::PSP;
 	std::unique_ptr<EmuCore::Core> activeCore_;
 	void AddGBATouchButtons(const Bounds &bounds, DeviceOrientation orientation);
+	void CreateSystemTouchButtons(UI::ViewGroup *parent, const Bounds &bounds, DeviceOrientation orientation);
 
 	// [PPSSPP-FORK] MultiCore: GBA rendering + save state moved to GBACore
 #endif
