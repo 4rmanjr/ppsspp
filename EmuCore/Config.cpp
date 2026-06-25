@@ -54,22 +54,24 @@ void InitDefaultTouchConfigs() {
 	}
 	// GBA — both orientations
 	FillDefaultGBATouchLayout(g_coreTouchLandscape[(int)Type::GBA]);
-	// Portrait: swap positions for tall screen
+	// Portrait: positions for tall phone screen (20:9+)
+	// GBA video (3:2) fills width + centered vertically,
+	// leaving empty space below where action buttons go.
 	{
 		auto &cfg = g_coreTouchPortrait[(int)Type::GBA];
 		cfg.Clear();
-		// D-Pad — bottom-left
-		cfg.Add(CTRL_UP,       0.04f, 0.52f, 0.10f, 0.09f, "\xe2\x96\xb2");
-		cfg.Add(CTRL_DOWN,     0.04f, 0.72f, 0.10f, 0.09f, "\xe2\x96\xbc");
-		cfg.Add(CTRL_LEFT,     0.00f, 0.62f, 0.08f, 0.09f, "\xe2\x97\x80");
-		cfg.Add(CTRL_RIGHT,    0.09f, 0.62f, 0.08f, 0.09f, "\xe2\x96\xb6");
-		// A & B — bottom-right
-		cfg.Add(CTRL_CROSS,    0.87f, 0.60f, 0.12f, 0.11f, "A");
-		cfg.Add(CTRL_CIRCLE,   0.76f, 0.49f, 0.12f, 0.11f, "B");
-		// L & R — top
-		cfg.Add(CTRL_LTRIGGER, 0.06f, 0.02f, 0.12f, 0.06f, "L");
-		cfg.Add(CTRL_RTRIGGER, 0.82f, 0.02f, 0.12f, 0.06f, "R");
-		// Start & Select — bottom-center
+		// D-Pad — below video area, left side
+		cfg.Add(CTRL_UP,       0.04f, 0.68f, 0.10f, 0.09f, "\xe2\x96\xb2");
+		cfg.Add(CTRL_DOWN,     0.04f, 0.84f, 0.10f, 0.09f, "\xe2\x96\xbc");
+		cfg.Add(CTRL_LEFT,     0.00f, 0.76f, 0.08f, 0.09f, "\xe2\x97\x80");
+		cfg.Add(CTRL_RIGHT,    0.09f, 0.76f, 0.08f, 0.09f, "\xe2\x96\xb6");
+		// A & B — below video area, right side
+		cfg.Add(CTRL_CROSS,    0.87f, 0.76f, 0.12f, 0.11f, "A");
+		cfg.Add(CTRL_CIRCLE,   0.76f, 0.66f, 0.12f, 0.11f, "B");
+		// L & R — top area (above video)
+		cfg.Add(CTRL_LTRIGGER, 0.06f, 0.03f, 0.12f, 0.06f, "L");
+		cfg.Add(CTRL_RTRIGGER, 0.82f, 0.03f, 0.12f, 0.06f, "R");
+		// Start & Select — very bottom, center
 		cfg.Add(CTRL_SELECT,   0.35f, 0.88f, 0.11f, 0.06f, "Select");
 		cfg.Add(CTRL_START,    0.57f, 0.88f, 0.11f, 0.06f, "Start");
 	}

@@ -53,11 +53,13 @@ public:
 	bool Touch(const TouchInput &input) override;
 	void CreateViews();
 	void Draw(UIContext &dc) override;
+	void SetPortrait(bool portrait);
 	bool HasCreatedViews() const { return !controls_.empty(); }
 
 	int mode_ = 0;
 
 private:
+	void ClearControls();
 	GBADragDrop *picked_ = nullptr;
 	float startObjX_ = -1.0f, startObjY_ = -1.0f;
 	float startDragX_ = -1.0f, startDragY_ = -1.0f;
@@ -109,6 +111,18 @@ void GBALayoutView::Draw(UIContext &dc) {
 	dc.FillRect(Drawable(0x80000000), bounds_);
 	dc.Flush();
 	AnchorLayout::Draw(dc);
+}
+
+void GBALayoutView::ClearControls() {
+	for (auto *c : controls_) RemoveSubview(c);
+	controls_.clear();
+}
+
+void GBALayoutView::SetPortrait(bool portrait) {
+	if (portrait_ == portrait) return;
+	portrait_ = portrait;
+	ClearControls();
+	CreateViews();
 }
 
 void GBALayoutView::CreateViews() {
@@ -188,10 +202,16 @@ void CoreTouchLayoutScreen::CreateViews() {
 
 	// Right column — interactive layout
 	auto *rightCol = root_->Add(new LinearLayout(ORIENT_VERTICAL, new LinearLayoutParams(1.0f, Margins(0.0f, 8.0f, 8.0f, 8.0f))));
-	rightCol->Add(new TextView(co->T("Landscape")))->SetTextSize(TextSize::Small);
-	rightCol->Add(new Spacer(new LinearLayoutParams(1.0f)));
+	// Landscape / Portrait toggle
+	auto *orientStrip = rightCol->Add(new ChoiceStrip(ORIENT_HORIZONTAL, new LinearLayoutParams(WRAP_CONTENT, WRAP_CONTENT)));
+	orientStrip->AddChoice(co->T("Landscape"));
+	orientStrip->AddChoice(co->T("Portrait"));
+	orientStrip->SetSelection(0, false);
 	float previewH = bounds.h * g_layoutScale;
 	layoutView_ = rightCol->Add(new GBALayoutView(coreType_, false, new LinearLayoutParams(FILL_PARENT, previewH)));
+	orientStrip->OnChoice.Add([this](UI::EventParams &e) {
+		layoutView_->SetPortrait(e.a == 1);
+	});
 }
 
 void CoreTouchLayoutScreen::dialogFinished(const Screen *, DialogResult) {

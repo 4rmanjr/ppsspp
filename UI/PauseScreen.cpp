@@ -74,6 +74,7 @@
 #ifdef PPSSPP_MULTICORE
 #include "EmuCore/GBACore.h"
 #include "GBASettingsScreen.h"
+#include "CoreTouchLayoutScreen.h"
 #endif
 #include "UI/MiscViews.h"
 #include "UI/AdhocServerScreen.h"
@@ -773,7 +774,14 @@ void GamePauseScreen::CreateViews() {
 	});
 	if (g_Config.bShowTouchControls) {
 		rightColumnItems->Add(new Choice(co->T("Edit touch control layout"), ImageID("I_CONTROLLER")))->OnClick.Add([this](UI::EventParams &) -> void {
-			screenManager()->push(new TouchControlLayoutScreen(gamePath_));
+#ifdef PPSSPP_MULTICORE
+			if (g_gbaModeActive) {
+				screenManager()->push(new CoreTouchLayoutScreen(gamePath_, EmuCore::Type::GBA));
+			} else
+#endif
+			{
+				screenManager()->push(new TouchControlLayoutScreen(gamePath_));
+			}
 		});
 	}
 
