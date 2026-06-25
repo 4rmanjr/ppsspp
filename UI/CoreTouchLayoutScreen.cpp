@@ -67,6 +67,42 @@ private:
 	ImageID bgImg_;
 };
 
+// [PPSSPP-FORK] GBASnapGrid: Snap/grid lines drawn behind touch buttons
+// Mirrors PSP SnapGrid behavior but adapted for per-core layout editor
+class GBASnapGrid : public UI::View {
+public:
+	GBASnapGrid(u32 color) : UI::View(), col(color) {}
+	void Draw(UIContext &dc) override {
+		if (g_Config.bTouchSnapToGrid && g_Config.iTouchSnapGridSize >= 2) {
+			dc.Flush();
+			dc.BeginNoTex();
+			float xOff = bounds_.x;
+			float yOff = bounds_.y;
+			int w = (int)bounds_.w;
+			int h = (int)bounds_.h;
+			int spacing = g_Config.iTouchSnapGridSize;
+
+			// Center crosshair
+			dc.Draw()->vLine(w * 0.5f + xOff, yOff, yOff + h, col);
+			dc.Draw()->hLine(xOff, h * 0.5f + yOff, xOff + w, col);
+
+			// Grid lines — offset so one line passes through center
+			int halfW = w / 2;
+			int halfH = h / 2;
+			for (int x = halfW % spacing; x < w; x += spacing)
+				dc.Draw()->vLine((float)x + xOff, yOff, yOff + h, col);
+			for (int y = halfH % spacing; y < h; y += spacing)
+				dc.Draw()->hLine(xOff, (float)y + yOff, xOff + w, col);
+
+			dc.Flush();
+			dc.Begin();
+		}
+	}
+	std::string DescribeText() const override { return ""; }
+private:
+	u32 col;
+};
+
 class GBALayoutView : public UI::AnchorLayout {
 public:
 	GBALayoutView(EmuCore::Type core, bool portrait, UI::LayoutParams *lp)
@@ -99,13 +135,22 @@ bool GBALayoutView::Touch(const TouchInput &touch) {
 
 	if ((touch.flags & TouchInputFlags::MOVE) && picked_) {
 		if (mode_ == 0) {
+			// Clamp to preview area (matching PSP behavior)
+			Bounds vr = this->GetBounds();
+			vr.x = 0.0f;
+			vr.y = 0.0f;
 			float nx = startObjX_ + (touch.x - startDragX_);
 			float ny = startObjY_ + (touch.y - startDragY_);
 			if (g_Config.bTouchSnapToGrid && g_Config.iTouchSnapGridSize > 0) {
 				float grid = (float)g_Config.iTouchSnapGridSize;
-				nx -= fmod(nx, grid);
-				ny -= fmod(ny, grid);
+				float cx = vr.centerX();
+				float cy = vr.centerY();
+				// Snap relative to center (matching PSP snap anchoring)
+				nx -= fmod(nx - cx, grid);
+				ny -= fmod(ny - cy, grid);
 			}
+			nx = std::clamp(nx, 0.0f, vr.w);
+			ny = std::clamp(ny, 0.0f, vr.h);
 			picked_->ReplaceLayoutParams(new AnchorLayoutParams(nx, ny, NONE, NONE, Centering::Both));
 		} else if (mode_ == 1) {
 			// btn_.w is normalized width (fraction of screen, default ~0.10).
@@ -141,35 +186,6 @@ bool GBALayoutView::Touch(const TouchInput &touch) {
 void GBALayoutView::Draw(UIContext &dc) {
 	using namespace UI;
 	dc.FillRect(Drawable(0x80000000), bounds_);
-
-	// Draw snap/grid lines when Garis Pinggir enabled
-	// [PPSSPP-FORK] GridLines: mirrors PSP SnapGrid drawing
-	if (g_Config.bTouchSnapToGrid && g_Config.iTouchSnapGridSize >= 2) {
-		dc.Flush();
-		dc.BeginNoTex();
-		float xOff = bounds_.x;
-		float yOff = bounds_.y;
-		int w = (int)bounds_.w;
-		int h = (int)bounds_.h;
-		uint32_t gridColor = 0x3FFFFFFF;
-		int spacing = g_Config.iTouchSnapGridSize;
-
-		// Center crosshair
-		dc.Draw()->vLine(w * 0.5f + xOff, yOff, yOff + h, gridColor);
-		dc.Draw()->hLine(xOff, h * 0.5f + yOff, xOff + w, gridColor);
-
-		// Grid lines — use integer iteration to avoid FP error accumulation
-		int halfW = w / 2;
-		int halfH = h / 2;
-		for (int x = halfW % spacing; x < w; x += spacing)
-			dc.Draw()->vLine((float)x + xOff, yOff, yOff + h, gridColor);
-		for (int y = halfH % spacing; y < h; y += spacing)
-			dc.Draw()->hLine(xOff, (float)y + yOff, xOff + w, gridColor);
-
-		dc.Flush();
-		dc.Begin();
-	}
-
 	AnchorLayout::Draw(dc);
 }
 
@@ -190,6 +206,9 @@ void GBALayoutView::CreateViews() {
 	if (b.w == 0.0f || b.h == 0.0f) return;
 
 	auto &cfg = EmuCore::GetTouchConfigMutable(coreType_, portrait_);
+
+	// Grid lines drawn behind buttons (mirrors PSP SnapGrid z-order)
+	Add(new GBASnapGrid(0x3FFFFFFF));
 
 	for (int i = 0; i < cfg.count; i++) {
 		auto &btn = cfg.buttons[i];
