@@ -1716,19 +1716,27 @@ void EmuScreen::CreateViews() {
 	InitPadLayout(&touch, deviceOrientation, bounds.w, bounds.h);
 
 #ifdef PPSSPP_MULTICORE
-	// [PPSSPP-FORK] MultiCore: GBA mode — use GBA touch layout instead of PSP
-	if (coreType_ != EmuCore::Type::PSP) {
+	// [PPSSPP-FORK] MultiCore: multi-core layout dispatch via switch (not binary routing)
+	switch (coreType_) {
+	case EmuCore::Type::PSP:
+		root_ = CreatePadLayout(touch, bounds.w, bounds.h, &pauseTrigger_, &g_controlMapper);
+		break;
+	case EmuCore::Type::GBA:
 		NOTICE_LOG(Log::System, "[GBA] CreateViews: GBA mode, bShowTouchControls=%d", g_Config.bShowTouchControls);
 		root_ = new UI::AnchorLayout(new UI::LayoutParams(UI::FILL_PARENT, UI::FILL_PARENT));
 		if (g_Config.bShowTouchControls) {
 			AddGBATouchButtons(bounds, deviceOrientation);
-
-			// [PPSSPP-FORK] MultiCore: GBA system buttons — Pause and Fast-forward
-			// Shared helper for all non-PSP cores
-			CreateSystemTouchButtons(root_, bounds, deviceOrientation);
 		}
-	} else {
-		root_ = CreatePadLayout(touch, bounds.w, bounds.h, &pauseTrigger_, &g_controlMapper);
+		break;
+	default:
+		// Unknown core — fallback to empty layout (no PSP-specific controls)
+		root_ = new UI::AnchorLayout(new UI::LayoutParams(UI::FILL_PARENT, UI::FILL_PARENT));
+		break;
+	}
+	// [PPSSPP-FORK] MultiCore: Shared system buttons for all non-PSP cores
+	// PSP's CreatePadLayout handles its own system buttons internally
+	if (coreType_ != EmuCore::Type::PSP && g_Config.bShowTouchControls) {
+		CreateSystemTouchButtons(root_, bounds, deviceOrientation);
 	}
 #else
 	root_ = CreatePadLayout(touch, bounds.w, bounds.h, &pauseTrigger_, &g_controlMapper);
