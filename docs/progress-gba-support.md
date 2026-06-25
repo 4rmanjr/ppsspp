@@ -168,7 +168,8 @@ Bug: R↔B terbalik (little-endian byte order). Fix: `(B<<16)|(G<<8)|R`.
 | GBATouchVisibilityPopup — feature parity with PSP | ✅ **FIXED (1eaa2c7)** | PSP punya: (1) ikon button, (2) Toggle All, (3) save di `onFinish()` (semua exit path). GBA sebelumnya cuma checkbox text + save ONCLICK OK. Fix: `GBACheckBoxChoice` + ikon atlas (`I_CROSS`, `I_CIRCLE`, dll) + Toggle All + `OnCompleted()` untuk back button. |
 | GBA Fast-forward & Pause buttons | ✅ **FIXED (c6faf8e + ed32432)** | System buttons (Fast-forward, Pause) dari shared TouchControlConfig. Visibility toggles di popup + button rendering di EmuScreen GBA path. Pause pakai `&pauseTrigger_`, Fast-forward pakai `&PSP_CoreParameter().fastForward`. Toggle All juga toggle system buttons. SetMinimumAlpha(0.1f) unconditional (match PSP). Pause checkbox disabled di device tanpa back button. |
 | AGENTS.md diperkuat (Quality) | ✅ **FIXED (1672c42)** | Tambah: PSP Feature Parity, Scope Definition, Anti-Hallucination, Code Review Gate (pre/post commit), PSP Knowledge Base (docs/agents/psp-knowledge-base.md), Build Flag Convention. 6 prioritas utama + 2 quality gates. |
-| AGENTS.md diperkuat (Extensibility) | ✅ **FIXED (5617acb)** | Tambah Extensibility Architecture: CoreButtonRegistry, generic Core* classes, switch(coreType_) dispatch, shared system buttons, GetCoreDirectory(type) resolver, step-by-step checklist untuk core baru, Zero Duplication Rule, 8-phase generification roadmap. Quality Gate #3: PSP parity WAJIB untuk SETIAP core baru. |
+| AGENTS.md diperkuat (Extensibility) | ✅ **FIXED (5617acb)** | Tambah Extensibility Architecture. |
+| AGENTS.md di-split untuk AI readability | ✅ **FIXED (9f95d42)** | AGENTS.md 466→98 lines (ringkas). Isi dipindah: quality-gates.md (3 Quality Gates + Anti-Hallucination + Scope Def) dan extensibility.md (extensibility architecture, step-by-step, generification roadmap). Tabel navigasi "Kapan Baca File Lain" memudahkan AI. |
 
 ---
 
