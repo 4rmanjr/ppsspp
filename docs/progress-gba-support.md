@@ -174,6 +174,7 @@ Bug: R↔B terbalik (little-endian byte order). Fix: `(B<<16)|(G<<8)|R`.
 | Code Review — P2#2 Switch dispatch | ✅ **FIXED (4025693)** | `if (coreType_ != PSP)` → `switch(coreType_)` dengan PSP, GBA, default case. Shared system buttons setelah switch. |
 | Code Review — P3 GBA→Core rename | ✅ **FIXED (9a4ff18)** | 5 class rename: GBADragDrop→CoreDragDrop, GBASnapGrid→CoreSnapGrid, GBALayoutView→CoreLayoutView, GBACheckBoxChoice→CoreCheckBoxChoice, GBATouchVisibilityPopup→CoreTouchVisibilityPopup. |
 | Code Review — P4 hoist getUIContext | ✅ **FIXED (be87503)** | `screenManager()->getUIContext()` dipanggil sekali di luar loop, bukan per iterasi. |
+| Code Review — P5 nitpicks | ✅ **FIXED (9b461df)** | Value copy untuk screenBounds_ + granular [PPSSPP-FORK] markers di semua class definitions. |
 
 ---
 
