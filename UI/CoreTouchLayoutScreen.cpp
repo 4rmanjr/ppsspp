@@ -19,9 +19,9 @@
 
 static float g_layoutScale = 0.8f;
 
-class GBADragDrop : public MultiTouchButton {
+class CoreDragDrop : public MultiTouchButton {
 public:
-	GBADragDrop(EmuCore::CoreTouchButton &btn, const Bounds &screenBounds, ImageID bgImg, ImageID img)
+	CoreDragDrop(EmuCore::CoreTouchButton &btn, const Bounds &screenBounds, ImageID bgImg, ImageID img)
 		: MultiTouchButton("gba_dd", bgImg, bgImg, img, 1.0f,
 			new UI::AnchorLayoutParams(btn.x * screenBounds.w, btn.y * screenBounds.h, UI::NONE, UI::NONE, UI::Centering::Both)),
 		  btn_(btn), screenBounds_(screenBounds), bgImg_(bgImg) {}
@@ -68,11 +68,11 @@ private:
 	ImageID bgImg_;
 };
 
-// [PPSSPP-FORK] GBASnapGrid: Snap/grid lines drawn behind touch buttons
+// [PPSSPP-FORK] CoreSnapGrid: Snap/grid lines drawn behind touch buttons
 // Mirrors PSP SnapGrid behavior but adapted for per-core layout editor
-class GBASnapGrid : public UI::View {
+class CoreSnapGrid : public UI::View {
 public:
-	GBASnapGrid(u32 color) : UI::View(), col(color) {}
+	CoreSnapGrid(u32 color) : UI::View(), col(color) {}
 	void Draw(UIContext &dc) override {
 		if (g_Config.bTouchSnapToGrid && g_Config.iTouchSnapGridSize >= 2) {
 			dc.Flush();
@@ -104,9 +104,9 @@ private:
 	u32 col;
 };
 
-class GBALayoutView : public UI::AnchorLayout {
+class CoreLayoutView : public UI::AnchorLayout {
 public:
-	GBALayoutView(EmuCore::Type core, bool portrait, UI::LayoutParams *lp)
+	CoreLayoutView(EmuCore::Type core, bool portrait, UI::LayoutParams *lp)
 		: UI::AnchorLayout(lp) { SetClip(true); coreType_ = core; portrait_ = portrait; }
 
 	bool Touch(const TouchInput &input) override;
@@ -120,18 +120,18 @@ public:
 private:
 	void ClearControls();
 
-	GBADragDrop *picked_ = nullptr;
+	CoreDragDrop *picked_ = nullptr;
 	float startObjX_ = -1.0f, startObjY_ = -1.0f;
 	float startDragX_ = -1.0f, startDragY_ = -1.0f;
 	float startScale_ = -1.0f;
 	EmuCore::Type coreType_;
-	std::vector<GBADragDrop *> controls_;
+	std::vector<CoreDragDrop *> controls_;
 
 public:
 	bool portrait_ = false;
 };
 
-bool GBALayoutView::Touch(const TouchInput &touch) {
+bool CoreLayoutView::Touch(const TouchInput &touch) {
 	using namespace UI;
 
 	if ((touch.flags & TouchInputFlags::MOVE) && picked_) {
@@ -184,32 +184,32 @@ bool GBALayoutView::Touch(const TouchInput &touch) {
 	return true;
 }
 
-void GBALayoutView::Draw(UIContext &dc) {
+void CoreLayoutView::Draw(UIContext &dc) {
 	using namespace UI;
 	dc.FillRect(Drawable(0x80000000), bounds_);
 	AnchorLayout::Draw(dc);
 }
 
-void GBALayoutView::ClearControls() {
+void CoreLayoutView::ClearControls() {
 	for (auto *c : controls_) RemoveSubview(c);
 	controls_.clear();
 }
 
-void GBALayoutView::SetPortrait(bool portrait) {
+void CoreLayoutView::SetPortrait(bool portrait) {
 	if (portrait_ == portrait) return;
 	portrait_ = portrait;
 	ClearControls();
 	CreateViews();
 }
 
-void GBALayoutView::CreateViews() {
+void CoreLayoutView::CreateViews() {
 	const Bounds &b = GetBounds();
 	if (b.w == 0.0f || b.h == 0.0f) return;
 
 	auto &cfg = EmuCore::GetTouchConfigMutable(coreType_, portrait_);
 
 	// Grid lines drawn behind buttons (mirrors PSP SnapGrid z-order)
-	Add(new GBASnapGrid(0x3FFFFFFF));
+	Add(new CoreSnapGrid(0x3FFFFFFF));
 
 	for (int i = 0; i < cfg.count; i++) {
 		auto &btn = cfg.buttons[i];
@@ -233,23 +233,23 @@ void GBALayoutView::CreateViews() {
 		ImageID shoulderImg = g_Config.iTouchButtonStyle ? ImageID("I_SHOULDER_LINE") : ImageID("I_SHOULDER");
 		ImageID bg = (btn.keyCode == CTRL_LTRIGGER || btn.keyCode == CTRL_RTRIGGER) ? shoulderImg : roundImg;
 		if (btn.keyCode == CTRL_SELECT || btn.keyCode == CTRL_START) bg = rectImg;
-		auto *dd = new GBADragDrop(btn, b, bg, icon);
+		auto *dd = new CoreDragDrop(btn, b, bg, icon);
 		controls_.push_back(dd);
 		Add(dd);
 	}
 }
 
-// [PPSSPP-FORK] GBA CheckBoxChoice — wraps a CheckBox inside a Choice
+// [PPSSPP-FORK] CoreCheckBoxChoice — wraps a CheckBox inside a Choice
 // Mirrors PSP TouchControlVisibilityScreen pattern for row-based visibility toggles
-class GBACheckBoxChoice : public UI::Choice {
+class CoreCheckBoxChoice : public UI::Choice {
 public:
-	GBACheckBoxChoice(std::string_view text, UI::CheckBox *checkbox, UI::LayoutParams *lp)
+	CoreCheckBoxChoice(std::string_view text, UI::CheckBox *checkbox, UI::LayoutParams *lp)
 		: Choice(text, lp), checkbox_(checkbox) {
-		OnClick.Handle(this, &GBACheckBoxChoice::HandleClick);
+		OnClick.Handle(this, &CoreCheckBoxChoice::HandleClick);
 	}
-	GBACheckBoxChoice(ImageID imgID, UI::CheckBox *checkbox, UI::LayoutParams *lp)
+	CoreCheckBoxChoice(ImageID imgID, UI::CheckBox *checkbox, UI::LayoutParams *lp)
 		: Choice(imgID, lp), checkbox_(checkbox) {
-		OnClick.Handle(this, &GBACheckBoxChoice::HandleClick);
+		OnClick.Handle(this, &CoreCheckBoxChoice::HandleClick);
 	}
 private:
 	void HandleClick(UI::EventParams &e) { checkbox_->Toggle(); }
@@ -257,12 +257,12 @@ private:
 };
 
 // Custom popup for per-button visibility toggle
-class GBATouchVisibilityPopup : public UI::PopupScreen {
+class CoreTouchVisibilityPopup : public UI::PopupScreen {
 public:
-	GBATouchVisibilityPopup(EmuCore::Type coreType, bool portrait)
+	CoreTouchVisibilityPopup(EmuCore::Type coreType, bool portrait)
 		: UI::PopupScreen("GBA Touch Control Visibility"), coreType_(coreType), portrait_(portrait) {}
 
-	const char *tag() const override { return "GBATouchVisibilityPopup"; }
+	const char *tag() const override { return "CoreTouchVisibilityPopup"; }
 
 	void CreatePopupContents(UI::ViewGroup *parent) override {
 		using namespace UI;
@@ -314,9 +314,9 @@ public:
 
 			Choice *choice;
 			if (t.icon.isValid()) {
-				choice = new GBACheckBoxChoice(t.icon, cb, new LinearLayoutParams(1.0f));
+				choice = new CoreCheckBoxChoice(t.icon, cb, new LinearLayoutParams(1.0f));
 			} else {
-				choice = new GBACheckBoxChoice(mc->T(t.label), cb, new LinearLayoutParams(1.0f));
+				choice = new CoreCheckBoxChoice(mc->T(t.label), cb, new LinearLayoutParams(1.0f));
 			}
 			choice->SetCentered(true);
 			row->Add(choice);
@@ -336,7 +336,7 @@ public:
 			row->SetSpacing(0);
 			CheckBox *cb = new CheckBox(&touchCfg.touchFastForwardKey.show, "", "", new LinearLayoutParams(50, WRAP_CONTENT));
 			row->Add(cb);
-			Choice *choice = new GBACheckBoxChoice(ImageID("I_FAST_FORWARD_LINE"), cb, new LinearLayoutParams(1.0f));
+			Choice *choice = new CoreCheckBoxChoice(ImageID("I_FAST_FORWARD_LINE"), cb, new LinearLayoutParams(1.0f));
 			choice->SetCentered(true);
 			row->Add(choice);
 			parent->Add(row);
@@ -351,7 +351,7 @@ public:
 			if (!hasBackButton) {
 				cb->SetEnabled(false);
 			}
-			Choice *choice = new GBACheckBoxChoice(ImageID("I_HAMBURGER"), cb, new LinearLayoutParams(1.0f));
+			Choice *choice = new CoreCheckBoxChoice(ImageID("I_HAMBURGER"), cb, new LinearLayoutParams(1.0f));
 			if (!hasBackButton) {
 				choice->SetEnabled(false);
 			}
@@ -433,7 +433,7 @@ void CoreTouchLayoutScreen::CreateViews() {
 	// Kustomisasi — buka popup visibility (respect current orientation)
 	leftCol->Add(new Choice(co->T("Customize")))->OnClick.Add([this](EventParams &) {
 		bool p = layoutView_ ? layoutView_->portrait_ : false;
-		screenManager()->push(new GBATouchVisibilityPopup(coreType_, p));
+		screenManager()->push(new CoreTouchVisibilityPopup(coreType_, p));
 	});
 
 	// Snap/Garis Pinggir — enable/disable grid
@@ -461,7 +461,7 @@ void CoreTouchLayoutScreen::CreateViews() {
 	float previewH = bounds.h * g_layoutScale;
 	if (previewH > bounds.h * 0.85f) previewH = bounds.h * 0.85f;
 	if (previewH < 100.0f) previewH = 100.0f;
-	layoutView_ = rightCol->Add(new GBALayoutView(coreType_, portrait, new LinearLayoutParams(FILL_PARENT, previewH)));
+	layoutView_ = rightCol->Add(new CoreLayoutView(coreType_, portrait, new LinearLayoutParams(FILL_PARENT, previewH)));
 }
 
 void CoreTouchLayoutScreen::dialogFinished(const Screen *dialog, DialogResult result) {

@@ -11,7 +11,7 @@
 #include "BaseScreens.h"
 #include "EmuCore/EmuCore.h"
 
-class GBALayoutView;
+class CoreLayoutView;
 
 class CoreTouchLayoutScreen : public UIBaseDialogScreen {
 public:
@@ -33,6 +33,6 @@ protected:
 private:
 	EmuCore::Type coreType_;
 	UI::ChoiceStrip *mode_ = nullptr;
-	GBALayoutView *layoutView_ = nullptr;
+	CoreLayoutView *layoutView_ = nullptr;
 
 };
