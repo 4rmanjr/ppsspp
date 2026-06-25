@@ -167,6 +167,7 @@ Bug: R↔B terbalik (little-endian byte order). Fix: `(B<<16)|(G<<8)|R`.
 | GBA portrait screen position (DisplayOffsetY) | ✅ **FIXED (56924fa)** | PSP portrait pakai `fDisplayOffsetY=0.25` (top-aligned). GBA `GetRenderRect()` sebelumnya center (`offsetY=0.5`). Fix: baca `g_Config.displayLayoutPortrait.fDisplayOffsetY` — match PSP formula. |
 | GBATouchVisibilityPopup — feature parity with PSP | ✅ **FIXED (1eaa2c7)** | PSP punya: (1) ikon button, (2) Toggle All, (3) save di `onFinish()` (semua exit path). GBA sebelumnya cuma checkbox text + save ONCLICK OK. Fix: `GBACheckBoxChoice` + ikon atlas (`I_CROSS`, `I_CIRCLE`, dll) + Toggle All + `OnCompleted()` untuk back button. |
 | GBA Fast-forward & Pause buttons | ✅ **FIXED (c6faf8e + ed32432)** | System buttons (Fast-forward, Pause) dari shared TouchControlConfig. Visibility toggles di popup + button rendering di EmuScreen GBA path. Pause pakai `&pauseTrigger_`, Fast-forward pakai `&PSP_CoreParameter().fastForward`. Toggle All juga toggle system buttons. SetMinimumAlpha(0.1f) unconditional (match PSP). Pause checkbox disabled di device tanpa back button. |
+| AGENTS.md diperkuat | ✅ **FIXED (1672c42)** | Tambah: PSP Feature Parity, Scope Definition, Anti-Hallucination, Code Review Gate (pre/post commit), PSP Knowledge Base (docs/agents/psp-knowledge-base.md), Build Flag Convention. 6 prioritas utama + 2 quality gates. |
 
 ---
 
