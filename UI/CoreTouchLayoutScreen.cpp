@@ -7,6 +7,7 @@
 #include "EmuCore/Config.h"
 #include "Core/Config.h"
 #include "Common/Data/Text/I18n.h"
+#include "Common/System/Display.h"
 #include "Common/UI/Context.h"
 #include "Common/UI/ScrollView.h"
 #include "Common/UI/TabHolder.h"
@@ -275,6 +276,9 @@ void CoreTouchLayoutScreen::CreateViews() {
 	const float leftW = 200.0f;
 	g_layoutScale = 1.0f - (leftW + 10.0f) / std::max(bounds.w, 1.0f);
 
+	const DeviceOrientation orientation = GetDeviceOrientation();
+	bool portrait = (orientation == DeviceOrientation::Portrait);
+
 	auto *rootLayout = new LinearLayout(ORIENT_HORIZONTAL, new LayoutParams(FILL_PARENT, FILL_PARENT));
 	rootLayout->SetSpacing(0.0f);
 	root_ = rootLayout;
@@ -300,12 +304,11 @@ void CoreTouchLayoutScreen::CreateViews() {
 		screenManager()->push(new GBATouchVisibilityPopup(coreType_, p));
 	});
 
-	// Garis Pinggir (Cek box) — default unceklist, enable/disable kisi-kisi
-	// [PPSSPP-FORK] GarisPinggir: maps to bTouchSnapToGrid
-	leftCol->Add(new CheckBox(&g_Config.bTouchSnapToGrid, "Garis Pinggir"));
+	// Snap/Garis Pinggir — enable/disable grid
+	leftCol->Add(new CheckBox(&g_Config.bTouchSnapToGrid, di->T("Snap")));
 
-	// Kisi-kisi — enabled only if Garis Pinggir is checked
-	PopupSliderChoice *gridSize = new PopupSliderChoice(&g_Config.iTouchSnapGridSize, 2, 256, 64, "Kisi-kisi", screenManager(), "");
+	// Grid/Kisi-kisi — enabled only if Snap is checked
+	PopupSliderChoice *gridSize = new PopupSliderChoice(&g_Config.iTouchSnapGridSize, 2, 256, 64, di->T("Grid"), screenManager(), "");
 	gridSize->SetEnabledPtr(&g_Config.bTouchSnapToGrid);
 	leftCol->Add(gridSize);
 
@@ -315,19 +318,18 @@ void CoreTouchLayoutScreen::CreateViews() {
 
 	// Kembali
 	leftCol->Add(new Choice(di->T("Back"), ImageID("I_NAVIGATE_BACK")))->OnClick.Add([this](EventParams &) {
-		EmuCore::SaveTouchConfig(coreType_);
 		TriggerFinish(DR_CANCEL);
 	});
 	leftScroll->SetShadows(false);
 
 	// Panel kanan — preview layout
 	auto *rightCol = root_->Add(new LinearLayout(ORIENT_VERTICAL, new LinearLayoutParams(1.0f, Margins(0.0f, 12.0f, 12.0f, 12.0f))));
-	rightCol->Add(new TextView(di->T("Landscape")))->SetTextSize(TextSize::Small);
+	rightCol->Add(new TextView(co->T(DeviceOrientationToString(orientation))))->SetTextSize(TextSize::Small);
 	rightCol->Add(new Spacer(new LinearLayoutParams(1.0f)));
 	float previewH = bounds.h * g_layoutScale;
 	if (previewH > bounds.h * 0.85f) previewH = bounds.h * 0.85f;
 	if (previewH < 100.0f) previewH = 100.0f;
-	layoutView_ = rightCol->Add(new GBALayoutView(coreType_, false, new LinearLayoutParams(FILL_PARENT, previewH)));
+	layoutView_ = rightCol->Add(new GBALayoutView(coreType_, portrait, new LinearLayoutParams(FILL_PARENT, previewH)));
 }
 
 void CoreTouchLayoutScreen::dialogFinished(const Screen *dialog, DialogResult result) {
@@ -336,6 +338,7 @@ void CoreTouchLayoutScreen::dialogFinished(const Screen *dialog, DialogResult re
 }
 
 void CoreTouchLayoutScreen::onFinish(DialogResult) {
+	EmuCore::SaveTouchConfig(coreType_);
 	INFO_LOG(Log::System, "[TOUCH] CoreTouchLayoutScreen closed for %s", EmuCore::GetConfigSection(coreType_));
 }
 

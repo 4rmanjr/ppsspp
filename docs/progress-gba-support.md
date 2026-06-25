@@ -162,6 +162,7 @@ Bug: R↔B terbalik (little-endian byte order). Fix: `(B<<16)|(G<<8)|R`.
 | GBA portrait touch positions | ✅ | Default portrait layout ada, tapi ada bug di `LoadTouchConfig()` — `cfgP.Clear()` unconditional hapus default portrait. Fix: pindahkan `cfgP.Clear()` di dalam `if (secP)` block. |
 | Type::COUNT | ✅ | Sentry added ke `EmuCore::EmuCore.h` untuk array indexing |
 | On-screen GBA touch button size | ✅ **FIXED** | `AddGBATouchButtons()` hardcoded `0.8f` — fix: `bgScale = (btn_.w × bounds.w) / atlasImg->w` |
+| CoreTouchLayoutScreen code quality (orientation, save, i18n) | ✅ **FIXED** | Orientation: `GetDeviceOrientation()` (was hardcoded `false`/"Landscape"). Save: `onFinish()` calls `SaveTouchConfig()` (was log-only). Labels: `di->T("Snap")`/`di->T("Grid")` (was hardcoded Indonesian). Back button delegates to `onFinish()`. |
 
 ---
 
