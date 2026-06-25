@@ -493,8 +493,14 @@ void GBACore::GetRenderRect(float &x, float &y, float &w, float &h, float viewW,
 		h = (float)(GBA_HEIGHT * scale);
 	}
 
+	// Match PSP behavior: in portrait, use fDisplayOffsetY (=0.25 by default) for top-aligned
+	// See PSP CalculateDisplayOutputRect: rc->y = frame.y + frame.h * offsetY - outH * 0.5f
+	float offsetY = g_Config.displayLayoutPortrait.fDisplayOffsetY;
+	if (viewH <= viewW * 1.1f) {
+		offsetY = g_Config.displayLayoutLandscape.fDisplayOffsetY;  // 0.5 = centered
+	}
 	x = (viewW - w) / 2.0f;
-	y = (viewH - h) / 2.0f;
+	y = viewH * offsetY - h * 0.5f;
 }
 
 void GBACore::Render(Draw::DrawContext *draw) {
