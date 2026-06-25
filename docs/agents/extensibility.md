@@ -10,13 +10,13 @@
 
 - [Prinsip Dasar](#-prinsip-dasar)
 - [Arsitektur Component](#-arsitektur-component)
-- [CoreButtonRegistry](#️-corebuttonregistry--definisi-tombol-per-core)
-- [EmuScreen Core Dispatch](#-emuscreen-core-dispatch--wajib-switch-bukan-binary)
+- [CoreButtonRegistry](#-corebuttonregistry-definisi-tombol-per-core)
+- [EmuScreen Core Dispatch](#-emuscreen-core-dispatch-wajib-switch-bukan-binary)
 - [Generic Touch Classes](#-generic-touch-classes)
-- [Directory Resolver](#-directory--file-path-per-core)
+- [Directory Resolver](#-directory-file-path-per-core)
 - [Step-by-Step: Menambah Emulator Baru](#-step-by-step-menambah-emulator-baru)
 - [Zero Duplication Rule](#-zero-duplication-rule)
-- [Generification Roadmap](#-262-gba-references--path-to-generification)
+- [Generification Roadmap](#-262-gba-references-path-to-generification)
 
 ---
 
@@ -67,10 +67,10 @@ struct CoreButtonDef {
     const char *bgImageID; // atlas image untuk background (e.g. "I_ROUND", "I_N64_C")
 };
 
-// Per-core registration
-void RegisterButtonMap(EmuCore::Type type, std::span<const CoreButtonDef> buttons);
+// Per-core registration (C++17 — gunakan const reference, bukan std::span)
+void RegisterButtonMap(EmuCore::Type type, const std::vector<CoreButtonDef> &buttons);
 const CoreButtonDef *GetButtonDef(EmuCore::Type type, int keyCode);
-std::span<const CoreButtonDef> GetButtonDefs(EmuCore::Type type);
+const std::vector<CoreButtonDef> &GetButtonDefs(EmuCore::Type type);
 ```
 
 **WAJIB:**

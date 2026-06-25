@@ -42,6 +42,7 @@ Ini adalah fork PPSSPP dengan fitur kustom yang **harus tetap kompatibel** denga
   3. Hanya **menambah** baris baru (zero deletion)
 - ✅ Build diverifikasi **DUA kondisi**: `-DPPSSPP_<FITUR>=ON` dan `=OFF` — keduanya sukses.
 - ✅ Setiap fitur baru punya feature flag sendiri (`PPSSPP_<NAMA>`).
+- ✅ Saat conflict merge dengan upstream: **kode upstream yang menang** — kode kustom dipindah/diadjust, bukan sebaliknya.
 - ✅ Pengaturan per-fitur terisolasi di section config terpisah (jangan campur dengan PSP).
 
 ### 🟢 Build Flag Convention

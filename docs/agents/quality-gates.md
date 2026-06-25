@@ -8,9 +8,9 @@
 
 ## Daftar Isi
 
-- [Gate #1: Feature Parity dengan PSP](#-quality-gate-1--feature-parity-dengan-psp)
-- [Gate #2: Code Review Gate](#-quality-gate-2--code-review-gate)
-- [Gate #3: PSP Parity Wajib untuk Setiap Core Baru](#-quality-gate-3--psp-parity-wajib-untuk-setiap-core-baru)
+- [Gate #1: Feature Parity dengan PSP](#-quality-gate-1-feature-parity-dengan-psp)
+- [Gate #2: Code Review Gate](#-quality-gate-2-code-review-gate)
+- [Gate #3: PSP Parity Wajib untuk Setiap Core Baru](#-quality-gate-3-psp-parity-wajib-untuk-setiap-core-baru)
 - [Supporting Rules](#supporting-rules)
 
 ---
