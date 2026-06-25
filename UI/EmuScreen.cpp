@@ -1428,6 +1428,8 @@ void EmuScreen::AddGBATouchButtons(const Bounds &bounds, DeviceOrientation orien
 	const ImageID roundImg = g_Config.iTouchButtonStyle ? ImageID("I_ROUND_LINE") : ImageID("I_ROUND");
 	const ImageID rectImg = g_Config.iTouchButtonStyle ? ImageID("I_RECT_LINE") : ImageID("I_RECT");
 	const ImageID shoulderImg = g_Config.iTouchButtonStyle ? ImageID("I_SHOULDER_LINE") : ImageID("I_SHOULDER");
+	// Fetch UIContext once, reuse for all button atlas lookups
+	UIContext *ctx = screenManager()->getUIContext();
 	for (int i = 0; i < cfg.count; i++) {
 		const auto &btn = cfg.buttons[i];
 		if (!btn.visible) continue;
@@ -1451,7 +1453,6 @@ void EmuScreen::AddGBATouchButtons(const Bounds &bounds, DeviceOrientation orien
 		// Compute image scale from normalized width btn_.w
 		// btn_.w = fraction of screen width (default ~0.10 = 10%%)
 		float bgScale = 0.8f; // fallback
-		UIContext *ctx = screenManager()->getUIContext();
 		if (ctx) {
 			const AtlasImage *atlasImg = ctx->Draw()->GetAtlas()->getImage(bgImg);
 			if (atlasImg && atlasImg->w > 0) {
