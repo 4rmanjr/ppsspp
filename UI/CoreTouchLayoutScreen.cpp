@@ -325,6 +325,7 @@ public:
 		parent->Add(new Spacer(8.0f));
 
 		// Toggle All — matches PSP TouchControlVisibilityScreen context menu
+		// nextToggleAll_ starts true: first click toggles ALL ON (show all), second click ALL OFF
 		auto *toggleAll = parent->Add(new Choice(di->T("Toggle All")));
 		toggleAll->OnClick.Add([this](UI::EventParams &e) {
 			auto &tcfg = EmuCore::GetTouchConfigMutable(coreType_, portrait_);
@@ -347,7 +348,7 @@ public:
 private:
 	EmuCore::Type coreType_;
 	bool portrait_;
-	bool nextToggleAll_ = false;
+	bool nextToggleAll_ = true;
 };
 
 void CoreTouchLayoutScreen::CreateViews() {
