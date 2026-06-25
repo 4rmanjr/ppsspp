@@ -64,14 +64,11 @@ public:
 	void resized() override;
 	ScreenRenderRole renderRole(bool isTop) const override;
 
-	// Note: Unlike your average boring UIScreen, here we override the Unsync* functions
-	// to get minimal latency and full control. We forward to UIScreen when needed.
-	bool UnsyncKey(const KeyInput &key) override;
-	void UnsyncAxis(const AxisInput *axes, size_t count) override;
+	InputMode PassInputToMapper() const override;
 
 	// We also need to do some special handling of queued UI events to handle closing the chat window.
 	bool key(const KeyInput &key) override;
-	void touch(const TouchInput &key) override;
+	bool touch(const TouchInput &key) override;
 
 	void deviceLost() override;
 	void deviceRestored(Draw::DrawContext *draw) override;
@@ -92,8 +89,6 @@ public:
 #endif
 
 protected:
-	bool AllowKeyboardNavigation() const override;
-
 	void darken();
 	void focusChanged(ScreenFocusChange focusChange) override;
 	ScreenRenderFlags PreRender(ScreenRenderMode mode) override;
@@ -125,7 +120,7 @@ private:
 	bool checkPowerDown();
 
 	void ProcessQueuedVKeys();
-	void ProcessVKey(VirtKey vkey);
+	void ProcessVKey(VirtKey vkey, bool down);
 
 	bool ShouldRunEmulation(ScreenRenderMode mode) const;
 
@@ -171,7 +166,8 @@ private:
 	ImCommand imCmd_{};  // needed to buffer commands in case imgui wasn't created yet.
 
 	bool imguiInited_ = false;
-	// For ImGui modifier tracking
+	// For ImGui modifier tracking. It works a bit weirdly and it's easier to track it here
+	// than to use our global modifier tracking that attaches modifiers to each key event.
 	bool keyCtrlLeft_ = false;
 	bool keyCtrlRight_ = false;
 	bool keyShiftLeft_ = false;
@@ -181,7 +177,7 @@ private:
 
 	bool lastImguiEnabled_ = false;
 
-	std::vector<VirtKey> queuedVirtKeys_;
+	std::vector<std::pair<VirtKey, bool>> queuedVirtKeys_;
 
 	// [PPSSPP-FORK] MultiCore: accumulated GBA VIRTKEY state (independent of PSP buttons)
 #ifdef PPSSPP_MULTICORE
