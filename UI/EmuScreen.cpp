@@ -1706,10 +1706,8 @@ void EmuScreen::CreateViews() {
 					roundImg, ImageID("I_ROUND"), ImageID("I_HAMBURGER"),
 					sysTouch.touchPauseKey.scale,
 					new UI::AnchorLayoutParams(px, py, UI::NONE, UI::NONE, UI::Centering::Both)));
-				// Pause must be findable on devices without hardware back button
-				if (!System_GetPropertyBool(SYSPROP_HAS_BACK_BUTTON)) {
-					pauseBtn->SetMinimumAlpha(0.1f);
-				}
+				// Pause must be findable on some platforms — it must not be completely hidden
+				pauseBtn->SetMinimumAlpha(0.1f);
 			}
 
 			// Fast-forward button (I_FAST_FORWARD_LINE on rect bg) — same as PSP::CreatePadLayout

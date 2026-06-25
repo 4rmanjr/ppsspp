@@ -370,6 +370,14 @@ public:
 			for (int i = 0; i < tcfg.count; i++) {
 				tcfg.buttons[i].visible = nextToggleAll_;
 			}
+			// Also toggle system buttons (Fast-forward, Pause) — match PSP Toggle All
+			DeviceOrientation orient = portrait_ ? DeviceOrientation::Portrait : DeviceOrientation::Landscape;
+			TouchControlConfig &tcfgSys = g_Config.GetTouchControlsConfig(orient);
+			tcfgSys.touchFastForwardKey.show = nextToggleAll_;
+			if (System_GetPropertyBool(SYSPROP_HAS_BACK_BUTTON)) {
+				tcfgSys.touchPauseKey.show = nextToggleAll_;
+			}
+			// (Pause disabled on back-button-less devices — InitPadLayout forces it visible)
 			nextToggleAll_ = !nextToggleAll_;
 		});
 
