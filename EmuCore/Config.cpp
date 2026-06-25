@@ -143,9 +143,10 @@ void SaveTouchConfig(Type coreType) {
 	IniFile ini;
 	ini.Load(iniPath);
 
-	// Save landscape
+	// Save landscape — clear section first to remove stale keys
 	{
 		Section *sec = ini.GetOrCreateSection(GetTouchConfigSection(coreType, false));
+		sec->Clear();
 		const CoreTouchConfig &cfg = GetTouchConfig(coreType, false);
 		for (int i = 0; i < cfg.count; i++) {
 			char key[32], val[128];
@@ -160,9 +161,10 @@ void SaveTouchConfig(Type coreType) {
 		}
 	}
 
-	// Save portrait
+	// Save portrait — clear section first to remove stale keys
 	{
 		Section *sec = ini.GetOrCreateSection(GetTouchConfigSection(coreType, true));
+		sec->Clear();
 		const CoreTouchConfig &cfg = GetTouchConfig(coreType, true);
 		for (int i = 0; i < cfg.count; i++) {
 			char key[32], val[128];

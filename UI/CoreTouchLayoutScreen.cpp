@@ -33,8 +33,6 @@ public:
 		btn_.x = (bounds_.centerX() - screenBounds_.x) / screenBounds_.w;
 		btn_.y = (bounds_.centerY() - screenBounds_.y) / screenBounds_.h;
 	}
-	void SetVisibleFlag(bool visible) { btn_.visible = visible; }
-	bool GetVisibleFlag() const { return btn_.visible; }
 	float GetScaleVal() const { return btn_.w; }
 	void SetScaleVal(float s) { btn_.w = btn_.h = s; }
 	virtual bool Contains(float x, float y) {
@@ -69,8 +67,10 @@ private:
 	float startDragX_ = -1.0f, startDragY_ = -1.0f;
 	float startScale_ = -1.0f;
 	EmuCore::Type coreType_;
-	bool portrait_;
 	std::vector<GBADragDrop *> controls_;
+
+public:
+	bool portrait_ = false;
 };
 
 bool GBALayoutView::Touch(const TouchInput &touch) {
@@ -121,25 +121,27 @@ void GBALayoutView::Draw(UIContext &dc) {
 
 	// Draw snap/grid lines when Garis Pinggir enabled
 	// [PPSSPP-FORK] GridLines: mirrors PSP SnapGrid drawing
-	if (g_Config.bTouchSnapToGrid && g_Config.iTouchSnapGridSize > 4) {
+	if (g_Config.bTouchSnapToGrid && g_Config.iTouchSnapGridSize >= 2) {
 		dc.Flush();
 		dc.BeginNoTex();
 		float xOff = bounds_.x;
 		float yOff = bounds_.y;
-		float w = bounds_.w;
-		float h = bounds_.h;
+		int w = (int)bounds_.w;
+		int h = (int)bounds_.h;
 		uint32_t gridColor = 0x3FFFFFFF;
+		int spacing = g_Config.iTouchSnapGridSize;
 
 		// Center crosshair
 		dc.Draw()->vLine(w * 0.5f + xOff, yOff, yOff + h, gridColor);
 		dc.Draw()->hLine(xOff, h * 0.5f + yOff, xOff + w, gridColor);
 
-		// Grid lines
-		int spacing = g_Config.iTouchSnapGridSize;
-		for (float x = (int)(w * 0.5f) % spacing; x < w; x += spacing)
-			dc.Draw()->vLine(x + xOff, yOff, yOff + h, gridColor);
-		for (float y = (int)(h * 0.5f) % spacing; y < h; y += spacing)
-			dc.Draw()->hLine(xOff, y + yOff, xOff + w, gridColor);
+		// Grid lines — use integer iteration to avoid FP error accumulation
+		int halfW = w / 2;
+		int halfH = h / 2;
+		for (int x = halfW % spacing; x < w; x += spacing)
+			dc.Draw()->vLine((float)x + xOff, yOff, yOff + h, gridColor);
+		for (int y = halfH % spacing; y < h; y += spacing)
+			dc.Draw()->hLine(xOff, (float)y + yOff, xOff + w, gridColor);
 
 		dc.Flush();
 		dc.Begin();
@@ -270,9 +272,10 @@ void CoreTouchLayoutScreen::CreateViews() {
 		if (layoutView_) layoutView_->mode_ = mode_->GetSelection();
 	});
 
-	// Kustomisasi — buka popup visibility
+	// Kustomisasi — buka popup visibility (respect current orientation)
 	leftCol->Add(new Choice(co->T("Customize")))->OnClick.Add([this](EventParams &) {
-		screenManager()->push(new GBATouchVisibilityPopup(coreType_, false));
+		bool p = layoutView_ ? layoutView_->portrait_ : false;
+		screenManager()->push(new GBATouchVisibilityPopup(coreType_, p));
 	});
 
 	// Garis Pinggir (Cek box) — default unceklist, enable/disable kisi-kisi
@@ -300,6 +303,8 @@ void CoreTouchLayoutScreen::CreateViews() {
 	rightCol->Add(new TextView(di->T("Landscape")))->SetTextSize(TextSize::Small);
 	rightCol->Add(new Spacer(new LinearLayoutParams(1.0f)));
 	float previewH = bounds.h * g_layoutScale;
+	if (previewH > bounds.h * 0.85f) previewH = bounds.h * 0.85f;
+	if (previewH < 100.0f) previewH = 100.0f;
 	layoutView_ = rightCol->Add(new GBALayoutView(coreType_, false, new LinearLayoutParams(FILL_PARENT, previewH)));
 }
 

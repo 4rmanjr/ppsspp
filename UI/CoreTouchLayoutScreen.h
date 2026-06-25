@@ -7,6 +7,7 @@
 #include "Common/UI/View.h"
 #include "Common/UI/ViewGroup.h"
 #include "Common/UI/TabHolder.h"
+#include "Common/UI/UI.h"
 #include "BaseScreens.h"
 #include "EmuCore/EmuCore.h"
 
