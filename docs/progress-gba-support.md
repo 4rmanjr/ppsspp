@@ -164,6 +164,7 @@ Bug: R↔B terbalik (little-endian byte order). Fix: `(B<<16)|(G<<8)|R`.
 | On-screen GBA touch button size | ✅ **FIXED** | `AddGBATouchButtons()` hardcoded `0.8f` — fix: `bgScale = (btn_.w × bounds.w) / atlasImg->w` |
 | CoreTouchLayoutScreen code quality (orientation, save, i18n) | ✅ **FIXED** | Orientation: `GetDeviceOrientation()` (was hardcoded `false`/"Landscape"). Save: `onFinish()` calls `SaveTouchConfig()` (was log-only). Labels: `di->T("Snap")`/`di->T("Grid")` (was hardcoded Indonesian). Back button delegates to `onFinish()`. |
 | CoreTouchLayoutScreen clamping, snap anchoring, grid class | ✅ **FIXED (98e586b)** | Clamping: `std::clamp()` prevent drag off-screen. Snap anchoring: relative to center (`fmod(nx-cx, grid)`). GBASnapGrid: class extracted from inline Draw() — matches PSP SnapGrid pattern. |
+| GBA portrait screen position (DisplayOffsetY) | ✅ **FIXED (56924fa)** | PSP portrait pakai `fDisplayOffsetY=0.25` (top-aligned). GBA `GetRenderRect()` sebelumnya center (`offsetY=0.5`). Fix: baca `g_Config.displayLayoutPortrait.fDisplayOffsetY` — match PSP formula. |
 
 ---
 
