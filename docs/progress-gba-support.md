@@ -161,6 +161,7 @@ Bug: R↔B terbalik (little-endian byte order). Fix: `(B<<16)|(G<<8)|R`.
 | GBA landscape touch positions | ✅ | Default 10 buttons landscape (D-Pad kiri, A/B kanan, L/R atas, Start/Select tengah). Terverifikasi di Samsung A05s. |
 | GBA portrait touch positions | ✅ | Default portrait layout ada, tapi ada bug di `LoadTouchConfig()` — `cfgP.Clear()` unconditional hapus default portrait. Fix: pindahkan `cfgP.Clear()` di dalam `if (secP)` block. |
 | Type::COUNT | ✅ | Sentry added ke `EmuCore::EmuCore.h` untuk array indexing |
+| On-screen GBA touch button size | ✅ **FIXED** | `AddGBATouchButtons()` hardcoded `0.8f` — fix: `bgScale = (btn_.w × bounds.w) / atlasImg->w` |
 
 ---
 

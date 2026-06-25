@@ -1448,13 +1448,23 @@ void EmuScreen::AddGBATouchButtons(const Bounds &bounds, DeviceOrientation orien
 		}
 		float cx = btn.x * bounds.w;
 		float cy = btn.y * bounds.h;
+		// Compute image scale from normalized width btn_.w
+		// btn_.w = fraction of screen width (default ~0.10 = 10%%)
+		float bgScale = 0.8f; // fallback
+		UIContext *ctx = screenManager()->getUIContext();
+		if (ctx) {
+			const AtlasImage *atlasImg = ctx->Draw()->GetAtlas()->getImage(bgImg);
+			if (atlasImg && atlasImg->w > 0) {
+				bgScale = (btn.w * bounds.w) / (float)atlasImg->w;
+			}
+		}
 		root_->Add(new PSPButton(
 			btn.keyCode,
 			std::string("GBA_") + btn.label,
 			bgImg,
 			bgImg,
 			icon,
-			0.8f,
+			bgScale,
 			new AnchorLayoutParams(cx, cy, UI::NONE, UI::NONE, Centering::Both)
 		));
 	}
