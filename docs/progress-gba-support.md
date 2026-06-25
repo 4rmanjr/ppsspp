@@ -2,7 +2,7 @@
 
 **Date:** 2026-06-25
 **Branch:** `feature/lan-sync`
-**Last commit:** `4d1be5cf7d` — Merge upstream/master into feature/lan-sync
+**Last commit:** `02fa70f90c` — Merge upstream/master (14 commits) into feature/lan-sync. Resolved ProcessVKey conflict (input refactoring #21857). Per AGENTS.md: upstream wins, fork adapted.
 **Uncommitted work:** — (clean)
 **Build Linux SDL:** `build-final/PPSSPPSDL` — MULTICORE=ON ✅ (no regression)
 **Build Android `normalRelease`:** ✅ (APK: 53MB, optimized `-O2`)
