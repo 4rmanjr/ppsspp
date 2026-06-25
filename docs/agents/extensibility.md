@@ -225,21 +225,16 @@ Gunakan checklist ini SETIAP kali menambah core baru:
 
 Saat ini ada ~262 reference GBA-specific di codebase. Target refactor bertahap:
 
-| Phase | Target | File |
-|-------|--------|------|
-| 1 | Class rename | `GBADragDrop` → `CoreDragDrop` |
-| 2 | Class rename | `GBALayoutView` → `CoreLayoutView` |
-| 3 | Class rename | `GBATouchVisibilityPopup` → `CoreTouchVisibilityPopup` |
-| 4 | Switch ke registry | Hardcoded `case CTRL_*` → `GetButtonDefs(coreType_)` |
-| 5 | System buttons | Inline → `CreateSystemTouchButtons()` |
-| 6 | Binary routing | `if (coreType_ != PSP)` → `switch(coreType_)` |
-| 7 | Hardcoded paths | String literal → `GetCoreDirectory(type)` |
-| 8 | GBA-prefixed methods | `AddGBATouchButtons` → `AddCoreTouchButtons` |
-
-**Status:**
-- Phase 1-3 (class rename) ✅ done — all `GBA*` → `Core*` classes.
-- Phase 5 (CreateSystemTouchButtons) ✅ done — helper extracted di EmuScreen.cpp.
-- Phase 6 (switch dispatch) ✅ done — `if (coreType_ != PSP)` → `switch(coreType_)`.
+| Phase | Target | File | Status |
+|-------|--------|------|--------|
+| 1 | Class rename | `GBADragDrop` → `CoreDragDrop` | ✅ Done |
+| 2 | Class rename | `GBALayoutView` → `CoreLayoutView` | ✅ Done |
+| 3 | Class rename | `GBATouchVisibilityPopup` → `CoreTouchVisibilityPopup` | ✅ Done |
+| 4 | Switch ke registry | Hardcoded `case CTRL_*` → `GetButtonDefs(coreType_)` | ⏳ |
+| 5 | System buttons | Inline → `CreateSystemTouchButtons()` | ✅ Done |
+| 6 | Binary routing | `if (coreType_ != PSP)` → `switch(coreType_)` | ✅ Done |
+| 7 | Hardcoded paths | String literal → `GetCoreDirectory(type)` | ⏳ |
+| 8 | GBA-prefixed methods | `AddGBATouchButtons` → `AddCoreTouchButtons` | ⏳ |
 
 Setiap phase WAJIB:
 - ✅ Build ON + OFF
