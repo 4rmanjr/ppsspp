@@ -238,6 +238,23 @@ void GBALayoutView::CreateViews() {
 	}
 }
 
+// [PPSSPP-FORK] GBA CheckBoxChoice — wraps a CheckBox inside a Choice
+// Mirrors PSP TouchControlVisibilityScreen pattern for row-based visibility toggles
+class GBACheckBoxChoice : public UI::Choice {
+public:
+	GBACheckBoxChoice(std::string_view text, UI::CheckBox *checkbox, UI::LayoutParams *lp)
+		: Choice(text, lp), checkbox_(checkbox) {
+		OnClick.Handle(this, &GBACheckBoxChoice::HandleClick);
+	}
+	GBACheckBoxChoice(ImageID imgID, UI::CheckBox *checkbox, UI::LayoutParams *lp)
+		: Choice(imgID, lp), checkbox_(checkbox) {
+		OnClick.Handle(this, &GBACheckBoxChoice::HandleClick);
+	}
+private:
+	void HandleClick(UI::EventParams &e) { checkbox_->Toggle(); }
+	UI::CheckBox *checkbox_;
+};
+
 // Custom popup for per-button visibility toggle
 class GBATouchVisibilityPopup : public UI::PopupScreen {
 public:
@@ -249,39 +266,88 @@ public:
 	void CreatePopupContents(UI::ViewGroup *parent) override {
 		using namespace UI;
 		auto co = GetI18NCategory(I18NCat::CONTROLS);
+		auto mc = GetI18NCategory(I18NCat::MAPPABLECONTROLS);
 		auto di = GetI18NCategory(I18NCat::DIALOG);
 
 		auto &cfg = EmuCore::GetTouchConfigMutable(coreType_, portrait_);
 		parent->Add(new ItemHeader(di->T("Show Buttons")));
 
+		struct ToggleInfo {
+			const char *label;
+			ImageID icon;
+			bool *show;
+		};
+		std::vector<ToggleInfo> toggles;
+
 		for (int i = 0; i < cfg.count; i++) {
 			auto &btn = cfg.buttons[i];
 			const char *label = nullptr;
+			ImageID icon;
 			switch (btn.keyCode) {
-			case CTRL_CROSS:     label = "A"; break;
-			case CTRL_CIRCLE:    label = "B"; break;
-			case CTRL_SELECT:    label = "Select"; break;
-			case CTRL_START:     label = "Start"; break;
-			case CTRL_LTRIGGER:  label = "L"; break;
-			case CTRL_RTRIGGER:  label = "R"; break;
-			case CTRL_UP:        label = "D-Pad Up"; break;
-			case CTRL_DOWN:      label = "D-Pad Down"; break;
-			case CTRL_LEFT:      label = "D-Pad Left"; break;
-			case CTRL_RIGHT:     label = "D-Pad Right"; break;
+			case CTRL_CROSS:     label = "A";     icon = ImageID("I_CROSS");   break;
+			case CTRL_CIRCLE:    label = "B";     icon = ImageID("I_CIRCLE");  break;
+			case CTRL_SELECT:    label = "Select"; icon = ImageID("I_SELECT"); break;
+			case CTRL_START:     label = "Start";  icon = ImageID("I_START");  break;
+			case CTRL_LTRIGGER:  label = "L";      icon = ImageID("I_L");      break;
+			case CTRL_RTRIGGER:  label = "R";      icon = ImageID("I_R");      break;
+			case CTRL_UP:        label = "D-Pad Up";   icon = ImageID("I_ARROW"); break;
+			case CTRL_DOWN:      label = "D-Pad Down";  icon = ImageID("I_ARROW"); break;
+			case CTRL_LEFT:      label = "D-Pad Left";  icon = ImageID("I_ARROW"); break;
+			case CTRL_RIGHT:     label = "D-Pad Right"; icon = ImageID("I_ARROW"); break;
 			}
 			if (!label) continue;
-			parent->Add(new CheckBox(&btn.visible, co->T(label)));
+			toggles.push_back({label, icon, &btn.visible});
 		}
-		parent->Add(new Spacer(12.0f));
-		parent->Add(new Choice(di->T("OK")))->OnClick.Add([this](EventParams &) {
-			EmuCore::SaveTouchConfig(coreType_);
+
+		const int cellSize = 380;
+		GridLayoutSettings gridsettings(cellSize, 52, 3);
+		gridsettings.fillCells = true;
+		GridLayout *grid = parent->Add(new GridLayoutList(gridsettings, new LayoutParams(FILL_PARENT, WRAP_CONTENT)));
+
+		for (auto &t : toggles) {
+			LinearLayout *row = new LinearLayout(ORIENT_HORIZONTAL, new LinearLayoutParams(FILL_PARENT, WRAP_CONTENT));
+			row->SetSpacing(0);
+
+			CheckBox *cb = new CheckBox(t.show, "", "", new LinearLayoutParams(50, WRAP_CONTENT));
+			row->Add(cb);
+
+			Choice *choice;
+			if (t.icon.isValid()) {
+				choice = new GBACheckBoxChoice(t.icon, cb, new LinearLayoutParams(1.0f));
+			} else {
+				choice = new GBACheckBoxChoice(mc->T(t.label), cb, new LinearLayoutParams(1.0f));
+			}
+			choice->SetCentered(true);
+			row->Add(choice);
+			grid->Add(row);
+		}
+
+		parent->Add(new Spacer(8.0f));
+
+		// Toggle All — matches PSP TouchControlVisibilityScreen context menu
+		auto *toggleAll = parent->Add(new Choice(di->T("Toggle All")));
+		toggleAll->OnClick.Add([this](UI::EventParams &e) {
+			auto &tcfg = EmuCore::GetTouchConfigMutable(coreType_, portrait_);
+			for (int i = 0; i < tcfg.count; i++) {
+				tcfg.buttons[i].visible = nextToggleAll_;
+			}
+			nextToggleAll_ = !nextToggleAll_;
+		});
+
+		parent->Add(new Choice(di->T("OK")))->OnClick.Add([this](UI::EventParams &) {
 			TriggerFinish(DR_OK);
 		});
+	}
+
+	void OnCompleted(DialogResult result) override {
+		// Save on all exit paths (OK, Cancel, back button) — matches PSP TouchControlVisibilityScreen::onFinish
+		EmuCore::SaveTouchConfig(coreType_);
 	}
 
 private:
 	EmuCore::Type coreType_;
 	bool portrait_;
+	bool nextToggleAll_ = false;
 };
 
 void CoreTouchLayoutScreen::CreateViews() {
