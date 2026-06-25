@@ -236,7 +236,10 @@ Saat ini ada ~262 reference GBA-specific di codebase. Target refactor bertahap:
 | 7 | Hardcoded paths | String literal → `GetCoreDirectory(type)` |
 | 8 | GBA-prefixed methods | `AddGBATouchButtons` → `AddCoreTouchButtons` |
 
-**Status:** Phase 5 (CreateSystemTouchButtons) ✅ done — helper already extracted di EmuScreen.cpp.
+**Status:**
+- Phase 1-3 (class rename) ✅ done — all `GBA*` → `Core*` classes.
+- Phase 5 (CreateSystemTouchButtons) ✅ done — helper extracted di EmuScreen.cpp.
+- Phase 6 (switch dispatch) ✅ done — `if (coreType_ != PSP)` → `switch(coreType_)`.
 
 Setiap phase WAJIB:
 - ✅ Build ON + OFF

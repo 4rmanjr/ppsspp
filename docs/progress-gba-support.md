@@ -172,6 +172,7 @@ Bug: R↔B terbalik (little-endian byte order). Fix: `(B<<16)|(G<<8)|R`.
 | AGENTS.md di-split untuk AI readability | ✅ **FIXED (9f95d42)** | AGENTS.md 466→98 lines (ringkas). Isi dipindah: quality-gates.md + extensibility.md. |
 | Code Review — P2#1 CreateSystemTouchButtons | ✅ **FIXED (9c2af50)** | Extract 30 baris inline system buttons (FF/Pause) ke helper. Reusable untuk semua non-PSP core. 3 baris call site. |
 | Code Review — P2#2 Switch dispatch | ✅ **FIXED (4025693)** | `if (coreType_ != PSP)` → `switch(coreType_)` dengan PSP, GBA, default case. Shared system buttons setelah switch. |
+| Code Review — P3 GBA→Core rename | ✅ **FIXED (9a4ff18)** | 5 class rename: GBADragDrop→CoreDragDrop, GBASnapGrid→CoreSnapGrid, GBALayoutView→CoreLayoutView, GBACheckBoxChoice→CoreCheckBoxChoice, GBATouchVisibilityPopup→CoreTouchVisibilityPopup. |
 
 ---
 
