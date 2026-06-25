@@ -1423,6 +1423,8 @@ void EmuScreen::AddGBATouchButtons(const Bounds &bounds, DeviceOrientation orien
 	using namespace UI;
 	bool portrait = (orientation == DeviceOrientation::Portrait);
 	const auto &cfg = EmuCore::GetTouchConfig(coreType_, portrait);
+	NOTICE_LOG(Log::System, "[GBA] AddGBATouchButtons: portrait=%d orientation=%d configCount=%d bShowTouch=%d",
+		portrait, (int)orientation, cfg.count, g_Config.bShowTouchControls);
 	const ImageID roundImg = g_Config.iTouchButtonStyle ? ImageID("I_ROUND_LINE") : ImageID("I_ROUND");
 	const ImageID rectImg = g_Config.iTouchButtonStyle ? ImageID("I_RECT_LINE") : ImageID("I_RECT");
 	const ImageID shoulderImg = g_Config.iTouchButtonStyle ? ImageID("I_SHOULDER_LINE") : ImageID("I_SHOULDER");
@@ -1675,6 +1677,7 @@ void EmuScreen::CreateViews() {
 #ifdef PPSSPP_MULTICORE
 	// [PPSSPP-FORK] MultiCore: GBA mode — use GBA touch layout instead of PSP
 	if (coreType_ != EmuCore::Type::PSP) {
+		NOTICE_LOG(Log::System, "[GBA] CreateViews: GBA mode, bShowTouchControls=%d", g_Config.bShowTouchControls);
 		root_ = new UI::AnchorLayout(new UI::LayoutParams(UI::FILL_PARENT, UI::FILL_PARENT));
 		if (g_Config.bShowTouchControls) {
 			AddGBATouchButtons(bounds, deviceOrientation);
@@ -1866,6 +1869,10 @@ void EmuScreen::update() {
 	// [PPSSPP-FORK] MultiCore: GBA emulation path
 #ifdef PPSSPP_MULTICORE
 	if (IsGBA() && activeCore_) {
+		// For GBA, coreState stays at CORE_POWERDOWN (PSP never inits),
+		// so GamepadUpdateOpacity() without force would set opacity=0.
+		// Force the configured opacity directly.
+		GamepadUpdateOpacity(g_Config.iTouchButtonOpacity / 100.0f);
 		UIScreen::update();
 		UpdateGBA();
 		return;
@@ -2457,8 +2464,12 @@ void EmuScreen::renderUI() {
 	// [PPSSPP-FORK] MultiCore: GBA UI rendering path
 	if (IsGBA()) {
 		if (root_) {
+			NOTICE_LOG(Log::System, "[GBA] renderUI: root_ exists, children=%d, opacity=%f",
+				root_->GetNumSubviews(), GamepadGetOpacity());
 			UI::LayoutViewHierarchy(*ctx, RootMargins(), root_, LayoutMode(), UseImmersiveMode());
 			root_->Draw(*ctx);
+		} else {
+			NOTICE_LOG(Log::System, "[GBA] renderUI: root_ is NULL!");
 		}
 		if (g_Config.iShowStatusFlags) {
 			DrawFPS(ctx, GetLayoutBounds(*ctx));

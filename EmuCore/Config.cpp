@@ -114,8 +114,8 @@ void LoadTouchConfig(Type coreType) {
 	const char *sectionNameP = GetTouchConfigSection(coreType, true);
 	const Section *secP = ini.GetSection(sectionNameP);
 	CoreTouchConfig &cfgP = GetTouchConfigMutable(coreType, true);
-	cfgP.Clear();
 	if (secP) {
+		cfgP.Clear();
 		for (int i = 0; i < MAX_TOUCH_BUTTONS; i++) {
 			char key[32];
 			snprintf(key, sizeof(key), "btn%d", i);

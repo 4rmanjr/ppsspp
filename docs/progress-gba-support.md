@@ -157,9 +157,9 @@ Bug: R↔B terbalik (little-endian byte order). Fix: `(B<<16)|(G<<8)|R`.
 | Android `ENABLE_VFS_FD` | ✅ | Required by `VFileFromFD()`, ditambah di `EmuCore/CMakeLists.txt` |
 | Per-core touch config | ✅ | `CoreTouchConfig` system — migrated from `TouchLayoutGBA`, centralized di `EmuCore/Config.h/.cpp` |
 | CoreTouchLayoutScreen | ✅ | NEW — per-core touch button editor (`UI/CoreTouchLayoutScreen.h/.cpp`) |
-| Android virtual touch buttons | ❌ | Belum muncul. Root cause: `LoadGBAOverrides()` membaca `bShowTouchControls=0` dari INI `[GBA]` section (sisa build lama) dan menimpa `ApplyGBADefaults()`. Fix: force `bShowTouchControls=true` **setelah** INI overrides di `LoadConfig()`. APK sudah dibuild (`v1.20.4-610`) tapi belum terinstall — ADB connection ke Samsung A05s gagal. Perlu install manual atau reconnect. |
-| GBA landscape touch positions | 🟡 | Default sudah disesuaikan mirip PSP (D-Pad kiri bawah, A/B kanan bawah, L/R atas, Start/Select tengah bawah). Perlu verifikasi di device |
-| GBA portrait touch positions | 🟡 | Default disesuaikan. Layar game 3:2 di tengah saat portrait — wajar karena GBA aspect ratio lebih pendek dari phone modern. Touch buttons perlu di area aman |
+| Android virtual touch buttons | ✅ **WORKING** | 3 root causes: (1) `LoadGBAOverrides()` override `bShowTouchControls=0` — fix: force-set true di `LoadConfig()`. (2) `EmuScreen::update()` early return sebelum `UIScreen::update()` → `CreateViews()` tidak pernah dipanggil — fix: tambah `UIScreen::update()` di GBA path. (3) `coreState` tetap `CORE_POWERDOWN` (PSP tidak diinisialisasi) → `GamepadUpdateOpacity()` tanpa force set opacity=0 — fix: `GamepadUpdateOpacity(g_Config.iTouchButtonOpacity/100.0f)`. **(ce9c3ea + fix selanjutnya)** |
+| GBA landscape touch positions | ✅ | Default 10 buttons landscape (D-Pad kiri, A/B kanan, L/R atas, Start/Select tengah). Terverifikasi di Samsung A05s. |
+| GBA portrait touch positions | ✅ | Default portrait layout ada, tapi ada bug di `LoadTouchConfig()` — `cfgP.Clear()` unconditional hapus default portrait. Fix: pindahkan `cfgP.Clear()` di dalam `if (secP)` block. |
 | Type::COUNT | ✅ | Sentry added ke `EmuCore::EmuCore.h` untuk array indexing |
 
 ---
@@ -300,6 +300,7 @@ otomatis iterasi registry — tidak perlu edit lagi.
 | **Speed control** | 🟢 Low | Coba test: turbo/slow-motion frame skip di GBA |
 | **SaveSlotView → GBA redirect** | 🟢 Low | Main pause menu slot view masih PSP-only |
 | **Game icon/cover** | ⚪️ **SKIP** | Bukan bug — GBA tidak punya cover download |
+| **GBA root_ cleanup** | 🟢 Low | `CreateViews()` GBA path tambah DevMenu + Resume buttons yang seharusnya hanya muncul di pause. `children=15` — idealnya 10 touch buttons + overlay saat pause |
 
 ### 🔴 Compliance Debt: LAN Sync
 
