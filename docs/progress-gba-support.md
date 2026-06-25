@@ -1,9 +1,9 @@
 # GBA Support — Progress Report
 
-**Date:** 2026-06-24
+**Date:** 2026-06-25
 **Branch:** `feature/lan-sync`
-**Last commit:** `be8e59c` — Fix crash from uninitialized mStandardLogger logFile pointer ✅
-**Uncommitted work:** 16 files changed (+920/-220) — Android SAF ROM open, crash guard, gold multicore
+**Last commit:** `4d1be5cf7d` — Merge upstream/master into feature/lan-sync
+**Uncommitted work:** — (clean)
 **Build Linux SDL:** `build-final/PPSSPPSDL` — MULTICORE=ON ✅ (no regression)
 **Build Android `normalRelease`:** ✅ (APK: 53MB, optimized `-O2`)
 **Build Android `goldRelease`:** ✅ (APK: 55MB, optimized `-O2`, +PPSSPP_MULTICORE)
@@ -303,7 +303,8 @@ otomatis iterasi registry — tidak perlu edit lagi.
 | **GBA touch layout editor parity** | ✅ **SELESAI** | CoreTouchLayoutScreen: Move/Resize mode, Kustomisasi (popup visibility), Garis Pinggir checkbox + Kisi-kisi slider, Reset. Cocok dengan PSP — terkecuali Border (diganti Garis Pinggir untuk grid control) |
 | **Pause menu editor redirect** | ✅ **SELESAI** | Pause → Edit touch control layout sekarang buka CoreTouchLayoutScreen(GBA) bukan PSP |
 | **GBA root_ cleanup** | 🟢 Low | `CreateViews()` GBA path tambah DevMenu + Resume buttons yang seharusnya hanya muncul di pause. `children=15` — idealnya 10 touch buttons + overlay saat pause |
-| **Editor preview buttons hide** | 🟡 **BUG** | Tombol di preview `CoreTouchLayoutScreen` tiba-tiba hilang — kemungkinan `LoadTouchConfig()` `cfg.Clear()` hapus default saat INI section ada tapi kosong/korup. Workaround: Reset di editor. Perlu debug: cocokkan `cfg.count` dengan semestinya.
+| **Editor preview button size (tiny dots)** | ✅ **FIXED** | `GBADragDrop::Draw()` pakai `scale_ = btn_.w * g_layoutScale` — `btn_.w` adalah normalized width (0.09), BUKAN image scale factor. Akibat: `scale_ ≈ 0.072` → render 7px (titik). Fix: `GetContentDimensions()` override + formula `(btn_.w × screenBounds_.w) / image->w` → render 87px ✅. Resize range [0.3, 1.5] → [0.03, 0.30] untuk normalized width semantics. |
+| **Editor preview buttons hide** | 🟡 **BUG** | Tombol di preview `CoreTouchLayoutScreen` tiba-tiba hilang — kemungkinan `LoadTouchConfig()` `cfg.Clear()` hapus default saat INI section ada tapi kosong/korup. Workaround: Reset di editor. Perlu debug: cocokkan `cfg.count` dengan semestinya. |
 | **Editor grid lines (Garis Pinggir)** | ✅ **FIXED (051b76d)** | Grid lines tidak muncul karena class `GBASnapGrid` terhapus saat rewrite. Fix: `vLine`/`hLine` langsung di `GBALayoutView::Draw()` saat `g_Config.bTouchSnapToGrid=true` |
 
 ### 🔴 Compliance Debt: LAN Sync

@@ -22,13 +22,32 @@ public:
 	GBADragDrop(EmuCore::CoreTouchButton &btn, const Bounds &screenBounds, ImageID bgImg, ImageID img)
 		: MultiTouchButton("gba_dd", bgImg, bgImg, img, 1.0f,
 			new UI::AnchorLayoutParams(btn.x * screenBounds.w, btn.y * screenBounds.h, UI::NONE, UI::NONE, UI::Centering::Both)),
-		  btn_(btn), screenBounds_(screenBounds) {}
+		  btn_(btn), screenBounds_(screenBounds), bgImg_(bgImg) {}
 
 	bool IsDownVisually() const override { return false; }
+
+	void GetContentDimensions(const UIContext &dc, float &w, float &h) const override {
+		const AtlasImage *image = dc.Draw()->GetAtlas()->getImage(bgImg_);
+		if (image && image->w > 0 && screenBounds_.w > 0.0f) {
+			float desiredW = btn_.w * screenBounds_.w;
+			float scale = desiredW / (float)image->w;
+			w = image->w * scale;
+			h = image->h * scale;
+		} else {
+			w = 0;
+			h = 0;
+		}
+	}
+
 	void Draw(UIContext &dc) override {
-		scale_ = btn_.w * g_layoutScale;
+		const AtlasImage *image = dc.Draw()->GetAtlas()->getImage(bgImg_);
+		if (image && image->w > 0 && screenBounds_.w > 0.0f) {
+			float desiredW = btn_.w * screenBounds_.w;
+			scale_ = desiredW / (float)image->w;
+		}
 		MultiTouchButton::Draw(dc);
 	}
+
 	void SavePosition() {
 		btn_.x = (bounds_.centerX() - screenBounds_.x) / screenBounds_.w;
 		btn_.y = (bounds_.centerY() - screenBounds_.y) / screenBounds_.h;
@@ -44,6 +63,7 @@ public:
 private:
 	EmuCore::CoreTouchButton &btn_;
 	const Bounds &screenBounds_;
+	ImageID bgImg_;
 };
 
 class GBALayoutView : public UI::AnchorLayout {
@@ -87,10 +107,12 @@ bool GBALayoutView::Touch(const TouchInput &touch) {
 			}
 			picked_->ReplaceLayoutParams(new AnchorLayoutParams(nx, ny, NONE, NONE, Centering::Both));
 		} else if (mode_ == 1) {
-			float diff = -(touch.y - startDragY_) * 0.02f;
+			// btn_.w is normalized width (fraction of screen, default ~0.10).
+			// Resize range [0.03, 0.30] = 3%-30% of screen width.
+			float diff = -(touch.y - startDragY_) * 0.0015f;
 			float ns = startScale_ + diff;
-			if (ns < 0.3f) ns = 0.3f;
-			if (ns > 1.5f) ns = 1.5f;
+			if (ns < 0.03f) ns = 0.03f;
+			if (ns > 0.30f) ns = 0.30f;
 			picked_->SetScaleVal(ns);
 		}
 	}
