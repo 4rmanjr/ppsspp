@@ -19,6 +19,8 @@
 
 static float g_layoutScale = 0.8f;
 
+// [PPSSPP-FORK] CoreDragDrop: draggable/resizable button in per-core layout editor
+// Mirrors PSP MultiTouchButton behavior for PSP's TouchControlLayoutScreen
 class CoreDragDrop : public MultiTouchButton {
 public:
 	CoreDragDrop(EmuCore::CoreTouchButton &btn, const Bounds &screenBounds, ImageID bgImg, ImageID img)
@@ -64,7 +66,7 @@ public:
 	}
 private:
 	EmuCore::CoreTouchButton &btn_;
-	const Bounds &screenBounds_;
+	Bounds screenBounds_;  // value copy — safe even if parent view is destroyed
 	ImageID bgImg_;
 };
 
@@ -104,6 +106,8 @@ private:
 	u32 col;
 };
 
+// [PPSSPP-FORK] CoreLayoutView: layout preview container for per-core editor
+// Manages drag-drop controls, grid overlay, portrait/landscape mode
 class CoreLayoutView : public UI::AnchorLayout {
 public:
 	CoreLayoutView(EmuCore::Type core, bool portrait, UI::LayoutParams *lp)
@@ -256,7 +260,8 @@ private:
 	UI::CheckBox *checkbox_;
 };
 
-// Custom popup for per-button visibility toggle
+// [PPSSPP-FORK] CoreTouchVisibilityPopup: per-button visibility toggle popup
+// Mirrors PSP's TouchControlVisibilityScreen with icons + Toggle All
 class CoreTouchVisibilityPopup : public UI::PopupScreen {
 public:
 	CoreTouchVisibilityPopup(EmuCore::Type coreType, bool portrait)
