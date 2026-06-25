@@ -1691,6 +1691,36 @@ void EmuScreen::CreateViews() {
 		root_ = new UI::AnchorLayout(new UI::LayoutParams(UI::FILL_PARENT, UI::FILL_PARENT));
 		if (g_Config.bShowTouchControls) {
 			AddGBATouchButtons(bounds, deviceOrientation);
+
+			// [PPSSPP-FORK] MultiCore: GBA system buttons — Pause and Fast-forward
+			// Match PSP CreatePadLayout behavior for these shared system controls
+			const ImageID roundImg = g_Config.iTouchButtonStyle ? ImageID("I_ROUND_LINE") : ImageID("I_ROUND");
+			const ImageID rectImg = g_Config.iTouchButtonStyle ? ImageID("I_RECT_LINE") : ImageID("I_RECT");
+			TouchControlConfig &sysTouch = g_Config.GetTouchControlsConfig(deviceOrientation);
+
+			// Pause button (I_HAMBURGER on round bg) — same as PSP::CreatePadLayout
+			if (sysTouch.touchPauseKey.show) {
+				float px = sysTouch.touchPauseKey.x * bounds.w;
+				float py = sysTouch.touchPauseKey.y * bounds.h;
+				auto *pauseBtn = root_->Add(new BoolButton(&pauseTrigger_, "GBA_Pause",
+					roundImg, ImageID("I_ROUND"), ImageID("I_HAMBURGER"),
+					sysTouch.touchPauseKey.scale,
+					new UI::AnchorLayoutParams(px, py, UI::NONE, UI::NONE, UI::Centering::Both)));
+				// Pause must be findable on devices without hardware back button
+				if (!System_GetPropertyBool(SYSPROP_HAS_BACK_BUTTON)) {
+					pauseBtn->SetMinimumAlpha(0.1f);
+				}
+			}
+
+			// Fast-forward button (I_FAST_FORWARD_LINE on rect bg) — same as PSP::CreatePadLayout
+			if (sysTouch.touchFastForwardKey.show) {
+				float ffx = sysTouch.touchFastForwardKey.x * bounds.w;
+				float ffy = sysTouch.touchFastForwardKey.y * bounds.h;
+				root_->Add(new BoolButton(&PSP_CoreParameter().fastForward, "GBA_FastForward",
+					rectImg, ImageID("I_RECT"), ImageID("I_FAST_FORWARD_LINE"),
+					sysTouch.touchFastForwardKey.scale,
+					new UI::AnchorLayoutParams(ffx, ffy, UI::NONE, UI::NONE, UI::Centering::Both)));
+			}
 		}
 	} else {
 		root_ = CreatePadLayout(touch, bounds.w, bounds.h, &pauseTrigger_, &g_controlMapper);

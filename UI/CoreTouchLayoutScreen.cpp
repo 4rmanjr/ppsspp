@@ -14,6 +14,7 @@
 #include "Common/UI/UI.h"
 #include "Common/UI/PopupScreens.h"
 #include "Common/Log.h"
+#include "Common/System/System.h"
 #include "UI/GamepadEmu.h"
 
 static float g_layoutScale = 0.8f;
@@ -320,6 +321,43 @@ public:
 			choice->SetCentered(true);
 			row->Add(choice);
 			grid->Add(row);
+		}
+
+		parent->Add(new Spacer(8.0f));
+
+		// System buttons (Fast-forward, Pause) — from main TouchControlConfig (shared with PSP)
+		parent->Add(new ItemHeader(di->T("System Buttons")));
+		DeviceOrientation orient = portrait_ ? DeviceOrientation::Portrait : DeviceOrientation::Landscape;
+		TouchControlConfig &touchCfg = g_Config.GetTouchControlsConfig(orient);
+
+		// Fast-forward
+		{
+			auto *row = new LinearLayout(ORIENT_HORIZONTAL, new LinearLayoutParams(FILL_PARENT, WRAP_CONTENT));
+			row->SetSpacing(0);
+			CheckBox *cb = new CheckBox(&touchCfg.touchFastForwardKey.show, "", "", new LinearLayoutParams(50, WRAP_CONTENT));
+			row->Add(cb);
+			Choice *choice = new GBACheckBoxChoice(ImageID("I_FAST_FORWARD_LINE"), cb, new LinearLayoutParams(1.0f));
+			choice->SetCentered(true);
+			row->Add(choice);
+			parent->Add(row);
+		}
+		// Pause
+		{
+			auto *row = new LinearLayout(ORIENT_HORIZONTAL, new LinearLayoutParams(FILL_PARENT, WRAP_CONTENT));
+			row->SetSpacing(0);
+			CheckBox *cb = new CheckBox(&touchCfg.touchPauseKey.show, "", "", new LinearLayoutParams(50, WRAP_CONTENT));
+			row->Add(cb);
+			bool hasBackButton = System_GetPropertyBool(SYSPROP_HAS_BACK_BUTTON);
+			if (!hasBackButton) {
+				cb->SetEnabled(false);
+			}
+			Choice *choice = new GBACheckBoxChoice(ImageID("I_HAMBURGER"), cb, new LinearLayoutParams(1.0f));
+			if (!hasBackButton) {
+				choice->SetEnabled(false);
+			}
+			choice->SetCentered(true);
+			row->Add(choice);
+			parent->Add(row);
 		}
 
 		parent->Add(new Spacer(8.0f));
