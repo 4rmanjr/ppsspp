@@ -353,6 +353,34 @@ reg.Register(EmuCore::RecentFilesEntry{
 
 Tambah core baru = 1 `Register()` + 1 `InitXXX()` + `add_subdirectory` di CMake.
 
+---
+
+## Known Upstream Issue: Back Button Pause Flicker
+
+**Affects:** Both PSP and GBA modes
+**Root cause:** `UI/PauseScreen.cpp:441-443` — `GamePauseScreen::OnVKey()`
+
+```cpp
+void GamePauseScreen::OnVKey(VirtKey virtualKeyCode, bool down) {
+	if (down && virtualKeyCode == VIRTKEY_PAUSE && time_now_d() > createdTime_ + 0.1) {
+		finishNextFrame_ = true;
+		finishNextFrameResult_ = DR_BACK;
+	}
+}
+```
+
+**Flow:**
+1. Back button pressed → EmuScreen pushes GamePauseScreen
+2. GamePauseScreen becomes top screen
+3. VIRTKEY_PAUSE repeat event arrives (key held >0.1s)
+4. GamePauseScreen::OnVKey closes itself with DR_BACK
+5. Pause menu appears briefly then disappears
+
+**Debounce guard:** 0.1s — too short for Android key repeat behavior.
+
+**Not a fork bug** — this is upstream PPSSPP behavior (`GamePauseScreen::OnVKey`).
+Fork's ESC handler in `key()` for GBA does not cause this.
+
 ## Build & Run
 
 ```bash
