@@ -26,6 +26,8 @@ This is a PPSSPP fork with custom features that **must remain compatible** with 
 
 **REQUIRED** — Read `quality-gates.md` before committing and `extensibility.md` before adding a new core.
 
+**Slash command:** `/codereview` — Review latest changes for bugs, regressions, and PSP parity violations.
+
 ## Global Rules
 
 ### 🔴 FORBIDDEN
