@@ -21,7 +21,7 @@
 static float g_layoutScale = 0.8f;
 
 // [PPSSPP-FORK] CoreDragDropBase: abstract base for draggable/resizable controls
-// All preview buttons are individual CoreDragDrop (no grouped controls).
+// D-pad uses CoreDPadGroup (grouped). Other buttons use individual CoreDragDrop.
 class CoreDragDropBase : public MultiTouchButton {
 public:
 	CoreDragDropBase(const char *tag, ImageID bgImg, ImageID bgDownImg, ImageID img, float scale, UI::LayoutParams *lp)
@@ -84,10 +84,110 @@ private:
 	ImageID bgImg_;
 };
 
-// [PPSSPP-FORK] MultiCore: All buttons individual CoreDragDrop in preview
-// Grouped controls (GBADPadGroup/GBAActionGroup) dihapus — custom Draw()
-// tidak konsisten dengan game screen. Semua tombol pakai CoreDragDrop.
-// Jangan hapus, jangan ubah kode upstream.
+// [PPSSPP-FORK] MultiCore: CoreDPadGroup — grouped D-pad for GBA preview editor
+// Mirrors PSP's PSPDPadButtons: renders 4 directional arrows in a cross pattern.
+// Single draggable/resizable unit that manages 4 CoreTouchButton configs.
+class CoreDPadGroup : public CoreDragDropBase {
+public:
+	CoreDPadGroup(EmuCore::CoreTouchButton &up, EmuCore::CoreTouchButton &down,
+				  EmuCore::CoreTouchButton &left, EmuCore::CoreTouchButton &right,
+				  const Bounds &screenBounds)
+		: CoreDragDropBase("gba_dpad", ImageID::invalid(), ImageID::invalid(), ImageID::invalid(), 1.0f,
+			new UI::AnchorLayoutParams(
+				((up.x + down.x + left.x + right.x) * 0.25f) * screenBounds.w,
+				((up.y + down.y + left.y + right.y) * 0.25f) * screenBounds.h,
+				UI::NONE, UI::NONE, UI::Centering::Both)),
+		  up_(up), down_(down), left_(left), right_(right), screenBounds_(screenBounds) {
+		// Ensure all 4 buttons share the same size
+		float avgW = (up_.w + down_.w + left_.w + right_.w) * 0.25f;
+		up_.w = down_.w = left_.w = right_.w = avgW;
+		up_.h = down_.h = left_.h = right_.h = avgW;
+	}
+
+	bool IsDownVisually() const override { return false; }
+
+	void GetContentDimensions(const UIContext &dc, float &w, float &h) const override {
+		const AtlasImage *image = dc.Draw()->GetAtlas()->getImage(ImageID("I_DIR"));
+		if (image && image->w > 0) {
+			// Estimate: D-pad spans ~2x button width in each direction
+			float btnW = up_.w * screenBounds_.w;
+			w = btnW * 3.0f + image->w * (btnW / image->w);
+			h = w;
+		} else {
+			w = 0;
+			h = 0;
+		}
+	}
+
+	void Draw(UIContext &dc) override {
+		const AtlasImage *image = dc.Draw()->GetAtlas()->getImage(ImageID("I_DIR"));
+		if (!image || image->w == 0) return;
+
+		float desiredW = up_.w * screenBounds_.w;
+		scale_ = desiredW / (float)image->w;
+
+		ImageID dirImage = g_Config.iTouchButtonStyle ? ImageID("I_DIR_LINE") : ImageID("I_DIR");
+
+		static const float xoff[4] = {1, 0, -1, 0};
+		static const float yoff[4] = {0, 1, 0, -1};
+
+		float cx = bounds_.centerX();
+		float cy = bounds_.centerY();
+		float dist = D_pad_Radius * scale_;
+
+		for (int i = 0; i < 4; i++) {
+			float x = cx + xoff[i] * dist;
+			float y = cy + yoff[i] * dist;
+			float angle = (float)i * M_PI / 2.0f;
+			float innerDist = dist + 4.0f * scale_;
+			float ix = cx + xoff[i] * innerDist;
+			float iy = cy + yoff[i] * innerDist;
+
+			dc.Draw()->DrawImageRotated(dirImage, x, y, scale_, angle + M_PI, 0xFFFFFFFF, false);
+			dc.Draw()->DrawImageRotated(ImageID("I_ARROW"), ix, iy, scale_, angle + M_PI, 0xFFFFFFFF, false);
+		}
+	}
+
+	void SavePosition() override {
+		float cx = (bounds_.centerX() - screenBounds_.x) / screenBounds_.w;
+		float cy = (bounds_.centerY() - screenBounds_.y) / screenBounds_.h;
+		// Distribute center back to individual buttons with their offset pattern
+		// D-pad: UP above center, DOWN below, LEFT left, RIGHT right
+		float dist = up_.w * 0.5f; // half button width as default spacing
+		up_.x = cx;
+		up_.y = cy - dist;
+		down_.x = cx;
+		down_.y = cy + dist;
+		left_.x = cx - dist;
+		left_.y = cy;
+		right_.x = cx + dist;
+		right_.y = cy;
+	}
+
+	float GetScaleVal() const override { return up_.w; }
+
+	void SetScaleVal(float s) override {
+		up_.w = down_.w = left_.w = right_.w = s;
+		up_.h = down_.h = left_.h = right_.h = s;
+	}
+
+	bool Contains(float x, float y) override {
+		const float t = 0.25f;
+		// Expanded hitbox (2x the regular size to cover full D-pad area)
+		float expandW = bounds_.w * 1.5f * 0.5f * t;
+		float expandH = bounds_.h * 1.5f * 0.5f * t;
+		Bounds tb(bounds_.x - expandW, bounds_.y - expandH,
+			bounds_.w * 1.5f + expandW * 2.0f, bounds_.h * 1.5f + expandH * 2.0f);
+		return tb.Contains(x, y);
+	}
+
+private:
+	EmuCore::CoreTouchButton &up_, &down_, &left_, &right_;
+	Bounds screenBounds_;
+};
+
+// [PPSSPP-FORK] MultiCore: D-pad is CoreDPadGroup (grouped, matching PSP)
+// Other buttons (A, B, L, R, Start, Select) remain individual CoreDragDrop.
 
 // [PPSSPP-FORK] CoreSnapGrid: draw grid lines on top of buttons (matching PSP SnapGrid z-order)
 // Instead of a child View, called from CoreLayoutView::Draw() to avoid 10x10 measurement issue
@@ -256,14 +356,39 @@ void CoreLayoutView::CreateViews() {
 
 	auto &cfg = EmuCore::GetTouchConfigMutable(coreType_, portrait_);
 
-	// [PPSSPP-FORK] MultiCore: Create all visible buttons as individual CoreDragDrop
-	// Using individual controls (not GBADPadGroup/GBAActionGroup groups) because
-	// custom grouped renderers may not work on all devices. Individual controls
-	// match the game screen (EmuScreen::AddGBATouchButtons) exactly.
+	// [PPSSPP-FORK] MultiCore: D-pad uses CoreDPadGroup (grouped, matching PSP)
+	// Other buttons (A, B, L, R, Start, Select) remain individual CoreDragDrop.
 	created_ = true;
+
+	// Find D-pad buttons for grouping
+	EmuCore::CoreTouchButton *dpUp = nullptr, *dpDown = nullptr;
+	EmuCore::CoreTouchButton *dpLeft = nullptr, *dpRight = nullptr;
+	bool dpadVisible = false;
+	for (int i = 0; i < cfg.count; i++) {
+		auto &btn = cfg.buttons[i];
+		switch (btn.keyCode) {
+		case CTRL_UP:    dpUp = &btn;    if (btn.visible) dpadVisible = true; break;
+		case CTRL_DOWN:  dpDown = &btn;  if (btn.visible) dpadVisible = true; break;
+		case CTRL_LEFT:  dpLeft = &btn;  if (btn.visible) dpadVisible = true; break;
+		case CTRL_RIGHT: dpRight = &btn; if (btn.visible) dpadVisible = true; break;
+		}
+	}
+
+	// Create grouped D-pad if all 4 buttons exist and at least one is visible
+	if (dpUp && dpDown && dpLeft && dpRight && dpadVisible) {
+		auto *dpad = new CoreDPadGroup(*dpUp, *dpDown, *dpLeft, *dpRight, b);
+		controls_.push_back(dpad);
+		Add(dpad);
+	}
+
+	// Create individual buttons for non-D-pad (skip D-pad keyCodes)
 	for (int i = 0; i < cfg.count; i++) {
 		auto &btn = cfg.buttons[i];
 		if (!btn.visible) continue;
+		// Skip D-pad buttons (handled by CoreDPadGroup above)
+		if (btn.keyCode == CTRL_UP || btn.keyCode == CTRL_DOWN ||
+			btn.keyCode == CTRL_LEFT || btn.keyCode == CTRL_RIGHT)
+			continue;
 
 		ImageID icon;
 		ImageID bg;
