@@ -2,7 +2,7 @@
 
 **Date:** 2026-06-26
 **Branch:** `feature/lan-sync`
-**Last commit:** `105f449935` — fix(gba): move ClampPointTo before Touch() to fix compile error (used before defined)
+**Last commit:** `1bd8840dad` — docs: convert AGENTS.md + docs/agents/ to English
 **Uncommitted work:** — (modified: `UI/EmuScreen.cpp`, `CMakeLists.txt`, `docs/progress-gba-support.md`; new: `EmuCore/GBASpeedControl.h`, `unittest/TestGBASpeedControl.cpp`)
 **Build Linux SDL:** `build-final/PPSSPPSDL` — MULTICORE=ON ✅ (no regression)
 **Build Android `normalRelease`:** ✅ (APK: 53MB, optimized `-O2`)
