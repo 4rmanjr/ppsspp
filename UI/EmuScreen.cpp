@@ -1459,21 +1459,21 @@ void EmuScreen::InitGBA(const Path &filename) {
 	g_Config.bSaveSettings = false;
 	NOTICE_LOG(Log::System, "[CONFIG] GBA mode active — autosave disabled");
 
-	File::CreateFullPath(GetSysDirectory(DIRECTORY_SAVEDATA) / "GBA");
-	File::CreateFullPath(GetSysDirectory(DIRECTORY_SAVESTATE) / "GBA");
+	File::CreateFullPath(GetSysDirectory(DIRECTORY_SAVEDATA) / EmuCore::GetCoreDirectory(coreType_));
+	File::CreateFullPath(GetSysDirectory(DIRECTORY_SAVESTATE) / EmuCore::GetCoreDirectory(coreType_));
 
 	activeCore_ = EmuCore::Create(filename);
 	if (activeCore_) {
 		EmuCore::GBACore *gba = static_cast<EmuCore::GBACore *>(activeCore_.get());
 		gba->SetSaveDirectory(
-			(GetSysDirectory(DIRECTORY_SAVEDATA) / "GBA").ToString()
+			(GetSysDirectory(DIRECTORY_SAVEDATA) / EmuCore::GetCoreDirectory(coreType_)).ToString()
 		);
 		if (activeCore_->LoadROM(filename)) {
 			INFO_LOG(Log::System, "[GBA] ROM loaded, boot pending");
 			// [PPSSPP-FORK] MultiCore: set GBA mode globals AFTER core + ROM ready
 			g_gbaModeActive = true;
 			g_activeCore = activeCore_.get();
-			g_gbaSavePrefix = "GBA_" + gba->GetSavePrefix();
+			g_gbaSavePrefix = std::string(EmuCore::GetCoreSavePrefix(coreType_)) + gba->GetSavePrefix();
 			NOTICE_LOG(Log::System, "[GBA] Save prefix: %s", g_gbaSavePrefix.c_str());
 			// [PPSSPP-FORK] MultiCore: add to recent files
 			g_recentFilesGBA.Add(filename.ToString());

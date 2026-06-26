@@ -218,6 +218,22 @@ const char *GetConfigSection(Type coreType) {
 	}
 }
 
+const char *GetCoreDirectory(Type coreType) {
+	switch (coreType) {
+	case Type::GBA:  return "GBA";
+	case Type::PSP:
+	default:         return "PSP";
+	}
+}
+
+const char *GetCoreSavePrefix(Type coreType) {
+	switch (coreType) {
+	case Type::GBA:  return "GBA_";
+	case Type::PSP:
+	default:         return "PSP_";
+	}
+}
+
 void SaveCurrentConfig() {
 	savedPSPConfig.iInternalResolution = g_Config.iInternalResolution;
 	savedPSPConfig.iTexFiltering = g_Config.iTexFiltering;

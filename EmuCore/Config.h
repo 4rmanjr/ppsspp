@@ -103,4 +103,12 @@ std::string GetSavestateDir(Type coreType);
 // Get the config section name for the specified core type.
 const char *GetConfigSection(Type coreType);
 
+// Get directory name for core-specific files (e.g., "GBA", "N64", "PSP").
+// Used for save/state folder paths, NOT config sections.
+const char *GetCoreDirectory(Type coreType);
+
+// Get save prefix for core-specific save files (e.g., "GBA_", "N64_", "PSP_").
+// Prepended to save state filenames for disambiguation.
+const char *GetCoreSavePrefix(Type coreType);
+
 }  // namespace EmuCore
