@@ -28,6 +28,8 @@ When the user types `/codereview`, perform a complete code review of the latest 
 
 4. **Check PSP parity** (Quality Gate #1):
    - For every core feature changed, find the PSP equivalent and compare behavior
+   - **Compare EVERY parameter** in Draw() calls — colors, opacity, scale, rotation — not just structure
+   - **Never assume** global state (e.g., `GamepadUpdateOpacity`) affects a rendering API — verify by reading the API implementation or comparing PSP's explicit parameter usage
    - Compare: init values, edge case handling, save/exit paths, z-order, opacity
    - If no PSP equivalent exists (e.g., GBA-only feature), verify against established patterns instead
    - Document any gaps found
@@ -36,6 +38,11 @@ When the user types `/codereview`, perform a complete code review of the latest 
    - `ImageID("...")` — verify the atlas ID exists
    - `new ClassName(...)` — verify constructor signature via grep
    - `System_*`, `screenManager()`, `GetI18NCategory` — verify return types
+   - **Rendering API** — `dc.Draw()->DrawImageRotated(...)` — verify EACH parameter:
+     * Color: is opacity/multiply color used? Or hardcoded `0xFFFFFFFF`?
+     * Position: same coordinate space as PSP?
+     * Scale: same semantics as PSP?
+     * Rotation: same angle convention?
 
 6. **Categorize issues:**
    - P1: Compile error / crash (must fix NOW)
@@ -110,6 +117,11 @@ When the user types `/codereview`, perform a complete code review of the latest 
 
 - Be thorough. Check every changed line, not just the diff overview.
 - Trace full code paths, not just isolated changes.
+- **Never assume API behavior.** If you think a global state affects a rendering call, verify by:
+  1. Reading the PSP reference and checking if PSP explicitly passes the parameter
+  2. If PSP passes it explicitly (e.g., `colorAlpha(..., opacity)`), then the GBA version MUST also pass it explicitly
+  3. Do NOT assume `GamepadUpdateOpacity()` or similar global state automatically applies to all draw calls
+- **Parameter-level comparison:** When comparing PSP vs GBA Draw() overrides, compare every single argument passed to every API call. "Similar structure" is NOT sufficient — check colors, opacity, scale, rotation individually.
 - The user should not need to ask follow-up questions — the review should be complete and actionable.
 - If you find a P1 bug, fix it immediately and report the fix.
 - Reference AGENTS.md rules by name when flagging violations.
