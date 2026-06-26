@@ -234,7 +234,7 @@ Currently ~262 GBA-specific references in the codebase. Incremental refactoring 
 | 5 | System buttons | Inline → `CreateSystemTouchButtons()` | ✅ Done |
 | 6 | Binary routing | `if (coreType_ != PSP)` → `switch(coreType_)` | ✅ Done |
 | 7 | Hardcoded paths | String literal → `GetCoreDirectory(type)` | ✅ Done |
-| 8 | GBA-prefixed methods | `AddGBATouchButtons` → `AddCoreTouchButtons` | ⏳ |
+| 8 | GBA-prefixed methods | `AddGBATouchButtons` → `AddCoreTouchButtons` | ✅ Done |
 
 Each phase REQUIRED:
 - ✅ Build ON + OFF

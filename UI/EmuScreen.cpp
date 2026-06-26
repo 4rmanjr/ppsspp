@@ -1360,11 +1360,11 @@ static UI::AnchorLayoutParams *AnchorInCorner(const Bounds &bounds, int corner, 
 }
 
 // [PPSSPP-FORK] MultiCore: Add GBA-specific touch buttons to root_
-void EmuScreen::AddGBATouchButtons(const Bounds &bounds, DeviceOrientation orientation) {
+void EmuScreen::AddCoreTouchButtons(const Bounds &bounds, DeviceOrientation orientation) {
 	using namespace UI;
 	bool portrait = (orientation == DeviceOrientation::Portrait);
 	const auto &cfg = EmuCore::GetTouchConfig(coreType_, portrait);
-	NOTICE_LOG(Log::System, "[GBA] AddGBATouchButtons: portrait=%d orientation=%d configCount=%d bShowTouch=%d",
+	NOTICE_LOG(Log::System, "[GBA] AddCoreTouchButtons: portrait=%d orientation=%d configCount=%d bShowTouch=%d",
 		portrait, (int)orientation, cfg.count, g_Config.bShowTouchControls);
 	const ImageID roundImg = g_Config.iTouchButtonStyle ? ImageID("I_ROUND_LINE") : ImageID("I_ROUND");
 	// Fetch UIContext once, reuse for all button atlas lookups
@@ -1643,7 +1643,7 @@ void EmuScreen::CreateViews() {
 		NOTICE_LOG(Log::System, "[GBA] CreateViews: GBA mode, bShowTouchControls=%d", g_Config.bShowTouchControls);
 		root_ = new UI::AnchorLayout(new UI::LayoutParams(UI::FILL_PARENT, UI::FILL_PARENT));
 		if (g_Config.bShowTouchControls) {
-			AddGBATouchButtons(bounds, deviceOrientation);
+			AddCoreTouchButtons(bounds, deviceOrientation);
 		}
 		break;
 	default:
