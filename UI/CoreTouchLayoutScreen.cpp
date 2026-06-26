@@ -16,6 +16,7 @@
 #include "Common/Log.h"
 #include "Common/System/System.h"
 #include "UI/GamepadEmu.h"
+#include "UI/SimpleDialogScreen.h"
 
 static float g_layoutScale = 0.8f;
 
@@ -308,18 +309,45 @@ private:
 	UI::CheckBox *checkbox_;
 };
 
-// [PPSSPP-FORK] CoreTouchVisibilityPopup: per-button visibility toggle popup
-// Mirrors PSP's TouchControlVisibilityScreen with icons + Toggle All
-class CoreTouchVisibilityPopup : public UI::PopupScreen {
+// [PPSSPP-FORK] CoreTouchVisibilityScreen: per-button visibility setup (full dialog)
+// Mirrors PSP TouchControlVisibilityScreen: full screen, icons, i18n, context menu
+class CoreTouchVisibilityScreen : public UISimpleBaseDialogScreen {
 public:
-	CoreTouchVisibilityPopup(EmuCore::Type coreType, bool portrait)
-		: UI::PopupScreen("GBA Touch Control Visibility"), coreType_(coreType), portrait_(portrait) {}
+	CoreTouchVisibilityScreen(const Path &gamePath, EmuCore::Type coreType, bool portrait)
+		: UISimpleBaseDialogScreen(gamePath, SimpleDialogFlags::ContentsCanScroll | SimpleDialogFlags::CustomContextMenu),
+		  coreType_(coreType), portrait_(portrait) {}
 
-	const char *tag() const override { return "CoreTouchVisibilityPopup"; }
+	const char *tag() const override { return "CoreTouchVisibilityScreen"; }
 
-	void CreatePopupContents(UI::ViewGroup *parent) override {
-		using namespace UI;
+	std::string_view GetTitle() const override {
 		auto co = GetI18NCategory(I18NCat::CONTROLS);
+		return co->T("Touch Control Visibility");
+	}
+
+	void CreateContextMenu(UI::ViewGroup *parent) override {
+		using namespace UI;
+		auto di = GetI18NCategory(I18NCat::DIALOG);
+
+		// Toggle All — same pattern as PSP TouchControlVisibilityScreen
+		Choice *toggleAll = parent->Add(new Choice(di->T("Toggle All")));
+		toggleAll->OnClick.Add([this](UI::EventParams &e) {
+			auto &tcfg = EmuCore::GetTouchConfigMutable(coreType_, portrait_);
+			for (int i = 0; i < tcfg.count; i++) {
+				tcfg.buttons[i].visible = nextToggleAll_;
+			}
+			// Also toggle system buttons (Fast-forward, Pause)
+			DeviceOrientation orient = portrait_ ? DeviceOrientation::Portrait : DeviceOrientation::Landscape;
+			TouchControlConfig &tcfgSys = g_Config.GetTouchControlsConfig(orient);
+			tcfgSys.touchFastForwardKey.show = nextToggleAll_;
+			if (System_GetPropertyBool(SYSPROP_HAS_BACK_BUTTON)) {
+				tcfgSys.touchPauseKey.show = nextToggleAll_;
+			}
+			nextToggleAll_ = !nextToggleAll_;
+		});
+	}
+
+	void CreateDialogViews(UI::ViewGroup *parent) override {
+		using namespace UI;
 		auto mc = GetI18NCategory(I18NCat::MAPPABLECONTROLS);
 		auto di = GetI18NCategory(I18NCat::DIALOG);
 
@@ -327,7 +355,7 @@ public:
 		parent->Add(new ItemHeader(di->T("Show Buttons")));
 
 		struct ToggleInfo {
-			const char *label;
+			std::string labelKey;
 			ImageID icon;
 			bool *show;
 		};
@@ -335,22 +363,22 @@ public:
 
 		for (int i = 0; i < cfg.count; i++) {
 			auto &btn = cfg.buttons[i];
-			const char *label = nullptr;
 			ImageID icon;
+			const char *labelKey = nullptr;
 			switch (btn.keyCode) {
-			case CTRL_CROSS:     label = "A";     icon = ImageID("I_CROSS");   break;
-			case CTRL_CIRCLE:    label = "B";     icon = ImageID("I_CIRCLE");  break;
-			case CTRL_SELECT:    label = "Select"; icon = ImageID("I_SELECT"); break;
-			case CTRL_START:     label = "Start";  icon = ImageID("I_START");  break;
-			case CTRL_LTRIGGER:  label = "L";      icon = ImageID("I_L");      break;
-			case CTRL_RTRIGGER:  label = "R";      icon = ImageID("I_R");      break;
-			case CTRL_UP:        label = "D-Pad Up";   icon = ImageID("I_ARROW_UP"); break;
-			case CTRL_DOWN:      label = "D-Pad Down";  icon = ImageID("I_ARROW_DOWN"); break;
-			case CTRL_LEFT:      label = "D-Pad Left";  icon = ImageID("I_ARROW_LEFT"); break;
-			case CTRL_RIGHT:     label = "D-Pad Right"; icon = ImageID("I_ARROW_RIGHT"); break;
+			case CTRL_CROSS:     labelKey = "A";     icon = ImageID("I_CROSS");   break;
+			case CTRL_CIRCLE:    labelKey = "B";     icon = ImageID("I_CIRCLE");  break;
+			case CTRL_SELECT:    labelKey = "Select"; icon = ImageID("I_SELECT"); break;
+			case CTRL_START:     labelKey = "Start";  icon = ImageID("I_START");  break;
+			case CTRL_LTRIGGER:  labelKey = "L";      icon = ImageID("I_L");      break;
+			case CTRL_RTRIGGER:  labelKey = "R";      icon = ImageID("I_R");      break;
+			case CTRL_UP:        labelKey = "D-Pad Up";   icon = ImageID("I_ARROW_UP"); break;
+			case CTRL_DOWN:      labelKey = "D-Pad Down";  icon = ImageID("I_ARROW_DOWN"); break;
+			case CTRL_LEFT:      labelKey = "D-Pad Left";  icon = ImageID("I_ARROW_LEFT"); break;
+			case CTRL_RIGHT:     labelKey = "D-Pad Right"; icon = ImageID("I_ARROW_RIGHT"); break;
 			}
-			if (!label) continue;
-			toggles.push_back({label, icon, &btn.visible});
+			if (!labelKey) continue;
+			toggles.push_back({std::string(labelKey), icon, &btn.visible});
 		}
 
 		const int cellSize = 380;
@@ -369,7 +397,7 @@ public:
 			if (t.icon.isValid()) {
 				choice = new CoreCheckBoxChoice(t.icon, cb, new LinearLayoutParams(1.0f));
 			} else {
-				choice = new CoreCheckBoxChoice(mc->T(t.label), cb, new LinearLayoutParams(1.0f));
+				choice = new CoreCheckBoxChoice(mc->T(t.labelKey), cb, new LinearLayoutParams(1.0f));
 			}
 			choice->SetCentered(true);
 			row->Add(choice);
@@ -412,36 +440,12 @@ public:
 			row->Add(choice);
 			parent->Add(row);
 		}
-
-		parent->Add(new Spacer(8.0f));
-
-		// Toggle All — matches PSP TouchControlVisibilityScreen context menu
-		// nextToggleAll_ starts true: first click toggles ALL ON (show all), second click ALL OFF
-		auto *toggleAll = parent->Add(new Choice(di->T("Toggle All")));
-		toggleAll->OnClick.Add([this](UI::EventParams &e) {
-			auto &tcfg = EmuCore::GetTouchConfigMutable(coreType_, portrait_);
-			for (int i = 0; i < tcfg.count; i++) {
-				tcfg.buttons[i].visible = nextToggleAll_;
-			}
-			// Also toggle system buttons (Fast-forward, Pause) — match PSP Toggle All
-			DeviceOrientation orient = portrait_ ? DeviceOrientation::Portrait : DeviceOrientation::Landscape;
-			TouchControlConfig &tcfgSys = g_Config.GetTouchControlsConfig(orient);
-			tcfgSys.touchFastForwardKey.show = nextToggleAll_;
-			if (System_GetPropertyBool(SYSPROP_HAS_BACK_BUTTON)) {
-				tcfgSys.touchPauseKey.show = nextToggleAll_;
-			}
-			// (Pause disabled on back-button-less devices — InitPadLayout forces it visible)
-			nextToggleAll_ = !nextToggleAll_;
-		});
-
-		parent->Add(new Choice(di->T("OK")))->OnClick.Add([this](UI::EventParams &) {
-			TriggerFinish(DR_OK);
-		});
 	}
 
-	void OnCompleted(DialogResult result) override {
-		// Save on all exit paths (OK, Cancel, back button) — matches PSP TouchControlVisibilityScreen::onFinish
+	void onFinish(DialogResult result) override {
+		// Save on all exit paths — matches PSP TouchControlVisibilityScreen::onFinish
 		EmuCore::SaveTouchConfig(coreType_);
+		INFO_LOG(Log::System, "[TOUCH] CoreTouchVisibilityScreen closed for %s", EmuCore::GetConfigSection(coreType_));
 	}
 
 private:
@@ -483,10 +487,10 @@ void CoreTouchLayoutScreen::CreateViews() {
 		if (layoutView_) layoutView_->mode_ = mode_->GetSelection();
 	});
 
-	// Kustomisasi — buka popup visibility (respect current orientation)
+	// Kustomisasi — buka full dialog visibility (matching PSP TouchControlVisibilityScreen)
 	leftCol->Add(new Choice(co->T("Customize")))->OnClick.Add([this](EventParams &) {
 		bool p = layoutView_ ? layoutView_->portrait_ : false;
-		screenManager()->push(new CoreTouchVisibilityPopup(coreType_, p));
+		screenManager()->push(new CoreTouchVisibilityScreen(gamePath_, coreType_, p));
 	});
 
 	// Snap/Garis Pinggir — enable/disable grid
