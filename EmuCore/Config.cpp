@@ -95,7 +95,10 @@ void LoadTouchConfig(Type coreType) {
 	const char *sectionName = GetTouchConfigSection(coreType, false);
 	const Section *sec = ini.GetSection(sectionName);
 	if (sec) {
-		cfg.Clear();
+		// [PPSSPP-FORK] Parse into a temporary first to protect defaults
+		// from empty/corrupt INI sections (e.g., crash between Clear() and Save()).
+		CoreTouchConfig parsed;
+		int parsedCount = 0;
 		for (int i = 0; i < MAX_TOUCH_BUTTONS; i++) {
 			char key[32];
 			snprintf(key, sizeof(key), "btn%d", i);
@@ -106,18 +109,25 @@ void LoadTouchConfig(Type coreType) {
 			char label[16] = "";
 			int vis = 1;
 			if (sscanf(val.c_str(), "%d,%f,%f,%f,%f,%15[^,],%d", &kc, &x, &y, &w, &h, label, &vis) >= 6) {
-				cfg.Add(kc, x, y, w, h, label, vis != 0);
+				parsed.Add(kc, x, y, w, h, label, vis != 0);
+				parsedCount++;
 			}
 		}
+		// Only replace defaults if we parsed valid buttons
+		if (parsedCount > 0) {
+			cfg = parsed;
+		}
 	}
-	// If section was empty/missing, in-memory defaults from InitDefaultTouchConfigs() remain intact
+	// If section was empty/missing or had only corrupt entries,
+	// in-memory defaults from InitDefaultTouchConfigs() remain intact
 
 	// Load portrait section
 	const char *sectionNameP = GetTouchConfigSection(coreType, true);
 	const Section *secP = ini.GetSection(sectionNameP);
 	CoreTouchConfig &cfgP = GetTouchConfigMutable(coreType, true);
 	if (secP) {
-		cfgP.Clear();
+		CoreTouchConfig parsed;
+		int parsedCount = 0;
 		for (int i = 0; i < MAX_TOUCH_BUTTONS; i++) {
 			char key[32];
 			snprintf(key, sizeof(key), "btn%d", i);
@@ -128,8 +138,12 @@ void LoadTouchConfig(Type coreType) {
 			char label[16] = "";
 			int vis = 1;
 			if (sscanf(val.c_str(), "%d,%f,%f,%f,%f,%15[^,],%d", &kc, &x, &y, &w, &h, label, &vis) >= 6) {
-				cfgP.Add(kc, x, y, w, h, label, vis != 0);
+				parsed.Add(kc, x, y, w, h, label, vis != 0);
+				parsedCount++;
 			}
+		}
+		if (parsedCount > 0) {
+			cfgP = parsed;
 		}
 	}
 

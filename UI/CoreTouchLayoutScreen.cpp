@@ -321,7 +321,7 @@ public:
 	void CreateViews();
 	void Draw(UIContext &dc) override;
 	void SetPortrait(bool portrait);
-	bool HasCreatedViews() const { return !controls_.empty(); }
+	bool HasCreatedViews() const { return created_; }
 
 	int mode_ = 0;
 
@@ -334,6 +334,7 @@ private:
 	float startScale_ = -1.0f;
 	EmuCore::Type coreType_;
 	std::vector<CoreDragDropBase *> controls_;
+	bool created_ = false;
 
 public:
 	bool portrait_ = false;
@@ -403,6 +404,7 @@ void CoreLayoutView::Draw(UIContext &dc) {
 void CoreLayoutView::ClearControls() {
 	for (auto *c : controls_) RemoveSubview(c);
 	controls_.clear();
+	created_ = false;
 }
 
 void CoreLayoutView::SetPortrait(bool portrait) {
@@ -457,6 +459,9 @@ void CoreLayoutView::CreateViews() {
 	}
 
 	// Second pass: remaining buttons as individual CoreDragDrop
+	// [PPSSPP-FORK] Set created_ flag here so HasCreatedViews() works
+	// even if all buttons are hidden (prevents infinite update() loop).
+	created_ = true;
 	for (int i = 0; i < cfg.count; i++) {
 		auto &btn = cfg.buttons[i];
 		if (!btn.visible) continue;
