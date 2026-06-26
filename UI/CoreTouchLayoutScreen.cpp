@@ -126,6 +126,11 @@ public:
 		float desiredW = up_.w * screenBounds_.w;
 		scale_ = desiredW / (float)image->w;
 
+		// [PPSSPP-FORK] PSP parity: respect user opacity + button color
+		float opacity = GamepadGetOpacity();
+		uint32_t colorBg = colorAlpha(g_Config.iTouchButtonStyle != 0 ? 0xFFFFFF : 0xc0b080, opacity);
+		uint32_t color = colorAlpha(0xFFFFFF, opacity);
+
 		ImageID dirImage = g_Config.iTouchButtonStyle ? ImageID("I_DIR_LINE") : ImageID("I_DIR");
 
 		static const float xoff[4] = {1, 0, -1, 0};
@@ -143,8 +148,8 @@ public:
 			float ix = cx + xoff[i] * innerDist;
 			float iy = cy + yoff[i] * innerDist;
 
-			dc.Draw()->DrawImageRotated(dirImage, x, y, scale_, angle + M_PI, 0xFFFFFFFF, false);
-			dc.Draw()->DrawImageRotated(ImageID("I_ARROW"), ix, iy, scale_, angle + M_PI, 0xFFFFFFFF, false);
+			dc.Draw()->DrawImageRotated(dirImage, x, y, scale_, angle + M_PI, colorBg, false);
+			dc.Draw()->DrawImageRotated(ImageID("I_ARROW"), ix, iy, scale_, angle + M_PI, color, false);
 		}
 	}
 
