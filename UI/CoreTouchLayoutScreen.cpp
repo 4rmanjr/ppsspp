@@ -266,27 +266,21 @@ void CoreLayoutView::CreateViews() {
 		if (!btn.visible) continue;
 
 		ImageID icon;
-		switch (btn.keyCode) {
-		case CTRL_CROSS:     icon = ImageID("I_CROSS");   break;
-		case CTRL_CIRCLE:    icon = ImageID("I_CIRCLE");  break;
-		case CTRL_SELECT:    icon = ImageID("I_SELECT");  break;
-		case CTRL_START:     icon = ImageID("I_START");   break;
-		case CTRL_LTRIGGER:  icon = ImageID("I_L");      break;
-		case CTRL_RTRIGGER:  icon = ImageID("I_R");      break;
-		case CTRL_UP:        icon = ImageID("I_ARROW_UP");    break;
-		case CTRL_DOWN:      icon = ImageID("I_ARROW_DOWN");  break;
-		case CTRL_LEFT:      icon = ImageID("I_ARROW_LEFT");  break;
-		case CTRL_RIGHT:     icon = ImageID("I_ARROW_RIGHT"); break;
-		default:             icon = ImageID("I_CROSS");   break;
+		ImageID bg;
+		bool doFlip = false;
+		{
+			const auto *def = EmuCore::GetButtonDef(coreType_, btn.keyCode);
+			if (def) {
+				icon = ImageID(def->imageID);
+				bg = g_Config.iTouchButtonStyle ? ImageID(std::string(def->bgID) + "_LINE") : ImageID(def->bgID);
+				doFlip = def->flipH;
+			} else {
+				icon = ImageID("I_CROSS");
+				bg = g_Config.iTouchButtonStyle ? ImageID("I_ROUND_LINE") : ImageID("I_ROUND");
+			}
 		}
-		ImageID roundImg = g_Config.iTouchButtonStyle ? ImageID("I_ROUND_LINE") : ImageID("I_ROUND");
-		ImageID rectImg = g_Config.iTouchButtonStyle ? ImageID("I_RECT_LINE") : ImageID("I_RECT");
-		ImageID shoulderImg = g_Config.iTouchButtonStyle ? ImageID("I_SHOULDER_LINE") : ImageID("I_SHOULDER");
-		ImageID bg = (btn.keyCode == CTRL_LTRIGGER || btn.keyCode == CTRL_RTRIGGER) ? shoulderImg : roundImg;
-		if (btn.keyCode == CTRL_SELECT || btn.keyCode == CTRL_START) bg = rectImg;
 		auto *dd = new CoreDragDrop(btn, b, bg, icon);
-		// [PPSSPP-FORK] PSP parity: flip R trigger horizontally (matching PSP TouchControlLayoutScreen)
-		if (btn.keyCode == CTRL_RTRIGGER) dd->FlipImageH(true);
+		if (doFlip) dd->FlipImageH(true);
 		controls_.push_back(dd);
 		Add(dd);
 	}
@@ -365,17 +359,12 @@ public:
 			auto &btn = cfg.buttons[i];
 			ImageID icon;
 			const char *labelKey = nullptr;
-			switch (btn.keyCode) {
-			case CTRL_CROSS:     labelKey = "A";     icon = ImageID("I_CROSS");   break;
-			case CTRL_CIRCLE:    labelKey = "B";     icon = ImageID("I_CIRCLE");  break;
-			case CTRL_SELECT:    labelKey = "Select"; icon = ImageID("I_SELECT"); break;
-			case CTRL_START:     labelKey = "Start";  icon = ImageID("I_START");  break;
-			case CTRL_LTRIGGER:  labelKey = "L";      icon = ImageID("I_L");      break;
-			case CTRL_RTRIGGER:  labelKey = "R";      icon = ImageID("I_R");      break;
-			case CTRL_UP:        labelKey = "D-Pad Up";   icon = ImageID("I_ARROW_UP"); break;
-			case CTRL_DOWN:      labelKey = "D-Pad Down";  icon = ImageID("I_ARROW_DOWN"); break;
-			case CTRL_LEFT:      labelKey = "D-Pad Left";  icon = ImageID("I_ARROW_LEFT"); break;
-			case CTRL_RIGHT:     labelKey = "D-Pad Right"; icon = ImageID("I_ARROW_RIGHT"); break;
+			{
+				const auto *def = EmuCore::GetButtonDef(coreType_, btn.keyCode);
+				if (def) {
+					icon = ImageID(def->imageID);
+					labelKey = def->labelKey;
+				}
 			}
 			if (!labelKey) continue;
 			toggles.push_back({std::string(labelKey), icon, &btn.visible});

@@ -6,6 +6,7 @@
 
 #include <string>
 #include <cstdio>
+#include <vector>
 #include "EmuCore/EmuCore.h"
 
 namespace EmuCore {
@@ -48,6 +49,28 @@ struct CoreTouchConfig {
 		count++;
 	}
 };
+
+// [PPSSPP-FORK] MultiCore: CoreButtonRegistry — data-driven button definitions
+// Replaces hardcoded `case CTRL_*` switches in 3 locations:
+//   EmuScreen::AddGBATouchButtons, CoreLayoutView::CreateViews,
+//   CoreTouchVisibilityScreen::CreateDialogViews
+// Each core registers via RegisterButtonMap(). Lookup via GetButtonDef().
+struct CoreButtonDef {
+	int keyCode;               // PSP CTRL_ constant (e.g. CTRL_CROSS)
+	const char *imageID;       // Atlas icon ID (e.g. "I_CROSS")
+	const char *labelKey;      // i18n key (e.g. "A", "Select")
+	const char *bgID;          // Base background ID (e.g. "I_ROUND", "I_SHOULDER")
+	bool flipH;                // Whether to flip horizontally (R trigger)
+};
+
+// Register button definitions for a core type.
+void RegisterButtonMap(Type coreType, const std::vector<CoreButtonDef> &defs);
+
+// Get single button definition by keyCode. Returns nullptr if not found.
+const CoreButtonDef *GetButtonDef(Type coreType, int keyCode);
+
+// Get all button definitions for a core type.
+const std::vector<CoreButtonDef> &GetButtonDefs(Type coreType);
 
 // Per-core touch configs (indexed by Type enum).
 extern CoreTouchConfig g_coreTouchLandscape[(int)Type::COUNT];

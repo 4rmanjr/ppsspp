@@ -46,6 +46,54 @@ void FillDefaultGBATouchLayout(CoreTouchConfig &cfg) {
 	cfg.Add(CTRL_START,    0.55f, 0.87f, 0.09f, 0.06f, "Start");
 }
 
+// [PPSSPP-FORK] MultiCore: button definition registry
+static std::vector<CoreButtonDef> g_buttonDefs[(int)Type::COUNT];
+static bool g_buttonDefsInitialized = false;
+
+static void InitCoreButtonMaps() {
+	if (g_buttonDefsInitialized) return;
+	g_buttonDefsInitialized = true;
+
+	// GBA button definitions
+	// Fields: keyCode, imageID, labelKey, bgID (base name), flipH
+	g_buttonDefs[(int)Type::GBA] = {
+		{CTRL_CROSS,     "I_CROSS",        "A",           "I_ROUND",    false},
+		{CTRL_CIRCLE,    "I_CIRCLE",       "B",           "I_ROUND",    false},
+		{CTRL_SELECT,    "I_SELECT",       "Select",      "I_RECT",     false},
+		{CTRL_START,     "I_START",        "Start",       "I_RECT",     false},
+		{CTRL_LTRIGGER,  "I_L",            "L",           "I_SHOULDER", false},
+		{CTRL_RTRIGGER,  "I_R",            "R",           "I_SHOULDER", true},
+		{CTRL_UP,        "I_ARROW_UP",     "D-Pad Up",    "I_ROUND",    false},
+		{CTRL_DOWN,      "I_ARROW_DOWN",   "D-Pad Down",  "I_ROUND",    false},
+		{CTRL_LEFT,      "I_ARROW_LEFT",   "D-Pad Left",  "I_ROUND",    false},
+		{CTRL_RIGHT,     "I_ARROW_RIGHT",  "D-Pad Right", "I_ROUND",    false},
+	};
+}
+
+void RegisterButtonMap(Type coreType, const std::vector<CoreButtonDef> &defs) {
+	int idx = (int)coreType;
+	if (idx < 0 || idx >= (int)Type::COUNT) return;
+	InitCoreButtonMaps();
+	g_buttonDefs[idx] = defs;
+}
+
+const CoreButtonDef *GetButtonDef(Type coreType, int keyCode) {
+	int idx = (int)coreType;
+	if (idx < 0 || idx >= (int)Type::COUNT) return nullptr;
+	InitCoreButtonMaps();
+	for (auto &def : g_buttonDefs[idx]) {
+		if (def.keyCode == keyCode) return &def;
+	}
+	return nullptr;
+}
+
+const std::vector<CoreButtonDef> &GetButtonDefs(Type coreType) {
+	int idx = (int)coreType;
+	InitCoreButtonMaps();
+	if (idx < 0 || idx >= (int)Type::COUNT) { static std::vector<CoreButtonDef> empty; return empty; }
+	return g_buttonDefs[idx];
+}
+
 void InitDefaultTouchConfigs() {
 	// Clear all core touch configs first (except PSP — uses its own system)
 	for (int i = 0; i < (int)Type::COUNT; i++) {

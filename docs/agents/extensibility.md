@@ -230,7 +230,7 @@ Currently ~262 GBA-specific references in the codebase. Incremental refactoring 
 | 1 | Class rename | `GBADragDrop` → `CoreDragDrop` | ✅ Done |
 | 2 | Class rename | `GBALayoutView` → `CoreLayoutView` | ✅ Done |
 | 3 | Class rename | `GBATouchVisibilityPopup` → `CoreTouchVisibilityScreen` | ✅ Done |
-| 4 | Switch to registry | Hardcoded `case CTRL_*` → `GetButtonDefs(coreType_)` | ⏳ |
+| 4 | Switch to registry | Hardcoded `case CTRL_*` → `GetButtonDefs(coreType_)` | ✅ Done |
 | 5 | System buttons | Inline → `CreateSystemTouchButtons()` | ✅ Done |
 | 6 | Binary routing | `if (coreType_ != PSP)` → `switch(coreType_)` | ✅ Done |
 | 7 | Hardcoded paths | String literal → `GetCoreDirectory(type)` | ✅ Done |

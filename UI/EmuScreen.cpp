@@ -1367,8 +1367,6 @@ void EmuScreen::AddGBATouchButtons(const Bounds &bounds, DeviceOrientation orien
 	NOTICE_LOG(Log::System, "[GBA] AddGBATouchButtons: portrait=%d orientation=%d configCount=%d bShowTouch=%d",
 		portrait, (int)orientation, cfg.count, g_Config.bShowTouchControls);
 	const ImageID roundImg = g_Config.iTouchButtonStyle ? ImageID("I_ROUND_LINE") : ImageID("I_ROUND");
-	const ImageID rectImg = g_Config.iTouchButtonStyle ? ImageID("I_RECT_LINE") : ImageID("I_RECT");
-	const ImageID shoulderImg = g_Config.iTouchButtonStyle ? ImageID("I_SHOULDER_LINE") : ImageID("I_SHOULDER");
 	// Fetch UIContext once, reuse for all button atlas lookups
 	UIContext *ctx = screenManager()->getUIContext();
 	for (int i = 0; i < cfg.count; i++) {
@@ -1376,18 +1374,14 @@ void EmuScreen::AddGBATouchButtons(const Bounds &bounds, DeviceOrientation orien
 		if (!btn.visible) continue;
 		ImageID bgImg = roundImg;
 		ImageID icon;
-		switch (btn.keyCode) {
-			case CTRL_CROSS:     icon = ImageID("I_CROSS");   break;
-			case CTRL_CIRCLE:    icon = ImageID("I_CIRCLE");  break;
-			case CTRL_START:     icon = ImageID("I_START");   bgImg = rectImg;  break;
-			case CTRL_SELECT:    icon = ImageID("I_SELECT");  bgImg = rectImg;  break;
-			case CTRL_LTRIGGER:  icon = ImageID("I_L");      bgImg = shoulderImg;  break;
-			case CTRL_RTRIGGER:  icon = ImageID("I_R");      bgImg = shoulderImg;  break;
-			case CTRL_UP:        icon = ImageID("I_ARROW_UP");    break;
-			case CTRL_DOWN:      icon = ImageID("I_ARROW_DOWN");  break;
-			case CTRL_LEFT:      icon = ImageID("I_ARROW_LEFT");  break;
-			case CTRL_RIGHT:     icon = ImageID("I_ARROW_RIGHT"); break;
-			default:             icon = ImageID("I_CROSS");   break;
+		{
+			const auto *def = EmuCore::GetButtonDef(coreType_, btn.keyCode);
+			if (def) {
+				icon = ImageID(def->imageID);
+				bgImg = g_Config.iTouchButtonStyle ? ImageID(std::string(def->bgID) + "_LINE") : ImageID(def->bgID);
+			} else {
+				icon = ImageID("I_CROSS");
+			}
 		}
 		float cx = btn.x * bounds.w;
 		float cy = btn.y * bounds.h;
@@ -1409,8 +1403,11 @@ void EmuScreen::AddGBATouchButtons(const Bounds &bounds, DeviceOrientation orien
 			bgScale,
 			new AnchorLayoutParams(cx, cy, UI::NONE, UI::NONE, Centering::Both)
 		);
-		// [PPSSPP-FORK] PSP parity: flip R trigger horizontally (matching PSP TouchControlLayoutScreen)
-		if (btn.keyCode == CTRL_RTRIGGER) pspBtn->FlipImageH(true);
+		// [PPSSPP-FORK] PSP parity: flip horizontally based on registry def
+		{
+			const auto *def = EmuCore::GetButtonDef(coreType_, btn.keyCode);
+			if (def && def->flipH) pspBtn->FlipImageH(true);
+		}
 		root_->Add(pspBtn);
 	}
 }
