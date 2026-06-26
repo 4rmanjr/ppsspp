@@ -136,6 +136,7 @@ public:
 
 private:
 	void ClearControls();
+	CoreDragDropBase *GetPickedControl(float x, float y);
 
 	CoreDragDropBase *picked_ = nullptr;
 	float startObjX_ = -1.0f, startObjY_ = -1.0f;
@@ -168,8 +169,9 @@ bool CoreLayoutView::Touch(const TouchInput &touch) {
 				nx -= fmod(nx - cx, grid);
 				ny -= fmod(ny - cy, grid);
 			}
-			nx = std::clamp(nx, 0.0f, vr.w);
-			ny = std::clamp(ny, 0.0f, vr.h);
+			Point2D clamped = ClampPointTo(Point2D(nx, ny), vr);
+			nx = clamped.x;
+			ny = clamped.y;
 			picked_->ReplaceLayoutParams(new AnchorLayoutParams(nx, ny, NONE, NONE, Centering::Both));
 		} else if (mode_ == 1) {
 			// btn_.w is normalized width (fraction of screen, default ~0.10).
@@ -182,17 +184,14 @@ bool CoreLayoutView::Touch(const TouchInput &touch) {
 		}
 	}
 	if ((touch.flags & TouchInputFlags::DOWN) && !picked_) {
-		for (auto *c : controls_) {
-			if (c->Contains(touch.x, touch.y)) {
-				picked_ = c;
-				startDragX_ = touch.x;
-				startDragY_ = touch.y;
-				const auto *params = picked_->GetLayoutParams()->As<AnchorLayoutParams>();
-				startObjX_ = params->left;
-				startObjY_ = params->top;
-				startScale_ = picked_->GetScaleVal();
-				break;
-			}
+		picked_ = GetPickedControl(touch.x, touch.y);
+		if (picked_) {
+			startDragX_ = touch.x;
+			startDragY_ = touch.y;
+			const auto *params = picked_->GetLayoutParams()->As<AnchorLayoutParams>();
+			startObjX_ = params->left;
+			startObjY_ = params->top;
+			startScale_ = picked_->GetScaleVal();
 		}
 	}
 	if ((touch.flags & TouchInputFlags::UP) && picked_) {
@@ -202,9 +201,36 @@ bool CoreLayoutView::Touch(const TouchInput &touch) {
 	return true;
 }
 
+// [PPSSPP-FORK] PSP parity: distance-based picking — pick closest control to touch point
+// Matching PSP ControlLayoutView::getPickedControl behavior
+CoreDragDropBase *CoreLayoutView::GetPickedControl(float x, float y) {
+	CoreDragDropBase *best = nullptr;
+	float bestDist = 0.0f;
+	for (auto *c : controls_) {
+		if (c->Contains(x, y)) {
+			const Bounds &b = c->GetBounds();
+			float dist = (b.centerX() - x) * (b.centerX() - x) + (b.centerY() - y) * (b.centerY() - y);
+			if (!best || dist < bestDist) {
+				bestDist = dist;
+				best = c;
+			}
+		}
+	}
+	return best;
+}
+
+// [PPSSPP-FORK] MultiCore: clamp point to bounds (matching PSP ClampTo)
+static Point2D ClampPointTo(const Point2D &p, const Bounds &b) {
+	return Point2D(std::clamp(p.x, b.x, b.x + b.w), std::clamp(p.y, b.y, b.y + b.h));
+};
+
 void CoreLayoutView::Draw(UIContext &dc) {
 	using namespace UI;
+	// [PPSSPP-FORK] PSP parity: apply user opacity setting to preview buttons
+	float opacity = g_Config.iTouchButtonOpacity / 100.0f;
+	GamepadUpdateOpacity(std::max(0.5f, opacity));
 	dc.FillRect(Drawable(0x80000000), bounds_);
+	dc.Flush();
 	AnchorLayout::Draw(dc);
 	// [PPSSPP-FORK] MultiCore: Draw grid on top of buttons (matching PSP SnapGrid z-order)
 	DrawCoreSnapGrid(dc, bounds_, 0x3FFFFFFF);
