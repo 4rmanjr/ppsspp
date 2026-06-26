@@ -1144,9 +1144,11 @@ void EmuScreen::ProcessVKey(VirtKey virtKey, bool down) {
 			}
 			*/
 			PSP_CoreParameter().fastForward = true;
+			// [PPSSPP-FORK] MultiCore: GBA fast-forward debug logging
 			if (IsGBA()) NOTICE_LOG(Log::System, "[GBA] VIRTKEY_FASTFORWARD ON");
 		} else {
 			PSP_CoreParameter().fastForward = false;
+			// [PPSSPP-FORK] MultiCore: GBA fast-forward debug logging
 			if (IsGBA() && !down) NOTICE_LOG(Log::System, "[GBA] VIRTKEY_FASTFORWARD OFF");
 		}
 		break;

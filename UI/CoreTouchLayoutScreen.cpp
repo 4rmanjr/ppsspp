@@ -29,9 +29,7 @@ public:
 	virtual void SavePosition() = 0;
 	virtual float GetScaleVal() const = 0;
 	virtual void SetScaleVal(float s) = 0;
-	virtual bool Contains(float x, float y) {
-		return bounds_.Contains(x, y);
-	}
+	virtual bool Contains(float x, float y) = 0;
 };
 
 // [PPSSPP-FORK] CoreDragDrop: draggable/resizable SINGLE button in per-core layout editor
