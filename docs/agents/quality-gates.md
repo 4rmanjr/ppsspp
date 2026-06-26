@@ -36,7 +36,7 @@ Understand:
 
 Compare behavior one-by-one with PSP. Example template:
 
-| Aspect | PSP (`TouchControlVisibilityScreen`) | GBA (`GBATouchVisibilityPopup`) | Match? |
+| Aspect | PSP (reference) | Core (this change) | Match? |
 |--------|--------------------------------------|----------------------------------|--------|
 | nextToggleAll_ init | `true` | `true` | ✅ |
 | Toggle All scope | All buttons (game + system) | All buttons | ✅ |
@@ -124,7 +124,7 @@ Before writing code, write a scope definition:
 ## Scope: <Feature Name>
 
 ### What will be built
-- [ ] Pause button on GBA game screen
+- [ ] Pause button on non-PSP game screen
 - [ ] Fast-forward toggle in visibility popup
 
 ### PSP equivalent

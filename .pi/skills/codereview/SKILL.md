@@ -1,11 +1,11 @@
 ---
 name: codereview
-description: Review the latest changes for bugs, regressions, and PSP parity violations across ALL cores (GBA, future N64, PS1, NDS, etc.). Runs Quality Gate #2 from AGENTS.md.
+description: Review the latest changes for bugs, regressions, and PSP parity violations across ALL cores (GBA, N64, PS1, NDS, etc.). Runs Quality Gate #2 from AGENTS.md.
 ---
 
 # Code Review — Quality Gate Check (All Cores)
 
-When the user types `/codereview`, perform a complete code review of the latest changes. This skill is **core-agnostic** — it applies to GBA as well as any future emulator (N64, PS1, NDS, SNES, etc.).
+When the user types `/codereview`, perform a complete code review of the latest changes. This skill is **core-agnostic** — it applies to any non-PSP emulator (GBA, N64, PS1, NDS, SNES, etc.).
 
 ## What to do
 
@@ -31,7 +31,7 @@ When the user types `/codereview`, perform a complete code review of the latest 
    - **Compare EVERY parameter** in Draw() calls — colors, opacity, scale, rotation — not just structure
    - **Never assume** global state (e.g., `GamepadUpdateOpacity`) affects a rendering API — verify by reading the API implementation or comparing PSP's explicit parameter usage
    - Compare: init values, edge case handling, save/exit paths, z-order, opacity
-   - If no PSP equivalent exists (e.g., GBA-only feature), verify against established patterns instead
+   - If no PSP equivalent exists (e.g., a core-specific feature like low-level audio), verify against established patterns instead
    - Document any gaps found
 
 5. **Run anti-hallucination check:**
@@ -119,9 +119,9 @@ When the user types `/codereview`, perform a complete code review of the latest 
 - Trace full code paths, not just isolated changes.
 - **Never assume API behavior.** If you think a global state affects a rendering call, verify by:
   1. Reading the PSP reference and checking if PSP explicitly passes the parameter
-  2. If PSP passes it explicitly (e.g., `colorAlpha(..., opacity)`), then the GBA version MUST also pass it explicitly
+  2. If PSP passes it explicitly (e.g., `colorAlpha(..., opacity)`), then the forked version MUST also pass it explicitly
   3. Do NOT assume `GamepadUpdateOpacity()` or similar global state automatically applies to all draw calls
-- **Parameter-level comparison:** When comparing PSP vs GBA Draw() overrides, compare every single argument passed to every API call. "Similar structure" is NOT sufficient — check colors, opacity, scale, rotation individually.
+- **Parameter-level comparison:** When comparing PSP vs forked Draw() overrides, compare every single argument passed to every API call. "Similar structure" is NOT sufficient — check colors, opacity, scale, rotation individually.
 - The user should not need to ask follow-up questions — the review should be complete and actionable.
 - If you find a P1 bug, fix it immediately and report the fix.
 - Reference AGENTS.md rules by name when flagging violations.
