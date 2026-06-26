@@ -2,7 +2,7 @@
 
 **Date:** 2026-06-26
 **Branch:** `feature/lan-sync`
-**Last commit:** `cf47394b77` — fix(gba): strengthen code robustness — pure virtual Contains + missing markers
+**Last commit:** `a87ce77ced` — fix(gba): PSP parity for layout editor preview — opacity + distance picking + ClampPointTo
 **Uncommitted work:** — (modified: `UI/EmuScreen.cpp`, `CMakeLists.txt`, `docs/progress-gba-support.md`; new: `EmuCore/GBASpeedControl.h`, `unittest/TestGBASpeedControl.cpp`)
 **Build Linux SDL:** `build-final/PPSSPPSDL` — MULTICORE=ON ✅ (no regression)
 **Build Android `normalRelease`:** ✅ (APK: 53MB, optimized `-O2`)
