@@ -43,11 +43,63 @@ When the user types `/codereview`, perform a complete code review of the latest 
    - P4: Code quality (missing guard, fragile pattern)
    - P5: Nitpick (missing marker, naming, minor)
 
-7. **Report findings:**
-   - List each issue with file path, line number, category
-   - For P1-P3 issues: suggest the fix
-   - For P4-P5: describe the concern
-   - If no issues found: report "✅ All clear"
+7. **Report findings** using this exact template:
+
+```
+## Review: <commit-hash-or-working-tree>
+
+### Files changed
+- <file1> — <lines changed>
+- <file2> — <lines changed>
+
+### 🔴 Issues found
+
+| # | File:Line | Category | Description | Fix |
+|---|-----------|----------|-------------|-----|
+| P1 | `path/file.cpp:123` | Compile error | `var` used before init | Initialize before use |
+| P2 | `path/file.cpp:456` | Logic error | Wrong formula X vs Y | Change to match PSP |
+| P3 | `path/file.cpp:789` | PSP parity | Init value `false`, PSP `true` | Change to `true` |
+| P4 | `path/file.cpp:101` | Code quality | Missing div-by-zero guard | Add `image->w > 0` check |
+| P5 | `path/file.cpp:112` | Nitpick | Missing `[PPSSPP-FORK]` marker | Add comment |
+
+*(If no issues, write: ✅ No issues found.)*
+
+### ✅ PSP parity check
+
+| Aspect | PSP | GBA (this change) | Match? |
+|--------|-----|-------------------|--------|
+| Init value | `true` | `true` | ✅ |
+| Edge case | null check | null check | ✅ |
+| Save path | `onFinish()` | `onFinish()` | ✅ |
+
+### ✅ AGENTS.md compliance
+
+| Rule | Status |
+|------|--------|
+| 🔴 FORBIDDEN #1 — Zero deletion | ✅ |
+| 🔴 FORBIDDEN #2 — No #else injection | ✅ |
+| 🔴 FORBIDDEN #3 — No refactoring | ✅ |
+| 🟢 REQUIRED #1 — Separate files | ✅ |
+| 🟢 REQUIRED #2 — Markers present | ✅ |
+| 🟢 REQUIRED #3 — Feature flags | ✅ |
+
+### 📋 Detail per issue
+
+**P1 — `path/file.cpp:123` — Compile error**
+- Problem: `var` initialized after use
+- Impact: Compile crash
+- Fix: Move init before the use site
+
+**P4 — `path/file.cpp:101` — Code quality**
+- Problem: Missing division-by-zero guard
+- Impact: Crash if image not found
+- Fix: Add `if (image && image->w > 0)`
+
+### Summary
+
+- **P1:** 0 | **P2:** 0 | **P3:** 0 | **P4:** 1 | **P5:** 0
+- **Verdict:** ✅ Clean (or ❌ Needs fix — P1 issues remain)
+```
 
 ## Important rules
 
