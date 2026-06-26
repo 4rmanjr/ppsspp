@@ -2,7 +2,7 @@
 
 **Date:** 2026-06-26
 **Branch:** `feature/lan-sync`
-**Last commit:** `4ba96c062b` — fix(gba): PSP parity for Customize button — popup → full dialog screen
+**Last commit:** `105f449935` — fix(gba): move ClampPointTo before Touch() to fix compile error (used before defined)
 **Uncommitted work:** — (modified: `UI/EmuScreen.cpp`, `CMakeLists.txt`, `docs/progress-gba-support.md`; new: `EmuCore/GBASpeedControl.h`, `unittest/TestGBASpeedControl.cpp`)
 **Build Linux SDL:** `build-final/PPSSPPSDL` — MULTICORE=ON ✅ (no regression)
 **Build Android `normalRelease`:** ✅ (APK: 53MB, optimized `-O2`)
