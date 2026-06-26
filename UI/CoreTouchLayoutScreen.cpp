@@ -151,6 +151,11 @@ public:
 	bool portrait_ = false;
 };
 
+// [PPSSPP-FORK] MultiCore: clamp point to bounds (matching PSP ClampTo)
+static Point2D ClampPointTo(const Point2D &p, const Bounds &b) {
+	return Point2D(std::clamp(p.x, b.x, b.x + b.w), std::clamp(p.y, b.y, b.y + b.h));
+}
+
 bool CoreLayoutView::Touch(const TouchInput &touch) {
 	using namespace UI;
 
@@ -219,11 +224,6 @@ CoreDragDropBase *CoreLayoutView::GetPickedControl(float x, float y) {
 	}
 	return best;
 }
-
-// [PPSSPP-FORK] MultiCore: clamp point to bounds (matching PSP ClampTo)
-static Point2D ClampPointTo(const Point2D &p, const Bounds &b) {
-	return Point2D(std::clamp(p.x, b.x, b.x + b.w), std::clamp(p.y, b.y, b.y + b.h));
-};
 
 void CoreLayoutView::Draw(UIContext &dc) {
 	using namespace UI;
