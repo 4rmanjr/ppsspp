@@ -95,7 +95,7 @@ void LoadTouchConfig(Type coreType) {
 	const char *sectionName = GetTouchConfigSection(coreType, false);
 	const Section *sec = ini.GetSection(sectionName);
 	if (sec) {
-		// [PPSSPP-FORK] Parse into a temporary first to protect defaults
+		// [PPSSPP-FORK] MultiCore: Parse into temporary first to protect defaults
 		// from empty/corrupt INI sections (e.g., crash between Clear() and Save()).
 		CoreTouchConfig parsed;
 		int parsedCount = 0;

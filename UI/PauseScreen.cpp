@@ -735,6 +735,7 @@ void GamePauseScreen::CreateViews() {
 		createGameConfig->SetEnabled(!bootPending_);
 	}
 
+	// [PPSSPP-FORK] MultiCore: GBA-specific pause menu button (GBA Settings)
 	if (g_gbaModeActive) {
 		rightColumnItems->Add(new Choice(pa->T("GBA Settings"), ImageID("I_GEAR")))->OnClick.Handle(this, &GamePauseScreen::OnGBASettings);
 	}
@@ -750,6 +751,7 @@ void GamePauseScreen::CreateViews() {
 	});
 	if (g_Config.bShowTouchControls) {
 		rightColumnItems->Add(new Choice(co->T("Edit touch control layout"), ImageID("I_CONTROLLER")))->OnClick.Add([this](UI::EventParams &) -> void {
+			// [PPSSPP-FORK] MultiCore: GBA uses CoreTouchLayoutScreen instead of PSP TouchControlLayoutScreen
 			if (g_gbaModeActive) {
 				screenManager()->push(new CoreTouchLayoutScreen(gamePath_, EmuCore::Type::GBA));
 			} else
@@ -876,6 +878,7 @@ void GamePauseScreen::OnGameSettings(UI::EventParams &e) {
 	screenManager()->push(new GameSettingsScreen(gamePath_));
 }
 
+	// [PPSSPP-FORK] MultiCore: GBA settings entry point implementation
 void GamePauseScreen::OnGBASettings(UI::EventParams &e) {
 	screenManager()->push(new GBASettingsScreen(gamePath_));
 }

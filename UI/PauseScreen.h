@@ -55,6 +55,7 @@ private:
 	void CreateSavestateControls(UI::LinearLayout *viewGroup, UI::LinearLayout **extraRow);
 
 	void OnGameSettings(UI::EventParams &e);
+	// [PPSSPP-FORK] MultiCore: GBA settings entry point
 	void OnGBASettings(UI::EventParams &e);
 	void OnExit(UI::EventParams &e);
 	void OnReportFeedback(UI::EventParams &e);

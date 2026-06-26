@@ -85,7 +85,7 @@ private:
 	ImageID bgImg_;
 };
 
-// [PPSSPP-FORK] Individual CoreDragDrop for ALL buttons in preview (no grouping).
+// [PPSSPP-FORK] MultiCore: All buttons individual CoreDragDrop in preview
 // Grouped controls (GBADPadGroup/GBAActionGroup) dihapus — custom Draw()
 // tidak konsisten dengan game screen. Semua tombol pakai CoreDragDrop.
 // Jangan hapus, jangan ubah kode upstream.
@@ -208,7 +208,7 @@ void CoreLayoutView::Draw(UIContext &dc) {
 	using namespace UI;
 	dc.FillRect(Drawable(0x80000000), bounds_);
 	AnchorLayout::Draw(dc);
-	// [PPSSPP-FORK] Draw grid on top of buttons (matching PSP SnapGrid z-order)
+	// [PPSSPP-FORK] MultiCore: Draw grid on top of buttons (matching PSP SnapGrid z-order)
 	DrawCoreSnapGrid(dc, bounds_, 0x3FFFFFFF);
 }
 
@@ -231,7 +231,7 @@ void CoreLayoutView::CreateViews() {
 
 	auto &cfg = EmuCore::GetTouchConfigMutable(coreType_, portrait_);
 
-	// [PPSSPP-FORK] Create ALL visible buttons as individual CoreDragDrop.
+	// [PPSSPP-FORK] MultiCore: Create all visible buttons as individual CoreDragDrop
 	// Using individual controls (not GBADPadGroup/GBAActionGroup groups) because
 	// custom grouped renderers may not work on all devices. Individual controls
 	// match the game screen (EmuScreen::AddGBATouchButtons) exactly.

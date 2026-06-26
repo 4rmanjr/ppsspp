@@ -1,4 +1,6 @@
-// [PPSSPP-FORK] Minimal test: verify GBACore loads and runs a ROM
+// [PPSSPP-FORK] MultiCore: Minimal test — verify GBACore loads and runs a ROM
+// Jangan hapus, jangan ubah kode upstream.
+
 #include "EmuCore/GBACore.h"
 #include <cstdio>
 #include <cstdlib>
