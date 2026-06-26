@@ -1,8 +1,8 @@
 # GBA Support — Progress Report
 
-**Date:** 2026-06-25
+**Date:** 2026-06-26
 **Branch:** `feature/lan-sync`
-**Last commit:** `02fa70f90c` — Merge upstream/master (14 commits) into feature/lan-sync. Resolved ProcessVKey conflict (input refactoring #21857). Per AGENTS.md: upstream wins, fork adapted.
+**Last commit:** `325284e` — fix(compliance): standardize [PPSSPP-FORK] markers per AGENTS.md + code-standards.md
 **Uncommitted work:** — (modified: `UI/EmuScreen.cpp`, `CMakeLists.txt`, `docs/progress-gba-support.md`; new: `EmuCore/GBASpeedControl.h`, `unittest/TestGBASpeedControl.cpp`)
 **Build Linux SDL:** `build-final/PPSSPPSDL` — MULTICORE=ON ✅ (no regression)
 **Build Android `normalRelease`:** ✅ (APK: 53MB, optimized `-O2`)
@@ -318,7 +318,9 @@ otomatis iterasi registry — tidak perlu edit lagi.
 | **Pause menu editor redirect** | ✅ **SELESAI** | Pause → Edit touch control layout sekarang buka CoreTouchLayoutScreen(GBA) bukan PSP |
 | **GBA root_ cleanup** | 🟢 Low | `CreateViews()` GBA path tambah DevMenu + Resume buttons yang seharusnya hanya muncul di pause. `children=15` — idealnya 10 touch buttons + overlay saat pause |
 | **Editor preview button size (tiny dots)** | ✅ **FIXED** | `GBADragDrop::Draw()` pakai `scale_ = btn_.w * g_layoutScale` — `btn_.w` adalah normalized width (0.09), BUKAN image scale factor. Akibat: `scale_ ≈ 0.072` → render 7px (titik). Fix: `GetContentDimensions()` override + formula `(btn_.w × screenBounds_.w) / image->w` → render 87px ✅. Resize range [0.3, 1.5] → [0.03, 0.30] untuk normalized width semantics. |
-| **Editor preview buttons hide** | 🟡 **BUG** | Tombol di preview `CoreTouchLayoutScreen` tiba-tiba hilang — kemungkinan `LoadTouchConfig()` `cfg.Clear()` hapus default saat INI section ada tapi kosong/korup. Workaround: Reset di editor. Perlu debug: cocokkan `cfg.count` dengan semestinya. |
+| **Editor preview grouped controls not rendering** | ✅ **FIXED (6353e7a)** | `GBADPadGroup` dan `GBAActionGroup` punya custom `Draw()` yang mungkin gagal di beberapa device Android. Fix: hapus grouped controls — semua 10 tombol jadi individual `CoreDragDrop`, sama persis dengan game screen (`EmuScreen::AddGBATouchButtons`). |
+| **Editor preview buttons hide (LoadTouchConfig)** | ✅ **FIXED (5678699)** | Bug #1: `LoadTouchConfig()` `cfg.Clear()` hapus default saat INI section kosong/korup. Fix: parse ke temporary `CoreTouchConfig` dulu. Bug #2: `HasCreatedViews()` pakai `controls_.empty()` → infinite loop jika semua tombol di-hide. Fix: dedicated `bool created_` flag. |
+| **Customize popup arrow icons** | ✅ **FIXED (b0bdc0b)** | Popup `CoreTouchVisibilityPopup` pakai `I_ARROW` (generic) untuk semua arah D-pad. Fix: `I_ARROW_UP/DOWN/LEFT/RIGHT` — konsisten dengan editor preview dan game screen. |
 | **Editor grid lines (Garis Pinggir)** | ✅ **FIXED (ulang)** | Fix sebelumnya (051b76d, `vLine`/`hLine` di `GBALayoutView::Draw()`) rusak saat `GBASnapGrid` class dibuat ulang sebagai child View — `GetContentDimensions()` return (10,10) default. Fix: `DrawCoreSnapGrid()` static function dipanggil langsung dari `CoreLayoutView::Draw()` SETELAH children (PSP SnapGrid z-order). Formula grid identik PSP. |
 
 ### 🔴 Compliance Debt: LAN Sync
