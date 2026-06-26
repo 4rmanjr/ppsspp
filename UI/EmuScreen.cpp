@@ -1381,10 +1381,10 @@ void EmuScreen::AddGBATouchButtons(const Bounds &bounds, DeviceOrientation orien
 			case CTRL_SELECT:    icon = ImageID("I_SELECT");  bgImg = rectImg;  break;
 			case CTRL_LTRIGGER:  icon = ImageID("I_L");      bgImg = shoulderImg;  break;
 			case CTRL_RTRIGGER:  icon = ImageID("I_R");      bgImg = shoulderImg;  break;
-			case CTRL_UP:        icon = ImageID("I_ARROW");   break;
-			case CTRL_DOWN:      icon = ImageID("I_ARROW");   break;
-			case CTRL_LEFT:      icon = ImageID("I_ARROW");   break;
-			case CTRL_RIGHT:     icon = ImageID("I_ARROW");   break;
+			case CTRL_UP:        icon = ImageID("I_ARROW_UP");    break;
+			case CTRL_DOWN:      icon = ImageID("I_ARROW_DOWN");  break;
+			case CTRL_LEFT:      icon = ImageID("I_ARROW_LEFT");  break;
+			case CTRL_RIGHT:     icon = ImageID("I_ARROW_RIGHT"); break;
 			default:             icon = ImageID("I_CROSS");   break;
 		}
 		float cx = btn.x * bounds.w;
@@ -1398,7 +1398,7 @@ void EmuScreen::AddGBATouchButtons(const Bounds &bounds, DeviceOrientation orien
 				bgScale = (btn.w * bounds.w) / (float)atlasImg->w;
 			}
 		}
-		root_->Add(new PSPButton(
+		auto *pspBtn = new PSPButton(
 			btn.keyCode,
 			std::string("GBA_") + btn.label,
 			bgImg,
@@ -1406,7 +1406,10 @@ void EmuScreen::AddGBATouchButtons(const Bounds &bounds, DeviceOrientation orien
 			icon,
 			bgScale,
 			new AnchorLayoutParams(cx, cy, UI::NONE, UI::NONE, Centering::Both)
-		));
+		);
+		// [PPSSPP-FORK] PSP parity: flip R trigger horizontally (matching PSP TouchControlLayoutScreen)
+		if (btn.keyCode == CTRL_RTRIGGER) pspBtn->FlipImageH(true);
+		root_->Add(pspBtn);
 	}
 }
 
@@ -1556,6 +1559,7 @@ void EmuScreen::UpdateGBA() {
 							NOTICE_LOG(Log::System, "[GBA] SDL audio: pushed=%zu queued=%d", stereoPairs, queued);
 						}
 					}
+#endif
 				}
 			} else {
 				gba->ClearAudio();
@@ -1615,9 +1619,6 @@ ScreenRenderFlags EmuScreen::RenderGBA(ScreenRenderFlags screenRenderFlags) {
 	renderUI();
 	return screenRenderFlags;
 }
-
-// [PPSSPP-FORK] MultiCore: GBA save state moved to GBACore::SaveStateToFile / LoadStateFromFile
-#endif
 
 void EmuScreen::CreateViews() {
 	using namespace UI;

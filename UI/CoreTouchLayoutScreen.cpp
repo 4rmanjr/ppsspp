@@ -550,10 +550,10 @@ public:
 			case CTRL_START:     label = "Start";  icon = ImageID("I_START");  break;
 			case CTRL_LTRIGGER:  label = "L";      icon = ImageID("I_L");      break;
 			case CTRL_RTRIGGER:  label = "R";      icon = ImageID("I_R");      break;
-			case CTRL_UP:        label = "D-Pad Up";   icon = ImageID("I_ARROW"); break;
-			case CTRL_DOWN:      label = "D-Pad Down";  icon = ImageID("I_ARROW"); break;
-			case CTRL_LEFT:      label = "D-Pad Left";  icon = ImageID("I_ARROW"); break;
-			case CTRL_RIGHT:     label = "D-Pad Right"; icon = ImageID("I_ARROW"); break;
+			case CTRL_UP:        label = "D-Pad Up";   icon = ImageID("I_ARROW_UP"); break;
+			case CTRL_DOWN:      label = "D-Pad Down";  icon = ImageID("I_ARROW_DOWN"); break;
+			case CTRL_LEFT:      label = "D-Pad Left";  icon = ImageID("I_ARROW_LEFT"); break;
+			case CTRL_RIGHT:     label = "D-Pad Right"; icon = ImageID("I_ARROW_RIGHT"); break;
 			}
 			if (!label) continue;
 			toggles.push_back({label, icon, &btn.visible});
