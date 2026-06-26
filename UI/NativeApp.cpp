@@ -127,10 +127,8 @@
 #include "UI/DiscordIntegration.h"
 #include "UI/EmuScreen.h"
 
-#ifdef PPSSPP_MULTICORE
 #include "EmuCore/EmuCore.h"
 #include "EmuCore/RecentFilesRegistry.h"
-#endif
 
 #include "UI/GameInfoCache.h"
 #include "UI/GameSettingsScreen.h"
@@ -418,7 +416,6 @@ void NativeInit(int argc, const char *argv[], const char *savegame_dir, const ch
 
 	g_recentFiles.EnsureThread();
 
-#ifdef PPSSPP_MULTICORE
 	// [PPSSPP-FORK] MultiCore: ensure GBA recent file processing thread
 	g_recentFilesGBA.EnsureThread();
 
@@ -454,7 +451,6 @@ void NativeInit(int argc, const char *argv[], const char *savegame_dir, const ch
 			".gba:.gb:.gbc",
 		});
 	}
-#endif
 
 	// Make sure UI state is MENU.
 	ResetUIState();
@@ -864,7 +860,6 @@ void NativeInit(int argc, const char *argv[], const char *savegame_dir, const ch
 	} else if (skipLogo && !boot_filename.empty()) {
 		NOTICE_LOG(Log::System, "[BOOT] skipLogo=true, launching EmuScreen for: %s", boot_filename.c_str());
 		INFO_LOG(Log::System, "Launching EmuScreen with boot filename '%s'", boot_filename.c_str());
-#ifdef PPSSPP_MULTICORE
 		// [PPSSPP-FORK] MultiCore: detect file type for GBA auto-boot
 		EmuCore::Type bootCoreType = EmuCore::DetectType(boot_filename);
 		NOTICE_LOG(Log::System, "[BOOT] Detected core type: %s", bootCoreType == EmuCore::Type::GBA ? "GBA" : "PSP");
@@ -877,11 +872,6 @@ void NativeInit(int argc, const char *argv[], const char *savegame_dir, const ch
 			g_screenManager->switchScreen(new EmuScreen(boot_filename));
 			NOTICE_LOG(Log::System, "[BOOT] EmuScreen (PSP) created OK");
 		}
-#else
-		NOTICE_LOG(Log::System, "[BOOT] Creating EmuScreen (PSP only)...");
-		g_screenManager->switchScreen(new EmuScreen(boot_filename));
-		NOTICE_LOG(Log::System, "[BOOT] EmuScreen created OK");
-#endif
 	} else {
 		g_screenManager->switchScreen(new LogoScreen(AfterLogoScreen::DEFAULT));
 	}

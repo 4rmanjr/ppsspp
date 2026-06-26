@@ -71,11 +71,9 @@
 #include "UI/TouchControlLayoutScreen.h"
 #include "UI/BackgroundAudio.h"
 
-#ifdef PPSSPP_MULTICORE
 #include "EmuCore/GBACore.h"
 #include "GBASettingsScreen.h"
 #include "CoreTouchLayoutScreen.h"
-#endif
 #include "UI/MiscViews.h"
 #include "UI/AdhocServerScreen.h"
 
@@ -161,7 +159,6 @@ private:
 void ScreenshotViewScreen::OnSaveState(UI::EventParams &e) {
 	if (!NetworkWarnUserIfOnlineAndCantSavestate()) {
 		g_Config.iCurrentStateSlot = slot_;
-#ifdef PPSSPP_MULTICORE
 		// [PPSSPP-FORK] MultiCore: GBA uses direct file save via GBACore
 		if (g_gbaModeActive && g_activeCore) {
 			EmuCore::GBACore *gba = static_cast<EmuCore::GBACore *>(g_activeCore);
@@ -174,7 +171,6 @@ void ScreenshotViewScreen::OnSaveState(UI::EventParams &e) {
 			TriggerFinish(DR_OK);
 			return;
 		}
-#endif
 		SaveState::SaveSlot(saveStatePrefix_, slot_, &ShowMessageAfterSaveStateAction);
 		TriggerFinish(DR_OK); //OK will close the pause screen as well
 	}
@@ -183,7 +179,6 @@ void ScreenshotViewScreen::OnSaveState(UI::EventParams &e) {
 void ScreenshotViewScreen::OnLoadState(UI::EventParams &e) {
 	if (!NetworkWarnUserIfOnlineAndCantSavestate()) {
 		g_Config.iCurrentStateSlot = slot_;
-#ifdef PPSSPP_MULTICORE
 		// [PPSSPP-FORK] MultiCore: GBA uses direct file load via GBACore
 		if (g_gbaModeActive && g_activeCore) {
 			EmuCore::GBACore *gba = static_cast<EmuCore::GBACore *>(g_activeCore);
@@ -196,7 +191,6 @@ void ScreenshotViewScreen::OnLoadState(UI::EventParams &e) {
 			TriggerFinish(DR_OK);
 			return;
 		}
-#endif
 		if (g_Config.bConfirmLoadState) {
 			screenManager()->push(new LoadStateConfirmScreen(saveStatePrefix_, slot_, [this](bool result) {
 				if (result) {
@@ -349,7 +343,6 @@ void SaveSlotView::Draw(UIContext &dc) {
 void SaveSlotView::OnLoadState(UI::EventParams &e) {
 	if (!NetworkWarnUserIfOnlineAndCantSavestate()) {
 		g_Config.iCurrentStateSlot = slot_;
-#ifdef PPSSPP_MULTICORE
 		// [PPSSPP-FORK] MultiCore: GBA uses direct file load via GBACore
 		if (g_gbaModeActive && g_activeCore) {
 			EmuCore::GBACore *gba = static_cast<EmuCore::GBACore *>(g_activeCore);
@@ -363,7 +356,6 @@ void SaveSlotView::OnLoadState(UI::EventParams &e) {
 			OnStateLoaded.Trigger(e2);
 			return;
 		}
-#endif
 		UI::EventParams e2{};
 		e2.v = this;
 		OnLoadRequested.Trigger(e2);
@@ -373,7 +365,6 @@ void SaveSlotView::OnLoadState(UI::EventParams &e) {
 void SaveSlotView::OnSaveState(UI::EventParams &e) {
 	if (!NetworkWarnUserIfOnlineAndCantSavestate()) {
 		g_Config.iCurrentStateSlot = slot_;
-#ifdef PPSSPP_MULTICORE
 		// [PPSSPP-FORK] MultiCore: GBA uses direct file save via GBACore
 		if (g_gbaModeActive && g_activeCore) {
 			EmuCore::GBACore *gba = static_cast<EmuCore::GBACore *>(g_activeCore);
@@ -387,7 +378,6 @@ void SaveSlotView::OnSaveState(UI::EventParams &e) {
 			OnStateSaved.Trigger(e2);
 			return;
 		}
-#endif
 		SaveState::SaveSlot(saveStatePrefix_, slot_, &ShowMessageAfterSaveStateAction);
 		UI::EventParams e2{};
 		e2.v = this;
@@ -433,12 +423,10 @@ GamePauseScreen::GamePauseScreen(const Path &filename, bool bootPending)
 	// So we can tell if something blew up while on the pause screen.
 	std::string assertStr = "PauseScreen: " + filename.GetFilename();
 	SetExtraAssertInfo(assertStr.c_str());
-#ifdef PPSSPP_MULTICORE
 	// [PPSSPP-FORK] MultiCore: GBA uses GBACore save prefix instead of PSP
 	if (g_gbaModeActive) {
 		saveStatePrefix_ = g_gbaSavePrefix;
 	} else
-#endif
 	saveStatePrefix_ = SaveState::GetGamePrefix(g_paramSFO);
 	SaveState::Rescan(saveStatePrefix_);
 	g_controlMapper.AddListener(this);
@@ -747,11 +735,9 @@ void GamePauseScreen::CreateViews() {
 		createGameConfig->SetEnabled(!bootPending_);
 	}
 
-#ifdef PPSSPP_MULTICORE
 	if (g_gbaModeActive) {
 		rightColumnItems->Add(new Choice(pa->T("GBA Settings"), ImageID("I_GEAR")))->OnClick.Handle(this, &GamePauseScreen::OnGBASettings);
 	}
-#endif
 
 	if (g_Config.bAchievementsEnable && Achievements::HasAchievementsOrLeaderboards()) {
 		rightColumnItems->Add(new Choice(ac->T("Achievements"), ImageID("I_ACHIEVEMENT")))->OnClick.Add([this](UI::EventParams &e) {
@@ -764,11 +750,9 @@ void GamePauseScreen::CreateViews() {
 	});
 	if (g_Config.bShowTouchControls) {
 		rightColumnItems->Add(new Choice(co->T("Edit touch control layout"), ImageID("I_CONTROLLER")))->OnClick.Add([this](UI::EventParams &) -> void {
-#ifdef PPSSPP_MULTICORE
 			if (g_gbaModeActive) {
 				screenManager()->push(new CoreTouchLayoutScreen(gamePath_, EmuCore::Type::GBA));
 			} else
-#endif
 			{
 				screenManager()->push(new TouchControlLayoutScreen(gamePath_));
 			}
@@ -892,11 +876,9 @@ void GamePauseScreen::OnGameSettings(UI::EventParams &e) {
 	screenManager()->push(new GameSettingsScreen(gamePath_));
 }
 
-#ifdef PPSSPP_MULTICORE
 void GamePauseScreen::OnGBASettings(UI::EventParams &e) {
 	screenManager()->push(new GBASettingsScreen(gamePath_));
 }
-#endif
 
 void GamePauseScreen::OnState(UI::EventParams &e) {
 	TriggerFinish(DR_CANCEL);

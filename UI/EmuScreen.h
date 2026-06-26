@@ -32,10 +32,8 @@
 
 struct AxisInput;
 
-#ifdef PPSSPP_MULTICORE
 #include <memory>
 #include "EmuCore/EmuCore.h"
-#endif
 
 #include "Common/GPU/thin3d.h"
 
@@ -47,12 +45,8 @@ struct ImGuiContext;
 
 class EmuScreen : public UIScreen, protected ControlListener {
 public:
-#ifdef PPSSPP_MULTICORE
 	// [PPSSPP-FORK] MultiCore: optional core type parameter
 	EmuScreen(const Path &filename, EmuCore::Type coreType = EmuCore::Type::PSP);
-#else
-	EmuScreen(const Path &filename);
-#endif
 	~EmuScreen();
 
 	const char *tag() const override { return "Emu"; }
@@ -78,15 +72,11 @@ public:
 	}
 
 	// [PPSSPP-FORK] MultiCore: helpers to reduce #ifdef clutter at call sites
-#ifdef PPSSPP_MULTICORE
 	bool IsGBA() const { return coreType_ != EmuCore::Type::PSP; }
 	void InitGBA(const Path &filename);
 	void ShutdownGBA();
 	void UpdateGBA();
 	ScreenRenderFlags RenderGBA(ScreenRenderFlags screenRenderFlags);
-#else
-	static constexpr bool IsGBA() { return false; }
-#endif
 
 protected:
 	void darken();
@@ -180,9 +170,7 @@ private:
 	std::vector<std::pair<VirtKey, bool>> queuedVirtKeys_;
 
 	// [PPSSPP-FORK] MultiCore: accumulated GBA VIRTKEY state (independent of PSP buttons)
-#ifdef PPSSPP_MULTICORE
 	uint32_t gbaVirtKeys_ = 0;
-#endif
 
 	ImGuiContext *ctx_ = nullptr;
 
@@ -196,7 +184,6 @@ private:
 
 	uint32_t clearColor_ = 0;
 
-#ifdef PPSSPP_MULTICORE
 	// [PPSSPP-FORK] MultiCore: multi-emulator members
 	EmuCore::Type coreType_ = EmuCore::Type::PSP;
 	std::unique_ptr<EmuCore::Core> activeCore_;
@@ -204,15 +191,12 @@ private:
 	void CreateSystemTouchButtons(UI::ViewGroup *parent, const Bounds &bounds, DeviceOrientation orientation);
 
 	// [PPSSPP-FORK] MultiCore: GBA rendering + save state moved to GBACore
-#endif
 };
 
 bool MustRunBehind();
 bool ShouldRunBehind();
 
-#ifdef PPSSPP_MULTICORE
 // [PPSSPP-FORK] MultiCore: GBA mode globals for cross-screen access (pause menu save/load)
 extern bool g_gbaModeActive;
 extern EmuCore::Core *g_activeCore;
 extern std::string g_gbaSavePrefix;
-#endif

@@ -4,7 +4,6 @@
 
 #include "EmuCore/GBACore.h"
 
-#ifdef PPSSPP_MULTICORE
 
 #include <cstring>
 #include <cstdlib>
@@ -870,4 +869,3 @@ void GBACore::GetGameInfo(std::string &title, std::string &id) const {
 
 }  // namespace EmuCore
 
-#endif  // PPSSPP_MULTICORE

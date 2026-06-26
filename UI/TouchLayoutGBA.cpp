@@ -3,7 +3,6 @@
 
 #include "UI/TouchLayoutGBA.h"
 
-#ifdef PPSSPP_MULTICORE
 
 #include "Core/HLE/sceCtrl.h"
 
@@ -55,4 +54,3 @@ const std::vector<TouchButton> &GetLayout(bool portrait) {
 
 }  // namespace TouchLayoutGBA
 
-#endif  // PPSSPP_MULTICORE

@@ -97,7 +97,6 @@ extern SDL_AudioStream *GetSDLAudioStream();
 #include "UI/Background.h"
 #include "UI/EmuScreen.h"
 
-#ifdef PPSSPP_MULTICORE
 #include "EmuCore/EmuCore.h"
 #include "EmuCore/GBACore.h"
 #include "EmuCore/GBASpeedControl.h"
@@ -105,7 +104,6 @@ extern SDL_AudioStream *GetSDLAudioStream();
 #include "Common/System/System.h"
 #include "Core/Util/PathUtil.h"
 #include "UI/TouchLayoutGBA.h"
-#endif
 
 #include "UI/DevScreens.h"
 #include "UI/GameInfoCache.h"
@@ -135,12 +133,10 @@ static AVIDump avi;
 
 extern bool g_TakeScreenshot;
 
-#ifdef PPSSPP_MULTICORE
 // [PPSSPP-FORK] MultiCore: GBA mode globals for cross-screen access (pause menu save/load)
 bool g_gbaModeActive = false;
 EmuCore::Core *g_activeCore = nullptr;
 std::string g_gbaSavePrefix;
-#endif
 
 static void AssertCancelCallback(const char *message, void *userdata) {
 	NOTICE_LOG(Log::CPU, "Broke after assert: %s", message);
@@ -195,19 +191,13 @@ void EmuScreen::SetPSPAnalog(int iInternalScreenRotation, int stick, float x, fl
 }
 
 EmuScreen::EmuScreen(const Path &filename
-#ifdef PPSSPP_MULTICORE
 	, EmuCore::Type coreType
-#endif
 	)
 	: gamePath_(filename)
-#ifdef PPSSPP_MULTICORE
 	, coreType_(coreType)
-#endif
 {
 	// [PPSSPP-FORK] MultiCore: initialize GBA core if needed
-#ifdef PPSSPP_MULTICORE
 	InitGBA(filename);
-#endif
 	saveStateSlot_ = SaveState::GetCurrentSlot();
 	g_controlMapper.AddListener(this);
 
@@ -493,9 +483,7 @@ void EmuScreen::bootComplete() {
 
 EmuScreen::~EmuScreen() {
 	// [PPSSPP-FORK] MultiCore: cleanup GBA resources
-#ifdef PPSSPP_MULTICORE
 	ShutdownGBA();
-#endif
 
 	g_controlMapper.RemoveListener(this);
 
@@ -824,7 +812,6 @@ void EmuScreen::ProcessVKey(VirtKey virtKey, bool down) {
 	auto sc = GetI18NCategory(I18NCat::SCREEN);
 
 	// [PPSSPP-FORK] MultiCore: accumulate GBA VIRTKEY state
-#ifdef PPSSPP_MULTICORE
 	if (virtKey >= VIRTKEY_GBA_FIRST && virtKey <= VIRTKEY_GBA_RIGHT) {
 		if (down) {
 			gbaVirtKeys_ |= (1u << (virtKey - VIRTKEY_GBA_FIRST));
@@ -833,7 +820,6 @@ void EmuScreen::ProcessVKey(VirtKey virtKey, bool down) {
 		}
 		return;
 	}
-#endif
 
 	switch (virtKey) {
 	case VIRTKEY_PAUSE:
@@ -1267,14 +1253,12 @@ bool EmuScreen::key(const KeyInput &key) {
 	}
 
 	if (!retval && (key.flags & KeyInputFlags::DOWN) != 0 && UI::IsEscapeKey(key)) {
-#ifdef PPSSPP_MULTICORE
 		// [PPSSPP-FORK] MultiCore: GBA ESC → direct pause trigger
 		if (IsGBA()) {
 			NOTICE_LOG(Log::System, "[GBA] ESC pressed — direct pause trigger");
 			pauseTrigger_ = true;
 			return true;
 		}
-#endif
 		if (chatMenu_)
 			chatMenu_->Close();
 		if (chatButton_)
@@ -1283,7 +1267,6 @@ bool EmuScreen::key(const KeyInput &key) {
 		return true;
 	}
 
-#ifdef PPSSPP_MULTICORE
 	// [PPSSPP-FORK] MultiCore: GBA direct save/load (F1=save, F3=load)
 	if (IsGBA() && (key.flags & KeyInputFlags::DOWN)) {
 		if (key.keyCode == NKCODE_F1) {
@@ -1309,7 +1292,6 @@ bool EmuScreen::key(const KeyInput &key) {
 			return true;
 		}
 	}
-#endif
 
 	return retval;
 }
@@ -1375,7 +1357,6 @@ static UI::AnchorLayoutParams *AnchorInCorner(const Bounds &bounds, int corner, 
 	}
 }
 
-#ifdef PPSSPP_MULTICORE
 // [PPSSPP-FORK] MultiCore: Add GBA-specific touch buttons to root_
 void EmuScreen::AddGBATouchButtons(const Bounds &bounds, DeviceOrientation orientation) {
 	using namespace UI;
@@ -1575,18 +1556,6 @@ void EmuScreen::UpdateGBA() {
 							NOTICE_LOG(Log::System, "[GBA] SDL audio: pushed=%zu queued=%d", stereoPairs, queued);
 						}
 					}
-#else
-					// Android: route through PPSSPP mixer (OpenSL/AAudio picks it up)
-					{
-						int32_t mixedBuf[GBA_AUDIO_BUF_SIZE * 2];
-						size_t mixedPairs = stereoPairs > GBA_AUDIO_BUF_SIZE ? GBA_AUDIO_BUF_SIZE : stereoPairs;
-						for (size_t i = 0; i < mixedPairs; i++) {
-							mixedBuf[i * 2] = (int32_t)audio16[i * 2];
-							mixedBuf[i * 2 + 1] = (int32_t)audio16[i * 2 + 1];
-						}
-						System_AudioPushSamples(mixedBuf, (int)mixedPairs, 1.0f);
-					}
-#endif
 				}
 			} else {
 				gba->ClearAudio();
@@ -1600,12 +1569,10 @@ void EmuScreen::UpdateGBA() {
 			NOTICE_LOG(Log::System, "[GBA] Input frame %d: pspButtons=0x%04X, gbaVirtKeys=0x%04X", inputDebug, pspButtons, gbaVirtKeys_);
 		}
 		// [PPSSPP-FORK] MultiCore: merge PSP buttons with GBA VIRTKEY bits
-#ifdef PPSSPP_MULTICORE
 		if (gbaVirtKeys_) {
 			EmuCore::GBACore *gba = static_cast<EmuCore::GBACore *>(activeCore_.get());
 			gba->SetKeys(pspButtons, gbaVirtKeys_);
 		} else
-#endif
 			activeCore_->SetKeys(pspButtons);
 	}
 
@@ -1667,7 +1634,6 @@ void EmuScreen::CreateViews() {
 
 	InitPadLayout(&touch, deviceOrientation, bounds.w, bounds.h);
 
-#ifdef PPSSPP_MULTICORE
 	// [PPSSPP-FORK] MultiCore: multi-core layout dispatch via switch (not binary routing)
 	switch (coreType_) {
 	case EmuCore::Type::PSP:
@@ -1690,9 +1656,6 @@ void EmuScreen::CreateViews() {
 	if (coreType_ != EmuCore::Type::PSP && g_Config.bShowTouchControls) {
 		CreateSystemTouchButtons(root_, bounds, deviceOrientation);
 	}
-#else
-	root_ = CreatePadLayout(touch, bounds.w, bounds.h, &pauseTrigger_, &g_controlMapper);
-#endif
 	if (g_Config.bShowDeveloperMenu) {
 		root_->Add(new Button(dev->T("DevMenu")))->OnClick.Handle(this, &EmuScreen::OnDevTools);
 	}
@@ -1808,9 +1771,7 @@ void EmuScreen::deviceLost() {
 	}
 
 	// [PPSSPP-FORK] MultiCore: release GBA GPU resources before draw context is destroyed
-#ifdef PPSSPP_MULTICORE
 	if (IsGBA() && activeCore_) activeCore_->DeviceLost();
-#endif
 
 	UIScreen::deviceLost();
 
@@ -1826,9 +1787,7 @@ void EmuScreen::deviceRestored(Draw::DrawContext *draw) {
 	UIScreen::deviceRestored(draw);
 
 	// [PPSSPP-FORK] MultiCore: GBA resources recreated lazily on next Render() call
-#ifdef PPSSPP_MULTICORE
 	if (IsGBA() && activeCore_) activeCore_->DeviceRestored(draw);
-#endif
 	if (imguiInited_) {
 		ImGui_ImplThin3d_CreateDeviceObjects(draw);
 	}
@@ -1872,7 +1831,6 @@ void EmuScreen::update() {
 	using namespace UI;
 
 	// [PPSSPP-FORK] MultiCore: GBA emulation path
-#ifdef PPSSPP_MULTICORE
 	if (IsGBA() && activeCore_) {
 		// For GBA, coreState stays at CORE_POWERDOWN (PSP never inits),
 		// so GamepadUpdateOpacity() without force would set opacity=0.
@@ -1882,7 +1840,6 @@ void EmuScreen::update() {
 		UpdateGBA();
 		return;
 	}
-#endif
 
 	// This is where views are recreated.
 	UIScreen::update();
@@ -2128,11 +2085,9 @@ ScreenRenderFlags EmuScreen::render(ScreenRenderMode mode) {
 		// It's possible this might be set outside PSP_RunLoopFor().
 		// In this case, we need to double check it here.
 		// [PPSSPP-FORK] MultiCore: GBA mode — draw video before UI
-#ifdef PPSSPP_MULTICORE
 		if (IsGBA()) {
 			return RenderGBA(screenRenderFlags);
 		}
-#endif
 		if (mode & ScreenRenderMode::TOP) {
 			checkPowerDown();
 		}
@@ -2143,11 +2098,9 @@ ScreenRenderFlags EmuScreen::render(ScreenRenderMode mode) {
 	}
 
 	// [PPSSPP-FORK] MultiCore: GBA rendering path — redundant safety (should be caught above)
-#ifdef PPSSPP_MULTICORE
 	if (IsGBA()) {
 		return RenderGBA(screenRenderFlags);
 	}
-#endif
 
 	if (skipBufferEffects_) {
 		// In skip buffer effects mode, we run emulation *after* the backbuffer bind.

@@ -48,9 +48,7 @@
 #include "Common/Data/Text/I18n.h"
 
 // [PPSSPP-FORK] MultiCore: recent files registry for extensible grouping
-#ifdef PPSSPP_MULTICORE
 #include "EmuCore/RecentFilesRegistry.h"
-#endif
 #include "Core/Util/DarwinFileSystemServices.h" // For the browser
 
 static void DrawIconWithText(UIContext &dc, ImageID image, std::string_view text, const Bounds &bounds, bool gridStyle, const UI::Style &style) {
@@ -647,13 +645,8 @@ bool GameBrowser::DisplayTopBar() {
 	std::string pathStr = path_.GetPath().ToString();
 
 	// [PPSSPP-FORK] MultiCore: check registry for special paths
-#ifdef PPSSPP_MULTICORE
 	if (EmuCore::RecentFilesRegistry::Get().FindBySpecialPath(pathStr))
 		return false;
-#else
-	if (pathStr == "!RECENT")
-		return false;
-#endif
 	return true;
 }
 
@@ -662,7 +655,6 @@ bool GameBrowser::HasSpecialFiles(std::vector<Path> &filenames) {
 	// Fallback to hardcoded PSP check for non-MULTICORE build and backward compat.
 	std::string pathStr = path_.GetPath().ToString();
 
-#ifdef PPSSPP_MULTICORE
 	{
 		const auto *entry = EmuCore::RecentFilesRegistry::Get().FindBySpecialPath(pathStr);
 		if (entry && entry->manager) {
@@ -675,16 +667,6 @@ bool GameBrowser::HasSpecialFiles(std::vector<Path> &filenames) {
 			return true;
 		}
 	}
-#else
-	// PSP-only fallback (non-MULTICORE build)
-	if (pathStr == "!RECENT") {
-		filenames.clear();
-		for (auto &str : g_recentFiles.GetRecentFiles()) {
-			filenames.emplace_back(str);
-		}
-		return true;
-	}
-#endif
 	return false;
 }
 

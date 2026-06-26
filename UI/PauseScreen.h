@@ -55,9 +55,7 @@ private:
 	void CreateSavestateControls(UI::LinearLayout *viewGroup, UI::LinearLayout **extraRow);
 
 	void OnGameSettings(UI::EventParams &e);
-#ifdef PPSSPP_MULTICORE
 	void OnGBASettings(UI::EventParams &e);
-#endif
 	void OnExit(UI::EventParams &e);
 	void OnReportFeedback(UI::EventParams &e);
 

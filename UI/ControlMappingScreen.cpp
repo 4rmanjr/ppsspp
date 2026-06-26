@@ -39,9 +39,7 @@
 #include "Core/KeyMap.h"
 #include "Core/HLE/sceCtrl.h"
 #include "Core/Config.h"
-#ifdef PPSSPP_MULTICORE
 #include "UI/EmuScreen.h"
-#endif
 #include "UI/ControlMappingScreen.h"
 #include "UI/PopupScreens.h"
 #include "UI/JoystickHistoryView.h"
@@ -227,9 +225,7 @@ static const BindingCategory cats[] = {
 	{"Emulator controls", VIRTKEY_FASTFORWARD},
 	{"Extended PSP controls", VIRTKEY_AXIS_RIGHT_Y_MAX},
 	// [PPSSPP-FORK] MultiCore: GBA-specific controls category
-#ifdef PPSSPP_MULTICORE
 	{"GBA controls", VIRTKEY_GBA_A},
-#endif
 	{},  // sentinel
 };
 
@@ -237,15 +233,11 @@ static const BindingCategory cats[] = {
 void ControlMappingScreen::CreateSettingsViews(UI::ViewGroup *parent) {
 	using namespace UI;
 	auto km = GetI18NCategory(I18NCat::KEYMAPPING);
-#ifdef PPSSPP_MULTICORE
 	if (!g_gbaModeActive) {
-#endif
 		parent->Add(new Choice(km->T("Clear All")))->OnClick.Add([](UI::EventParams &) {
 			KeyMap::ClearAllMappings();
 		});
-#ifdef PPSSPP_MULTICORE
 	}
-#endif
 	parent->Add(new Choice(km->T("Default All")))->OnClick.Add([](UI::EventParams &) {
 		KeyMap::RestoreDefault();
 	});
@@ -255,20 +247,14 @@ void ControlMappingScreen::CreateSettingsViews(UI::ViewGroup *parent) {
 		parent->Add(new Choice(km->T("Autoconfigure")))->OnClick.Handle(this, &ControlMappingScreen::OnAutoConfigure);
 	}
 	parent->Add(new Choice(km->T(
-#ifdef PPSSPP_MULTICORE
 		g_gbaModeActive ? "Show Key Map" :
-#endif
 		"Show PSP")))->OnClick.Add([this](UI::EventParams &params) {
 		screenManager()->push(new VisualMappingScreen(gamePath_));
 	});
-#ifdef PPSSPP_MULTICORE
 	if (!g_gbaModeActive) {
-#endif
 		parent->Add(new CheckBox(&g_Config.bAllowMappingCombos, km->T("Allow combo mappings")));
 		parent->Add(new CheckBox(&g_Config.bStrictComboOrder, km->T("Strict combo input order")));
-#ifdef PPSSPP_MULTICORE
 	}
-#endif
 }
 
 std::string_view ControlMappingScreen::GetTitle() const {
@@ -297,13 +283,11 @@ void ControlMappingScreen::CreateContentViews(UI::ViewGroup *parent) {
 				curSection->SetOpenPtr(&categoryToggles_[curCat]);
 			}
 			curCat++;
-	#ifdef PPSSPP_MULTICORE
 			bool skipCat = g_gbaModeActive && (curCat <= 1 || curCat == 3);
 			if (skipCat) {
 				curSection = nullptr;
 				continue;
 			}
-	#endif
 			curSection = rootLayout->Add(new CollapsibleSection(km->T(cats[curCat].catName)));
 			curSection->SetSpacing(6.0f);
 		}

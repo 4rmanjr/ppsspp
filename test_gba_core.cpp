@@ -22,7 +22,6 @@ int main(int argc, char *argv[]) {
 	printf("ROM path: %s\n", romPath);
 	fflush(stdout);
 
-#ifdef PPSSPP_MULTICORE
 	printf("Creating GBACore...\n");
 	fflush(stdout);
 	EmuCore::GBACore *core = new EmuCore::GBACore();
@@ -83,8 +82,4 @@ int main(int argc, char *argv[]) {
 	delete core;
 	printf("\n=== ALL TESTS PASSED ===\n");
 	return 0;
-#else
-	fprintf(stderr, "PPSSPP_MULTICORE not defined\n");
-	return 1;
-#endif
 }

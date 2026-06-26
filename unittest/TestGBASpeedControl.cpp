@@ -1,7 +1,6 @@
 // [PPSSPP-FORK] TestGBASpeedControl
 // Unit test for GBA speed control logic (EmuCore/GBASpeedControl.h)
 // Jangan hapus, jangan ubah kode upstream.
-#ifdef PPSSPP_MULTICORE
 
 #include "EmuCore/GBASpeedControl.h"
 #include <cstdio>
@@ -249,9 +248,3 @@ int main(int argc, const char *argv[]) {
 	return failed > 0 ? 1 : 0;
 }
 
-#else // !PPSSPP_MULTICORE
-int main(int, const char *[]) {
-	printf("Test skipped: PPSSPP_MULTICORE not defined\n");
-	return 0;
-}
-#endif

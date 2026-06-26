@@ -4,7 +4,6 @@
 
 #pragma once
 
-#ifdef PPSSPP_MULTICORE
 
 #include "EmuCore/EmuCore.h"
 #include "Common/GPU/thin3d.h"
@@ -142,4 +141,3 @@ private:
 
 }  // namespace EmuCore
 
-#endif  // PPSSPP_MULTICORE

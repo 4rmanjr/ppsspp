@@ -5,9 +5,7 @@
 #include "EmuCore/EmuCore.h"
 #include "EmuCore/PSPCore.h"
 
-#ifdef PPSSPP_MULTICORE
 #include "EmuCore/GBACore.h"
-#endif
 
 namespace EmuCore {
 
@@ -19,11 +17,9 @@ Type DetectType(const Path &romPath) {
 			c += 32;
 	}
 
-#ifdef PPSSPP_MULTICORE
 	if (ext == ".gba" || ext == ".gb" || ext == ".gbc") {
 		return Type::GBA;
 	}
-#endif
 
 	// Default: PSP (existing behavior)
 	return Type::PSP;
@@ -33,10 +29,8 @@ std::unique_ptr<Core> Create(const Path &romPath) {
 	Type type = DetectType(romPath);
 
 	switch (type) {
-#ifdef PPSSPP_MULTICORE
 	case Type::GBA:
 		return std::make_unique<GBACore>();
-#endif
 	case Type::PSP:
 	default:
 		return std::make_unique<PSPCore>();

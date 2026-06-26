@@ -2228,12 +2228,9 @@ if((MACOSX OR IOS) AND NOT LIBRETRO)
 endif()
 
 # [PPSSPP-FORK] MultiCore: emulator core abstraction layer
-if(PPSSPP_MULTICORE)
-	# Propagate PPSSPP_MULTICORE globally so ALL targets can use it
-	add_definitions(-DPPSSPP_MULTICORE)
-	# native library (UI/, EmuScreen, CoreTouch) also needs PPSSPP_MULTICORE
-	target_compile_definitions(native PRIVATE PPSSPP_MULTICORE)
-endif()
+# PPSSPP_MULTICORE is always ON — no dual-build path
+add_definitions(-DPPSSPP_MULTICORE)
+target_compile_definitions(native PRIVATE PPSSPP_MULTICORE)
 add_subdirectory(EmuCore)
 
 # 'ppsspp_jni' on ANDROID, 'Core' everywhere else
@@ -2753,7 +2750,7 @@ if(NOT HTTPS_NOT_AVAILABLE)
 endif()
 
 # [PPSSPP-FORK] MultiCore: link EmuCore to Core
-if(PPSSPP_MULTICORE AND TARGET EmuCore)
+if(TARGET EmuCore)
 	target_link_libraries(${CoreLibName} EmuCore)
 	target_compile_definitions(${CoreLibName} PRIVATE PPSSPP_MULTICORE)
 endif()
@@ -3238,28 +3235,25 @@ if(TargetBin)
 	target_link_libraries(${TargetBin} ${LinkCommon} Common)
 
 # [PPSSPP-FORK] MultiCore: enable for main executable
-if(PPSSPP_MULTICORE)
-	target_compile_definitions(${TargetBin} PRIVATE PPSSPP_MULTICORE)
-	set_source_files_properties(
-		UI/EmuScreen.cpp UI/NativeApp.cpp UI/MainScreen.cpp
-		PROPERTIES COMPILE_DEFINITIONS "PPSSPP_MULTICORE"
-	)
-endif()
+# PPSSPP_MULTICORE is always ON
+target_compile_definitions(${TargetBin} PRIVATE PPSSPP_MULTICORE)
+set_source_files_properties(
+	UI/EmuScreen.cpp UI/NativeApp.cpp UI/MainScreen.cpp
+	PROPERTIES COMPILE_DEFINITIONS "PPSSPP_MULTICORE"
+)
 
 # [PPSSPP-FORK] MultiCore: test target for GBA core
 # Test links all libs used by the main binary to resolve all symbols
-if(PPSSPP_MULTICORE)
-	add_executable(test_gba_core EXCLUDE_FROM_ALL test_gba_core.cpp)
-	target_link_libraries(test_gba_core PRIVATE EmuCore ${LinkCommon} Common)
-	target_compile_definitions(test_gba_core PRIVATE PPSSPP_MULTICORE)
-	target_include_directories(test_gba_core PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_executable(test_gba_core EXCLUDE_FROM_ALL test_gba_core.cpp)
+target_link_libraries(test_gba_core PRIVATE EmuCore ${LinkCommon} Common)
+target_compile_definitions(test_gba_core PRIVATE PPSSPP_MULTICORE)
+target_include_directories(test_gba_core PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
-	# [PPSSPP-FORK] GBASpeedControl: unit test for speed control logic (inline functions only, no EmuCore link needed)
-	add_executable(test_gba_speed EXCLUDE_FROM_ALL unittest/TestGBASpeedControl.cpp)
-	target_compile_definitions(test_gba_speed PRIVATE PPSSPP_MULTICORE)
-	target_include_directories(test_gba_speed PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
-	target_link_libraries(test_gba_speed PRIVATE Common)
-endif()
+# [PPSSPP-FORK] GBASpeedControl: unit test for speed control logic (inline functions only, no EmuCore link needed)
+add_executable(test_gba_speed EXCLUDE_FROM_ALL unittest/TestGBASpeedControl.cpp)
+target_compile_definitions(test_gba_speed PRIVATE PPSSPP_MULTICORE)
+target_include_directories(test_gba_speed PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(test_gba_speed PRIVATE Common)
 endif()
 
 # installs

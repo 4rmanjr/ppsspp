@@ -43,10 +43,8 @@
 #include "UI/MainScreen.h"
 #include "UI/GameScreen.h"
 
-#ifdef PPSSPP_MULTICORE
 #include "EmuCore/EmuCore.h"
 #include "EmuCore/RecentFilesRegistry.h"
-#endif
 #include "UI/GameInfoCache.h"
 #include "UI/GameSettingsScreen.h"
 #include "UI/IAPScreen.h"
@@ -94,14 +92,12 @@ static void LaunchFile(ScreenManager *screenManager, Screen *currentScreen, cons
 		}
 		// Otherwise let the EmuScreen take care of it, including error handling.
 
-#ifdef PPSSPP_MULTICORE
 		// [PPSSPP-FORK] MultiCore: detect file type and switch to appropriate core
 		EmuCore::Type coreType = EmuCore::DetectType(path);
 		if (coreType == EmuCore::Type::GBA) {
 			screenManager->switchScreen(new EmuScreen(path, EmuCore::Type::GBA));
 			return;
 		}
-#endif
 
 		screenManager->switchScreen(new EmuScreen(path));
 	}
@@ -375,7 +371,6 @@ void MainScreen::CreateViews() {
 	tabHolder_->SetClip(true);
 
 	// [PPSSPP-FORK] MultiCore: check registry for any core with recent files
-#ifdef PPSSPP_MULTICORE
 	bool anyCoreHasRecent = false;
 	for (const auto &e : EmuCore::RecentFilesRegistry::Get().GetAll()) {
 		if (e.manager && e.manager->HasAny()) {
@@ -384,9 +379,6 @@ void MainScreen::CreateViews() {
 		}
 	}
 	bool showRecent = g_Config.iMaxRecent > 0 || anyCoreHasRecent;
-#else
-	bool showRecent = g_Config.iMaxRecent > 0;
-#endif
 	bool hasStorageAccess = !System_GetPropertyBool(SYSPROP_SUPPORTS_PERMISSIONS) ||
 		System_GetPermissionStatus(SYSTEM_PERMISSION_STORAGE) == PERMISSION_STATUS_GRANTED;
 	bool storageIsTemporary = IsTempPath(GetSysDirectory(DIRECTORY_SAVEDATA)) && !confirmedTemporary_;
@@ -410,11 +402,7 @@ void MainScreen::CreateViews() {
 		}
 
 		// [PPSSPP-FORK] MultiCore: check registry for any cores with recent files
-#ifdef PPSSPP_MULTICORE
 		bool setRecent = anyCoreHasRecent;
-#else
-		bool setRecent = g_recentFiles.HasAny();
-#endif
 		if (setRecent) {
 			tabHolder_->SetCurrentTab(std::clamp(g_Config.iDefaultTab, 0, g_Config.bRemoteTab ? 3 : 2), true);
 		} else if (g_Config.iMaxRecent > 0) {
@@ -964,9 +952,7 @@ void GridSettingsPopupScreen::GridMinusClick(UI::EventParams &e) {
 void GridSettingsPopupScreen::OnRecentClearClick(UI::EventParams &e) {
 	g_recentFiles.Clear();
 	// [PPSSPP-FORK] MultiCore: also clear GBA recent files
-#ifdef PPSSPP_MULTICORE
 	g_recentFilesGBA.Clear();
-#endif
 	OnRecentChanged.Trigger(e);
 	TriggerFinish(DR_OK);
 }
