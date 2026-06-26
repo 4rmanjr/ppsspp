@@ -64,6 +64,8 @@ struct CoreButtonDef {
 };
 
 // Register button definitions for a core type.
+// NOTE: `defs` must contain string literals (static storage).
+// Do NOT pass strings whose lifetimes end after this call (e.g. string::c_str()).
 void RegisterButtonMap(Type coreType, const std::vector<CoreButtonDef> &defs);
 
 // Get single button definition by keyCode. Returns nullptr if not found.

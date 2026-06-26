@@ -89,8 +89,8 @@ const CoreButtonDef *GetButtonDef(Type coreType, int keyCode) {
 
 const std::vector<CoreButtonDef> &GetButtonDefs(Type coreType) {
 	int idx = (int)coreType;
-	InitCoreButtonMaps();
 	if (idx < 0 || idx >= (int)Type::COUNT) { static std::vector<CoreButtonDef> empty; return empty; }
+	InitCoreButtonMaps();
 	return g_buttonDefs[idx];
 }
 
