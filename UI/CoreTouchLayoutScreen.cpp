@@ -20,7 +20,7 @@
 static float g_layoutScale = 0.8f;
 
 // [PPSSPP-FORK] CoreDragDropBase: abstract base for draggable/resizable controls
-// Supports both single buttons (CoreDragDrop) and grouped controls (GBADPadGroup, GBAActionGroup)
+// All preview buttons are individual CoreDragDrop (no grouped controls).
 class CoreDragDropBase : public MultiTouchButton {
 public:
 	CoreDragDropBase(const char *tag, ImageID bgImg, ImageID bgDownImg, ImageID img, float scale, UI::LayoutParams *lp)
@@ -85,199 +85,10 @@ private:
 	ImageID bgImg_;
 };
 
-// [PPSSPP-FORK] GBADPadGroup: grouped D-pad control matching PSP PSPDPadButtons
-// Wraps 4 individual CoreTouchButton directions into one draggable widget.
+// [PPSSPP-FORK] Individual CoreDragDrop for ALL buttons in preview (no grouping).
+// Grouped controls (GBADPadGroup/GBAActionGroup) dihapus — custom Draw()
+// tidak konsisten dengan game screen. Semua tombol pakai CoreDragDrop.
 // Jangan hapus, jangan ubah kode upstream.
-class GBADPadGroup : public CoreDragDropBase {
-public:
-	GBADPadGroup(EmuCore::CoreTouchButton *btns[4], const Bounds &screenBounds)
-		: CoreDragDropBase("gba_dpad", ImageID::invalid(), ImageID::invalid(), ImageID::invalid(), 1.0f,
-			new UI::AnchorLayoutParams(
-				((btns[0]->x + btns[1]->x + btns[2]->x + btns[3]->x) / 4.0f) * screenBounds.w,
-				((btns[0]->y + btns[1]->y + btns[2]->y + btns[3]->y) / 4.0f) * screenBounds.h,
-				UI::NONE, UI::NONE, UI::Centering::Both)),
-		  screenBounds_(screenBounds) {
-		for (int i = 0; i < 4; i++)
-			btns_[i] = btns[i];
-		// Identify direction indices via keyCode
-		for (int i = 0; i < 4; i++) {
-			switch (btns_[i]->keyCode) {
-				case CTRL_LEFT:  left_ = i; break;
-				case CTRL_RIGHT: right_ = i; break;
-				case CTRL_UP:    up_ = i; break;
-				case CTRL_DOWN:  down_ = i; break;
-			}
-		}
-		// Compute spacing as average distance from center
-		float cx = 0, cy = 0;
-		for (int i = 0; i < 4; i++) { cx += btns_[i]->x; cy += btns_[i]->y; }
-		cx /= 4.0f; cy /= 4.0f;
-		float d = 0; int n = 0;
-		float hl = fabs(btns_[left_]->x - cx);
-		float hr = fabs(btns_[right_]->x - cx);
-		float vu = fabs(btns_[up_]->y - cy);
-		float vd = fabs(btns_[down_]->y - cy);
-		if (hl > 0.001f) { d += hl; n++; }
-		if (hr > 0.001f) { d += hr; n++; }
-		if (vu > 0.001f) { d += vu; n++; }
-		if (vd > 0.001f) { d += vd; n++; }
-		spacing_ = (n > 0) ? d / n : 0.05f;
-	}
-
-	bool IsDownVisually() const override { return false; }
-
-	void Draw(UIContext &dc) override {
-		ImageID dirImg = g_Config.iTouchButtonStyle ? ImageID("I_DIR_LINE") : ImageID("I_DIR");
-		const AtlasImage *image = dc.Draw()->GetAtlas()->getImage(dirImg);
-		if (!image || image->w == 0) return;
-
-		float desiredW = spacing_ * screenBounds_.w;
-		scale_ = desiredW / (float)image->w;
-
-		float cx = bounds_.centerX();
-		float cy = bounds_.centerY();
-		float sp = spacing_ * screenBounds_.w;
-		uint32_t color = 0xFFFFFF;
-		uint32_t colorBg = 0xFFFFFF;
-
-		// xoff/yoff order: RIGHT, DOWN, LEFT, UP (matching PSP PSPDPadButtons)
-		static const float xoff[4] = {1, 0, -1, 0};
-		static const float yoff[4] = {0, 1, 0, -1};
-
-		for (int i = 0; i < 4; i++) {
-			float x = cx + xoff[i] * sp;
-			float y = cy + yoff[i] * sp;
-			float angle = i * (float)M_PI / 2.0f;
-
-			dc.Draw()->DrawImageRotated(dirImg, x, y, scale_, angle + (float)M_PI, colorBg, false);
-
-			float ax = cx + xoff[i] * (sp + 10.0f * scale_);
-			float ay = cy + yoff[i] * (sp + 10.0f * scale_);
-			dc.Draw()->DrawImageRotated(ImageID("I_ARROW"), ax, ay, scale_, angle + (float)M_PI, color);
-		}
-	}
-
-	void GetContentDimensions(const UIContext &dc, float &w, float &h) const override {
-		const AtlasImage *image = dc.Draw()->GetAtlas()->getImage(
-			g_Config.iTouchButtonStyle ? ImageID("I_DIR_LINE") : ImageID("I_DIR"));
-		float iw = image ? (float)image->w : 40.0f;
-		float s = (spacing_ * screenBounds_.w) / iw;
-		w = 2.0f * (spacing_ * screenBounds_.w) + iw * s;
-		h = w;
-	}
-
-	void SavePosition() override {
-		float cx = (bounds_.centerX() - screenBounds_.x) / screenBounds_.w;
-		float cy = (bounds_.centerY() - screenBounds_.y) / screenBounds_.h;
-		float sp = spacing_;
-		btns_[left_]->x = cx - sp;
-		btns_[left_]->y = cy;
-		btns_[right_]->x = cx + sp;
-		btns_[right_]->y = cy;
-		btns_[up_]->x = cx;
-		btns_[up_]->y = cy - sp;
-		btns_[down_]->x = cx;
-		btns_[down_]->y = cy + sp;
-	}
-
-	float GetScaleVal() const override { return spacing_; }
-	void SetScaleVal(float s) override { if (s >= 0.01f && s <= 0.50f) spacing_ = s; }
-
-	bool Contains(float x, float y) override {
-		const float t = 0.25f;
-		Bounds tb(bounds_.x - t * bounds_.w * 0.5f, bounds_.y - t * bounds_.h * 0.5f,
-			bounds_.w * (1.0f + t), bounds_.h * (1.0f + t));
-		return tb.Contains(x, y);
-	}
-
-private:
-	EmuCore::CoreTouchButton *btns_[4];
-	Bounds screenBounds_;
-	int left_ = 0, right_ = 1, up_ = 2, down_ = 3;
-	float spacing_ = 0.05f;
-};
-
-// [PPSSPP-FORK] GBAActionGroup: grouped GBA action buttons (A/B) matching PSP PSPActionButtons
-// Wraps 2 CoreTouchButton (CTRL_CROSS=A, CTRL_CIRCLE=B) into one draggable widget.
-// Jangan hapus, jangan ubah kode upstream.
-class GBAActionGroup : public CoreDragDropBase {
-public:
-	GBAActionGroup(EmuCore::CoreTouchButton *btns[2], const Bounds &screenBounds)
-		: CoreDragDropBase("gba_action", ImageID::invalid(), ImageID::invalid(), ImageID::invalid(), 1.0f,
-			new UI::AnchorLayoutParams(
-				((btns[0]->x + btns[1]->x) / 2.0f) * screenBounds.w,
-				((btns[0]->y + btns[1]->y) / 2.0f) * screenBounds.h,
-				UI::NONE, UI::NONE, UI::Centering::Both)),
-		  screenBounds_(screenBounds) {
-		btns_[0] = btns[0]; // A (CTRL_CROSS)
-		btns_[1] = btns[1]; // B (CTRL_CIRCLE)
-		// Compute spacing as distance between A and B centers
-		float dx = fabs(btns_[1]->x - btns_[0]->x);
-		float dy = fabs(btns_[1]->y - btns_[0]->y);
-		spacing_ = (dx + dy > 0.001f) ? (dx + dy) * 0.5f : 0.05f;
-	}
-
-	bool IsDownVisually() const override { return false; }
-
-	void Draw(UIContext &dc) override {
-		ImageID roundBg = g_Config.iTouchButtonStyle ? ImageID("I_ROUND_LINE") : ImageID("I_ROUND");
-		const AtlasImage *image = dc.Draw()->GetAtlas()->getImage(roundBg);
-		if (!image || image->w == 0) return;
-
-		float desiredW = spacing_ * screenBounds_.w;
-		scale_ = desiredW / (float)image->w;
-
-		float cx = bounds_.centerX();
-		float cy = bounds_.centerY();
-		float sp = spacing_ * screenBounds_.w;
-		uint32_t color = 0xFFFFFF;
-		uint32_t colorBg = 0xFFFFFF;
-
-		// B (CTRL_CIRCLE) on right, A (CTRL_CROSS) below (matching PSP action button quadrant)
-		// Right: cx + sp, cy
-		dc.Draw()->DrawImageRotated(roundBg, cx + sp, cy, scale_, 0, colorBg, false);
-		dc.Draw()->DrawImageRotated(ImageID("I_CIRCLE"), cx + sp, cy, scale_, 0, color, false);
-
-		// Below: cx, cy + sp
-		dc.Draw()->DrawImageRotated(roundBg, cx, cy + sp, scale_, 0, colorBg, false);
-		dc.Draw()->DrawImageRotated(ImageID("I_CROSS"), cx, cy + sp, scale_, 0, color, false);
-	}
-
-	void GetContentDimensions(const UIContext &dc, float &w, float &h) const override {
-		const AtlasImage *image = dc.Draw()->GetAtlas()->getImage(
-			g_Config.iTouchButtonStyle ? ImageID("I_ROUND_LINE") : ImageID("I_ROUND"));
-		float iw = image ? (float)image->w : 40.0f;
-		float s = (spacing_ * screenBounds_.w) / iw;
-		w = 2.0f * (spacing_ * screenBounds_.w) + iw * s;
-		h = 2.0f * (spacing_ * screenBounds_.w) + iw * s;
-	}
-
-	void SavePosition() override {
-		float cx = (bounds_.centerX() - screenBounds_.x) / screenBounds_.w;
-		float cy = (bounds_.centerY() - screenBounds_.y) / screenBounds_.h;
-		float sp = spacing_;
-		// B on right, A below
-		btns_[1]->x = cx + sp;  // B (CTRL_CIRCLE)
-		btns_[1]->y = cy;
-		btns_[0]->x = cx;       // A (CTRL_CROSS)
-		btns_[0]->y = cy + sp;
-	}
-
-	float GetScaleVal() const override { return spacing_; }
-	void SetScaleVal(float s) override { if (s >= 0.01f && s <= 0.50f) spacing_ = s; }
-
-	bool Contains(float x, float y) override {
-		const float t = 0.25f;
-		Bounds tb(bounds_.x - t * bounds_.w * 0.5f, bounds_.y - t * bounds_.h * 0.5f,
-			bounds_.w * (1.0f + t), bounds_.h * (1.0f + t));
-		return tb.Contains(x, y);
-	}
-
-private:
-	EmuCore::CoreTouchButton *btns_[2];
-	Bounds screenBounds_;
-	float spacing_ = 0.05f;
-};
 
 // [PPSSPP-FORK] CoreSnapGrid: draw grid lines on top of buttons (matching PSP SnapGrid z-order)
 // Instead of a child View, called from CoreLayoutView::Draw() to avoid 10x10 measurement issue
@@ -420,55 +231,14 @@ void CoreLayoutView::CreateViews() {
 
 	auto &cfg = EmuCore::GetTouchConfigMutable(coreType_, portrait_);
 
-	// First pass: identify buttons for grouped controls (D-pad, action buttons)
-	// matching PSP's PSPDPadButtons and PSPActionButtons
-	EmuCore::CoreTouchButton *dpadUp = nullptr, *dpadDown = nullptr;
-	EmuCore::CoreTouchButton *dpadLeft = nullptr, *dpadRight = nullptr;
-	EmuCore::CoreTouchButton *btnA = nullptr, *btnB = nullptr;
-
-	for (int i = 0; i < cfg.count; i++) {
-		auto &btn = cfg.buttons[i];
-		if (!btn.visible) continue;
-		switch (btn.keyCode) {
-		case CTRL_UP:    dpadUp = &btn; break;
-		case CTRL_DOWN:  dpadDown = &btn; break;
-		case CTRL_LEFT:  dpadLeft = &btn; break;
-		case CTRL_RIGHT: dpadRight = &btn; break;
-		case CTRL_CROSS: btnA = &btn; break;
-		case CTRL_CIRCLE: btnB = &btn; break;
-		default: break;
-		}
-	}
-
-	// Create D-pad group if all 4 directions visible (matching PSP PSPDPadButtons)
-	bool hasDpadGroup = (dpadUp && dpadDown && dpadLeft && dpadRight);
-	if (hasDpadGroup) {
-		EmuCore::CoreTouchButton *dpadBtns[4] = {dpadLeft, dpadRight, dpadUp, dpadDown};
-		auto *dd = new GBADPadGroup(dpadBtns, b);
-		controls_.push_back(dd);
-		Add(dd);
-	}
-
-	// Create Action group if both A and B visible (matching PSP PSPActionButtons)
-	bool hasActionGroup = (btnA && btnB);
-	if (hasActionGroup) {
-		EmuCore::CoreTouchButton *actBtns[2] = {btnA, btnB};
-		auto *ag = new GBAActionGroup(actBtns, b);
-		controls_.push_back(ag);
-		Add(ag);
-	}
-
-	// Second pass: remaining buttons as individual CoreDragDrop
-	// [PPSSPP-FORK] Set created_ flag here so HasCreatedViews() works
-	// even if all buttons are hidden (prevents infinite update() loop).
+	// [PPSSPP-FORK] Create ALL visible buttons as individual CoreDragDrop.
+	// Using individual controls (not GBADPadGroup/GBAActionGroup groups) because
+	// custom grouped renderers may not work on all devices. Individual controls
+	// match the game screen (EmuScreen::AddGBATouchButtons) exactly.
 	created_ = true;
 	for (int i = 0; i < cfg.count; i++) {
 		auto &btn = cfg.buttons[i];
 		if (!btn.visible) continue;
-		// Skip buttons already handled by groups
-		if (hasDpadGroup && (btn.keyCode == CTRL_UP || btn.keyCode == CTRL_DOWN ||
-			btn.keyCode == CTRL_LEFT || btn.keyCode == CTRL_RIGHT)) continue;
-		if (hasActionGroup && (btn.keyCode == CTRL_CROSS || btn.keyCode == CTRL_CIRCLE)) continue;
 
 		ImageID icon;
 		switch (btn.keyCode) {
