@@ -1,156 +1,156 @@
 # Quality Gates — PSP Parity & Code Review
 
 > **Referenced by:** `AGENTS.md`
-> **Applies to:** Semua fitur GBA dan emulator baru (N64, PS1, dll)
-> **Tujuan:** Menjamin tidak ada gap behavior dengan PSP, tidak ada hallucination, dan kode clean.
+> **Applies to:** All GBA features and new emulators (N64, PS1, etc.)
+> **Purpose:** Guarantee no behavioral gap with PSP, no hallucination, and clean code.
 
 ---
 
-## Daftar Isi
+## Table of Contents
 
-- [Gate #1: Feature Parity dengan PSP](#-quality-gate-1-feature-parity-dengan-psp)
+- [Gate #1: Feature Parity with PSP](#-quality-gate-1-feature-parity-with-psp)
 - [Gate #2: Code Review Gate](#-quality-gate-2-code-review-gate)
-- [Gate #3: PSP Parity Wajib untuk Setiap Core Baru](#-quality-gate-3-psp-parity-wajib-untuk-setiap-core-baru)
+- [Gate #3: PSP Parity Required for Every New Core](#-quality-gate-3-psp-parity-required-for-every-new-core)
 - [Supporting Rules](#supporting-rules)
 
 ---
 
-## 🔵 Quality Gate #1 — Feature Parity dengan PSP
+## 🔵 Quality Gate #1 — Feature Parity with PSP
 
-Setiap fitur GBA (atau core lain) yang memiliki equivalent PSP WAJIB mengikuti aturan ini.
+Every GBA (or other core) feature that has a PSP equivalent MUST follow these rules.
 
-### 1. Read PSP Reference (Wajib)
+### 1. Read PSP Reference (Required)
 
-SEBELUM menulis kode, baca implementasi PSP yang equivalent:
+BEFORE writing code, read the equivalent PSP implementation:
 
 ```bash
-grep -n "<nama_fungsi/class>" UI/<psp_file>.cpp | head -20
+grep -n "<function/class_name>" UI/<psp_file>.cpp | head -20
 ```
 
-Pahami:
-- Bagaimana PSP melakukan init, update, render
-- Bagaimana PSP handle edge cases (null, invalid state, boundary)
-- Bagaimana PSP handle user interaction (Touch, Click)
+Understand:
+- How PSP does init, update, render
+- How PSP handles edge cases (null, invalid state, boundary)
+- How PSP handles user interaction (Touch, Click)
 
-### 2. Feature Parity Checklist (Wajib)
+### 2. Feature Parity Checklist (Required)
 
-Bandingkan behavior satu-per-satu dengan PSP. Contoh template:
+Compare behavior one-by-one with PSP. Example template:
 
-| Aspek | PSP (`TouchControlVisibilityScreen`) | GBA (`GBATouchVisibilityPopup`) | Match? |
-|-------|--------------------------------------|----------------------------------|--------|
+| Aspect | PSP (`TouchControlVisibilityScreen`) | GBA (`GBATouchVisibilityPopup`) | Match? |
+|--------|--------------------------------------|----------------------------------|--------|
 | nextToggleAll_ init | `true` | `true` | ✅ |
-| Toggle All scope | Semua button (game + system) | Semua button | ✅ |
+| Toggle All scope | All buttons (game + system) | All buttons | ✅ |
 | SetMinimumAlpha | Unconditional | Unconditional | ✅ |
-| Pause disable logic | Via `System_GetPropertyBool` | Sama | ✅ |
+| Pause disable logic | Via `System_GetPropertyBool` | Same | ✅ |
 | Save on exit | `onFinish()` (all paths) | `OnCompleted()` (all paths) | ✅ |
 
-**Catat setiap gap sebagai task** — jangan skip meskipun kelihatan kecil.
+**Record every gap as a task** — do not skip even small ones.
 
-### 3. Identifikasi PSP-Specific Logic (Wajib)
+### 3. Identify PSP-Specific Logic (Required)
 
-Tidak semua yang ada di PSP cocok untuk core lain. Filter:
+Not everything in PSP applies to other cores. Filter:
 
-| ❌ Jangan Ditiru | ✅ Boleh Ditiru |
-|-----------------|-----------------|
+| ❌ Don't Copy | ✅ Do Copy |
+|---------------|-----------|
 | PSP-only buttons (Square, Triangle, Analog Stick) | Shared behavior (Toggle All, save on exit, visibility toggles) |
 | Analog deadzone, pressure sensitivity | Shared config (`TouchControlConfig`: Fast-forward, Pause) |
 
-### 4. Catat Mismatch ke PSP Knowledge Base
+### 4. Log Mismatches to PSP Knowledge Base
 
-Setiap kali menemukan perbedaan behavior yang tidak disengaja (bug), catat di [`psp-knowledge-base.md`](psp-knowledge-base.md):
+Every time you find an unintentional behavioral difference (bug), log it in [`psp-knowledge-base.md`](psp-knowledge-base.md):
 
 ```
 # File: UI/CoreTouchLayoutScreen.cpp
-# Bug: nextToggleAll_ mulai false, PSP mulai true
+# Bug: nextToggleAll_ started false, PSP starts true
 # Fix: false → true
-# Tanggal: 2026-06-25
+# Date: 2026-06-25
 ```
 
 ---
 
 ## 🟠 Quality Gate #2 — Code Review Gate
 
-WAJIB dijalankan sebelum commit.
+MUST be run before every commit.
 
 ### Pre-Commit Checklist
 
 ```
-[ ] 1. Unified diff review — tidak ada perubahan upstream
+[ ] 1. Unified diff review — no upstream changes
 [ ] 2. Edge cases:
      - Null/empty bounds → w=0, h=0
-     - Division by zero → image->w == 0 check
-     - Config belum di-init → fallback values
+     - Division-by-zero → image->w == 0 check
+     - Uninitialized config → fallback values
      - Platform-specific → System_GetPropertyBool check
-[ ] 3. PSP reference — semua behavior sudah match?
-[ ] 4. Compile — fitur ON ✅ | fitur OFF ✅
-[ ] 5. Naming convention — [PPSSPP-FORK] marker ada?
-[ ] 6. IsFitur() pattern — call site tanpa #ifdef?
-[ ] 7. Helper method extraction — logic >5 baris dipisah?
+[ ] 3. PSP reference — all behaviors match?
+[ ] 4. Compile — feature ON ✅ | feature OFF ✅
+[ ] 5. Naming convention — [PPSSPP-FORK] marker present?
+[ ] 6. IsFeature() pattern — call site without #ifdef?
+[ ] 7. Helper method extraction — logic >5 lines separated?
 ```
 
 ### Post-Commit Diff Verification
 
 ```bash
 git diff HEAD~1 -- UI/ UI/EmuCore/ EmuCore/
-# Pastikan tidak ada file upstream yang berubah
+# Verify no upstream files changed unintentionally
 ```
 
 ---
 
-## 🔷 Quality Gate #3 — PSP Parity WAJIB untuk Setiap Core Baru
+## 🔷 Quality Gate #3 — PSP Parity Required for Every New Core
 
-Setiap emulator baru (N64, PS1, NDS, SNES, dll) WAJIB diperlakukan SAMA seperti GBA:
+Every new emulator (N64, PS1, NDS, SNES, etc.) MUST be treated the SAME as GBA:
 
-| Aturan | GBA | N64 (future) | PS1 (future) |
-|--------|-----|-------------|-------------|
-| Quality Gate #1 (Feature Parity) | ✅ | ✅ WAJIB | ✅ WAJIB |
-| Quality Gate #2 (Code Review) | ✅ | ✅ WAJIB | ✅ WAJIB |
-| Scope Definition | ✅ | ✅ WAJIB | ✅ WAJIB |
-| Catat mismatch ke Knowledge Base | ✅ | ✅ WAJIB | ✅ WAJIB |
-| Verifikasi PSP equivalent | ✅ | ✅ WAJIB | ✅ WAJIB |
-| Build dual verification | ✅ | ✅ WAJIB | ✅ WAJIB |
+| Rule | GBA | N64 (future) | PS1 (future) |
+|------|-----|-------------|-------------|
+| Quality Gate #1 (Feature Parity) | ✅ | ✅ REQUIRED | ✅ REQUIRED |
+| Quality Gate #2 (Code Review) | ✅ | ✅ REQUIRED | ✅ REQUIRED |
+| Scope Definition | ✅ | ✅ REQUIRED | ✅ REQUIRED |
+| Log mismatches to Knowledge Base | ✅ | ✅ REQUIRED | ✅ REQUIRED |
+| Verify PSP equivalent | ✅ | ✅ REQUIRED | ✅ REQUIRED |
+| Build dual verification | ✅ | ✅ REQUIRED | ✅ REQUIRED |
 
-**Contoh:** Kalau N64 punya equivalent PSP feature (misal analog stick), maka behavior-nya WAJIB match satu-per-satu. Kalau PS1 punya L1/L2/R1/R2, samakan dengan PSP L/R trigger behavior.
+**Example:** If N64 has an equivalent PSP feature (e.g., analog stick), its behavior MUST match one-by-one. If PS1 has L1/L2/R1/R2, match PSP L/R trigger behavior.
 
 ---
 
 ## Supporting Rules
 
-### 🔵 Scope Definition (Wajib Sebelum Implementasi)
+### 🔵 Scope Definition (Required Before Implementation)
 
-Sebelum menulis kode, tulis definisi scope:
+Before writing code, write a scope definition:
 
 ```
-## Scope: <Nama Fitur>
+## Scope: <Feature Name>
 
-### Apa yang akan dibuat
-- [ ] Button Pause di GBA game screen
-- [ ] Fast-forward toggle di visibility popup
+### What will be built
+- [ ] Pause button on GBA game screen
+- [ ] Fast-forward toggle in visibility popup
 
 ### PSP equivalent
 - UI/GamepadEmu.cpp::CreatePadLayout() — Pause button
 - UI/TouchControlVisibilityScreen — system button toggles
 
-### Batasan (Apa yang TIDAK dibuat)
-- ❌ Tidak membuat PSP-only buttons (Square, Triangle, Analog)
-- ❌ Tidak membuat settings screen baru (pakai existing)
+### Boundaries (What will NOT be built)
+- ❌ Not creating PSP-only buttons (Square, Triangle, Analog)
+- ❌ Not creating a new settings screen (use existing)
 
-### Edge cases yang harus di-handle
-- [ ] Device tanpa back button → Pause button minimal alpha
-- [ ] TouchControlConfig belum di-init → InitPadLayout
+### Edge cases to handle
+- [ ] Device without back button → Pause button minimum alpha
+- [ ] Uninitialized TouchControlConfig → InitPadLayout
 ```
 
 ### 🟠 Anti-Hallucination Rule
 
-> **JANGAN PERNAH** menebak-nebak API tanpa verifikasi.
+> **NEVER** guess API signatures without verification.
 
-Setiap kali menulis:
+Whenever writing:
 
-| Jika menulis... | WAJIB cek... |
-|----------------|--------------|
-| `new ClassName(...)` | Constructor di file `.h` via `grep` / `read` |
-| `ImageID("...")` | Apakah ID itu terdaftar di atlas texture |
-| `#include "..."` | Pastikan file exists |
-| `System_*` / `GetI18NCategory` / `screenManager()` | Return type dari header |
+| If writing... | MUST check... |
+|---------------|---------------|
+| `new ClassName(...)` | Constructor in `.h` file via `grep` / `read` |
+| `ImageID("...")` | Whether the ID is registered in the texture atlas |
+| `#include "..."` | Whether the file exists |
+| `System_*` / `GetI18NCategory` / `screenManager()` | Return type from header |
 
-Kalau tidak bisa diverifikasi karena file terlalu besar, **tanyakan ke user**. Jangan tebak.
+If verification is impossible (file too large), **ask the user**. Don't guess.

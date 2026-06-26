@@ -1,32 +1,32 @@
-# LAN Sync Development — Aturan Khusus
+# LAN Sync Development — Specific Rules
 
-## Cakupan Fitur
+## Feature Scope
 
-Fitur kustom yang ada saat ini:
-- **LAN Sync Core** — sinkronisasi save state antar device via jaringan lokal
-- **MDNS Discovery** — menemukan peer otomatis di jaringan lokal
-- **TLS Server** — komunikasi terenkripsi antar peer
-- **UDP Discovery** — alternatif discovery protocol
-- **QR Code Pairing** — koneksi via scan QR
-- **Platform Key Store** — penyimpanan credential aman per platform
+Current custom features:
+- **LAN Sync Core** — save state synchronization between devices over local network
+- **MDNS Discovery** — automatic peer discovery on local network
+- **TLS Server** — encrypted communication between peers
+- **UDP Discovery** — alternative discovery protocol
+- **QR Code Pairing** — connection via QR scan
+- **Platform Key Store** — secure credential storage per platform
 
-## Arsitektur Modular
+## Modular Architecture
 
-Semua fitur LAN sync tersebar di direktori non-inti:
+All LAN sync features are distributed across non-core directories:
 
-| Direktori | Konten |
-|-----------|--------|
+| Directory | Contents |
+|-----------|----------|
 | `Common/Net/` | MDNS, UDP Discovery, TLS, Key Store (cross-platform) |
-| `Core/` | Config, SaveState LANSync (file baru, bukan modifikasi) |
-| `SDL/` | Implementasi LAN sync untuk SDL/Linux |
-| `Windows/` | Implementasi LAN sync untuk Windows |
-| `macOS/` | Implementasi LAN sync untuk macOS |
-| `UI/` | LAN Peer List Screen, Settings (file UI baru) |
+| `Core/` | Config, SaveState LANSync (new files, not modifications) |
+| `SDL/` | LAN sync implementation for SDL/Linux |
+| `Windows/` | LAN sync implementation for Windows |
+| `macOS/` | LAN sync implementation for macOS |
+| `UI/` | LAN Peer List Screen, Settings (new UI files) |
 
-## Aturan Tambahan
+## Additional Rules
 
-1. **Jangan sentuh `Core/SaveState.cpp` untuk logic baru.** Semua logic sync ada di `SaveStateLANSync.cpp`. File upstream hanya boleh kena hook minimal.
-2. **Platform-specific code** dipisah per platform (`SDL/`, `Windows/`, `macOS/`), bukan dicampur di `Common/`.
-3. **Setiap fitur baru** harus punya flag `#ifdef` sendiri (lihat `fork-maintenance.md`).
-4. **Test** — setiap perubahan harus bisa di-build dengan `./b.sh --debug` tanpa error.
-5. **End-to-end test** tersedia di `test_e2e_lansync.cpp` dan `test_e2e_full.cpp` — jalankan sebelum submit perubahan.
+1. **Don't touch `Core/SaveState.cpp` for new logic.** All sync logic lives in `SaveStateLANSync.cpp`. Upstream files only get minimal hooks.
+2. **Platform-specific code** separated per platform (`SDL/`, `Windows/`, `macOS/`), not mixed in `Common/`.
+3. **Every new feature** must have its own `#ifdef` flag (see `fork-maintenance.md`).
+4. **Test** — every change must build with `./b.sh --debug` without errors.
+5. **End-to-end test** available in `test_e2e_lansync.cpp` and `test_e2e_full.cpp` — run before submitting changes.

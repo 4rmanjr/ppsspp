@@ -1,67 +1,67 @@
 # Code Standards — C++ & Platform Guidelines
 
-## Bahasa & Standar
-- C++17 (ikuti standar yang sudah dipakai upstream PPSSPP).
-- Ikuti code style file di sekitarnya — jangan reformat atau ubah indentasi kode upstream.
+## Language & Standards
+- C++17 (follow the standard already used by upstream PPSSPP).
+- Follow the code style of surrounding files — don't reformat or change upstream code indentation.
 
 ## File Header
-Setiap file kustom baru WAJIB punya header:
+Every new custom file MUST have a header:
 
 ```cpp
-// [PPSSPP-FORK] <NamaFitur>
-// <Deskripsi singkat>
-// Jangan hapus, jangan ubah kode upstream.
+// [PPSSPP-FORK] <FeatureName>
+// <Brief description>
+// Do not delete or modify upstream code.
 ```
 
-File yang merupakan **tambahan ke file upstream** (1-5 baris hook) WAJIB punya:
+Files that are **additions to upstream files** (1-5 line hooks) MUST have:
 ```cpp
-// [PPSSPP-FORK] <NamaFitur>: <penjelasan hook>
-// Hanya tambahkan baris baru. Jangan hapus/mengubah baris upstream.
-#ifdef PPSSPP_<FITUR>
-// ... kode hook minimal ...
+// [PPSSPP-FORK] <FeatureName>: <hook explanation>
+// Only add new lines. Do not delete/modify upstream lines.
+#ifdef PPSSPP_<FEATURE>
+// ... minimal hook code ...
 #endif
 ```
 
 ## Platform Handling
-- Platform-specific code di direktori masing-masing (`SDL/`, `Windows/`, `macOS/`, `android/`).
-- `Common/` hanya untuk kode cross-platform. Jika ada platform-specific block, gunakan `#ifdef`:
+- Platform-specific code in respective directories (`SDL/`, `Windows/`, `macOS/`, `android/`).
+- `Common/` is for cross-platform code only. If platform-specific blocks are needed, use `#ifdef`:
 
 ```cpp
-// [PPSSPP-FORK] NamaFitur
+// [PPSSPP-FORK] FeatureName
 #ifdef _WIN32
-// kode Windows
+// Windows code
 #elif defined(__APPLE__)
-// kode macOS
+// macOS code
 #else
-// kode Linux/SDL
+// Linux/SDL code
 #endif
 ```
 
 ## Naming Convention
-- Class/fungsi baru: gunakan prefix `LANSync`, `MDNS`, `TLS`, `GBA`, `EmuCore` sesuai fitur.
-- Jangan gunakan nama yang sama dengan class upstream untuk menghindari ambiguity.
-- Untuk multi-emulator: semua class inti di namespace `EmuCore` (contoh: `EmuCore::GBACore`, `EmuCore::PSPCore`).
+- New classes/functions: use prefix `LANSync`, `MDNS`, `TLS`, `GBA`, `EmuCore` matching the feature.
+- Don't use names that conflict with upstream classes to avoid ambiguity.
+- For multi-emulator: all core classes in namespace `EmuCore` (e.g., `EmuCore::GBACore`, `EmuCore::PSPCore`).
 
-## Build Validation — WAJIB Dual Verification
+## Build Validation — REQUIRED Dual Verification
 
-Setiap perubahan WAJIB di-verifikasi dalam **DUA kondisi**:
+Every change MUST be verified in **TWO conditions**:
 
-### 1. Dengan fitur ON
+### 1. With feature ON
 ```bash
-cmake -DPPSSPP_<FITUR>=ON .. && make -j$(nproc)
+cmake -DPPSSPP_<FEATURE>=ON .. && make -j$(nproc)
 ```
-### 2. Dengan fitur OFF
+### 2. With feature OFF
 ```bash
-cmake -DPPSSPP_<FITUR>=OFF .. && make -j$(nproc)
+cmake -DPPSSPP_<FEATURE>=OFF .. && make -j$(nproc)
 ```
 
-**Aturan:**
-- Keduanya harus build sukses tanpa error.
-- Tidak boleh ada warning baru di kode upstream di kedua kondisi.
-- Semua file baru harus masuk CMakeLists.txt atau build system yang sesuai.
-- Default: fitur **ON** untuk development, **OFF** harus tetap build.
+**Rules:**
+- Both must build successfully with no errors.
+- No new warnings in upstream code in either condition.
+- All new files must be added to CMakeLists.txt or the appropriate build system.
+- Default: feature **ON** for development, **OFF** must still build.
 
 ## Commit Messages
-- Format: `[feature/<nama>] <pesan>`
-  - Contoh: `[lansync] Fix peer discovery timeout`
-- Untuk merge upstream: `chore: merge upstream/master`
+- Format: `[feature/<name>] <message>`
+  - Example: `[lansync] Fix peer discovery timeout`
+- For upstream merges: `chore: merge upstream/master`

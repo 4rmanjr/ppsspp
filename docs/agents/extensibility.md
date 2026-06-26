@@ -1,36 +1,36 @@
-# Extensibility Architecture — Menambah Emulator Baru
+# Extensibility Architecture — Adding New Emulators
 
 > **Referenced by:** `AGENTS.md`
-> **Applies to:** N64, PS1, NDS, SNES, dan semua emulator masa depan
-> **Tujuan:** Zero duplication, PSP parity konsisten, tiap core bisa di-add tanpa mengubah file core lain.
+> **Applies to:** N64, PS1, NDS, SNES, and all future emulators
+> **Purpose:** Zero duplication, consistent PSP parity, each core addable without modifying other core files.
 
 ---
 
-## Daftar Isi
+## Table of Contents
 
-- [Prinsip Dasar](#-prinsip-dasar)
-- [Arsitektur Component](#-arsitektur-component)
-- [CoreButtonRegistry](#-corebuttonregistry-definisi-tombol-per-core)
-- [EmuScreen Core Dispatch](#-emuscreen-core-dispatch-wajib-switch-bukan-binary)
+- [Core Principles](#-core-principles)
+- [Component Architecture](#-component-architecture)
+- [CoreButtonRegistry](#-corebuttonregistry-per-core-button-definitions)
+- [EmuScreen Core Dispatch](#-emuscreen-core-dispatch-must-use-switch-not-binary)
 - [Generic Touch Classes](#-generic-touch-classes)
 - [Directory Resolver](#-directory-file-path-per-core)
-- [Step-by-Step: Menambah Emulator Baru](#-step-by-step-menambah-emulator-baru)
+- [Step-by-Step: Adding a New Emulator](#-step-by-step-adding-a-new-emulator)
 - [Zero Duplication Rule](#-zero-duplication-rule)
-- [Generification Roadmap](#-262-gba-references-path-to-generification)
+- [262 GBA References — Path to Generification](#-262-gba-references--path-to-generification)
 
 ---
 
-## 🔷 Prinsip Dasar
+## 🔷 Core Principles
 
-1. **Core-agnostic classes** — Semua class baru WAJIB pakai prefix `Core` (misal `CoreDragDrop`), **bukan** `GBA`/`N64`/`PS1`. GBA-specific classes yang sudah ada akan di-refactor bertahap (lihat roadmap).
-2. **Per-core definition** — Yang berbeda per core hanyalah **data** (button list, default layout, image IDs). Yang **sama** (renderer, popup, grid, drag-drop) harus generic.
-3. **PSP parity WAJIB** — Setiap core baru WAJIB melewati [Quality Gate #1](quality-gates.md#-quality-gate-1--feature-parity-dengan-psp) yang sama seperti GBA.
-4. **Shared system buttons** — Fast-forward dan Pause dibuat OTOMATIS untuk semua non-PSP core.
-5. **No binary routing** — `if (coreType_ != PSP) { ... }` **DILARANG** untuk kode baru. WAJIB pakai `switch(coreType_)`.
+1. **Core-agnostic classes** — All new classes MUST use the `Core` prefix (e.g., `CoreDragDrop`), **not** `GBA`/`N64`/`PS1`. Existing GBA-specific classes will be refactored incrementally (see roadmap).
+2. **Per-core definition** — Only **data** varies per core (button list, default layout, image IDs). What's **shared** (renderer, popup, grid, drag-drop) must be generic.
+3. **PSP parity REQUIRED** — Every new core MUST pass the same [Quality Gate #1](quality-gates.md#-quality-gate-1-feature-parity-with-psp) as GBA.
+4. **Shared system buttons** — Fast-forward and Pause are created AUTOMATICALLY for all non-PSP cores.
+5. **No binary routing** — `if (coreType_ != PSP) { ... }` is **FORBIDDEN** for new code. MUST use `switch(coreType_)`.
 
 ---
 
-## 🔷 Arsitektur Component
+## 🔷 Component Architecture
 
 ```
 EmuCore/
@@ -45,16 +45,16 @@ EmuCore/
 
 UI/
 ├── CoreTouchLayoutScreen.cpp → Generic layout editor (CoreDragDrop, CoreLayoutView)
-│                                Baca button map dari registry, bukan hardcoded switch
+│                                Reads button map from registry, not hardcoded switch
 ├── EmuScreen.cpp             → Core dispatch via switch(coreType_)
-└── GamepadEmu.cpp            → CreateSystemTouchButtons() untuk semua core
+└── GamepadEmu.cpp            → CreateSystemTouchButtons() for all cores
 ```
 
 ---
 
-## 🗂️ CoreButtonRegistry — Definisi Tombol Per Core
+## 🗂️ CoreButtonRegistry — Per-Core Button Definitions
 
-GANTI hardcoded `case CTRL_*` switches dengan registry:
+REPLACE hardcoded `case CTRL_*` switches with a registry:
 
 ```cpp
 // EmuCore/Config.h
@@ -64,38 +64,38 @@ struct CoreButtonDef {
     const char *label;     // display name (e.g. "A", "Cross")
     enum BgType { ROUND, RECT, SHOULDER, ANALOG, CUSTOM };
     BgType bgType;
-    const char *bgImageID; // atlas image untuk background (e.g. "I_ROUND", "I_N64_C")
+    const char *bgImageID; // atlas image for background (e.g. "I_ROUND", "I_N64_C")
 };
 
-// Per-core registration (C++17 — gunakan const reference, bukan std::span)
+// Per-core registration (C++17 — use const reference, not std::span)
 void RegisterButtonMap(EmuCore::Type type, const std::vector<CoreButtonDef> &buttons);
 const CoreButtonDef *GetButtonDef(EmuCore::Type type, int keyCode);
 const std::vector<CoreButtonDef> &GetButtonDefs(EmuCore::Type type);
 ```
 
-**WAJIB:**
-- [ ] Tiap core daftarkan button map di `InitDefaultTouchConfigs()`
-- [ ] `CoreLayoutView::CreateViews()` baca dari `GetButtonDefs(coreType_)`
-- [ ] `CoreTouchVisibilityPopup` iterasi `GetButtonDefs(coreType_)`
-- [ ] Tidak boleh ada `case CTRL_*` di class renderer/popup — semua data-driven
+**REQUIRED:**
+- [ ] Each core registers its button map in `InitDefaultTouchConfigs()`
+- [ ] `CoreLayoutView::CreateViews()` reads from `GetButtonDefs(coreType_)`
+- [ ] `CoreTouchVisibilityScreen` iterates `GetButtonDefs(coreType_)`
+- [ ] No `case CTRL_*` in renderer/popup classes — all data-driven
 
-**Satu-satunya tempat hardcoded per-core adalah di `EmuCore/Config.cpp`** (registrasi button map + default layout).
+**The only place for per-core hardcoded data is `EmuCore/Config.cpp`** (button map registration + default layout).
 
 ---
 
-## 🔷 EmuScreen Core Dispatch — Wajib switch, bukan binary
+## 🔷 EmuScreen Core Dispatch — Must Use switch, Not Binary
 
-**LARANG:**
+**FORBIDDEN:**
 ```cpp
-// ⛔ DILARANG — binary routing, tidak extensible
+// ⛔ FORBIDDEN — binary routing, not extensible
 if (coreType_ != EmuCore::Type::PSP) {
-    // GBA-specific (N64 gak bisa masuk sini)
+    // GBA-specific (N64 can't enter here)
 }
 ```
 
-**WAJIB:**
+**REQUIRED:**
 ```cpp
-// ✅ WAJIB — switch dispatch
+// ✅ REQUIRED — switch dispatch
 switch (coreType_) {
 #ifdef PPSSPP_GBA
 case EmuCore::Type::GBA:
@@ -114,7 +114,7 @@ default:
 }
 ```
 
-**Shared system buttons** — Fast-forward + Pause dipanggil SETELAH dispatch, untuk SEMUA non-PSP core:
+**Shared system buttons** — Fast-forward + Pause called AFTER dispatch, for ALL non-PSP cores:
 ```cpp
 if (coreType_ != EmuCore::Type::PSP) {
     CreateSystemTouchButtons(root_, bounds, deviceOrientation);
@@ -125,31 +125,31 @@ if (coreType_ != EmuCore::Type::PSP) {
 
 ## 🔷 Generic Touch Classes
 
-| Class Saat Ini (GBA-specific) | Class Baru (Generic) |
+| Current Class (GBA-specific) | New Class (Generic) |
 |------------------------------|----------------------|
-| `GBADragDrop` | `CoreDragDrop` — baca button def dari registry, hitung scale dari `buttonDef.imageID` |
-| `GBASnapGrid` | `CoreSnapGrid` — sudah generic (tidak ada GBA reference ✅) |
-| `GBALayoutView` | `CoreLayoutView` — `CreateViews()` iterasi `GetButtonDefs(coreType_)` |
-| `GBACheckBoxChoice` | `CoreCheckBoxChoice` — sudah generic ✅ (hanya wrapper) |
-| `GBATouchVisibilityPopup` | `CoreTouchVisibilityPopup` — title dari `EmuCore::GetConfigSection(coreType_)`, button rows dari `GetButtonDefs(coreType_)` |
+| `GBADragDrop` | `CoreDragDrop` — reads button def from registry, computes scale from `buttonDef.imageID` |
+| `GBASnapGrid` | `CoreSnapGrid` — already generic (no GBA reference ✅) |
+| `GBALayoutView` | `CoreLayoutView` — `CreateViews()` iterates `GetButtonDefs(coreType_)` |
+| `GBACheckBoxChoice` | `CoreCheckBoxChoice` — already generic ✅ (wrapper only) |
+| `GBATouchVisibilityPopup` | `CoreTouchVisibilityScreen` — title from `EmuCore::GetConfigSection(coreType_)`, button rows from `GetButtonDefs(coreType_)` |
 
-**Aturan:**
-- [ ] Setiap class baru di `CoreTouchLayoutScreen.cpp` WAJIB pakai prefix `Core`, bukan nama core spesifik
-- [ ] Semua data per-core (button def, image ID, label) WAJIB dari registry, bukan hardcoded
+**Rules:**
+- [ ] Every new class in `CoreTouchLayoutScreen.cpp` MUST use the `Core` prefix, not a core-specific name
+- [ ] All per-core data (button def, image ID, label) MUST come from the registry, not hardcoded
 
 ---
 
 ## 🔷 Directory & File Path Per Core
 
-**LARANG:**
+**FORBIDDEN:**
 ```cpp
-// ⛔ DILARANG — hardcoded path
+// ⛔ FORBIDDEN — hardcoded path
 File::CreateFullPath(GetSysDirectory(DIRECTORY_SAVEDATA) / "GBA");
 ```
 
-**WAJIB:**
+**REQUIRED:**
 ```cpp
-// ✅ WAJIB — resolver
+// ✅ REQUIRED — resolver
 std::string GetCoreSaveDir(EmuCore::Type type) {
     switch (type) {
     case EmuCore::Type::GBA: return "GBA";
@@ -160,7 +160,7 @@ std::string GetCoreSaveDir(EmuCore::Type type) {
 }
 ```
 
-Resolver WAJIB untuk:
+Resolver REQUIRED for:
 - `DIRECTORY_SAVEDATA / <core>` — save files
 - `DIRECTORY_SAVESTATE / <core>` — save states
 - `g_gbaSavePrefix` → `GetCoreSavePrefix(type)`
@@ -168,44 +168,44 @@ Resolver WAJIB untuk:
 
 ---
 
-## 🔷 Step-by-Step: Menambah Emulator Baru
+## 🔷 Step-by-Step: Adding a New Emulator
 
-Gunakan checklist ini SETIAP kali menambah core baru:
+Use this checklist EVERY time you add a new core:
 
 ```
-## Menambah Core Baru: <Nama Core>
+## Adding New Core: <Core Name>
 
-### [Phase 0] Persiapan
-- [ ] Tambah `PPSSPP_<CORE>` flag di CMakeLists.txt
-- [ ] Tambah `EmuCore::Type::<CORE>` di EmuCore/EmuCore.h
-- [ ] Tambah `DetectType()` + `Create()` di EmuCore/EmuCore.cpp
-- [ ] Buat `<Core>Core.h/.cpp` (implementasi Core interface)
+### [Phase 0] Preparation
+- [ ] Add `PPSSPP_<CORE>` flag to CMakeLists.txt
+- [ ] Add `EmuCore::Type::<CORE>` to EmuCore/EmuCore.h
+- [ ] Add `DetectType()` + `Create()` to EmuCore/EmuCore.cpp
+- [ ] Create `<Core>Core.h/.cpp` (Core interface implementation)
 - [ ] Update `EmuCore/CMakeLists.txt`
 
 ### [Phase 1] Default Layout
-- [ ] Daftarkan button map via RegisterButtonMap() di EmuCore/Config.cpp
-- [ ] Definisikan default touch layout (positions + sizes)
-- [ ] Isolasi config section: [<Core> ControlLayout]
+- [ ] Register button map via RegisterButtonMap() in EmuCore/Config.cpp
+- [ ] Define default touch layout (positions + sizes)
+- [ ] Isolate config section: [<Core> ControlLayout]
 - [ ] Update InitDefaultTouchConfigs()
 
 ### [Phase 2] EmuScreen Integration
-- [ ] Tambah case di switch(coreType_) dispatch
-- [ ] Buat Create<Core>TouchLayout() — panggil CoreLayoutView
-- [ ] System buttons otomatis (CreateSystemTouchButtons)
+- [ ] Add case to switch(coreType_) dispatch
+- [ ] Create Create<Core>TouchLayout() — uses CoreLayoutView
+- [ ] System buttons automatic (CreateSystemTouchButtons)
 - [ ] Update Is<Core>() pattern (constexpr fallback)
 - [ ] Update Init/Update/Shutdown routing
 
 ### [Phase 3] Quality Gate #1 — PSP Parity
-- [ ] Identifikasi PSP equivalent feature untuk setiap aspek
-- [ ] Feature Parity Checklist (toggle all, save on exit, visibility icons, dll)
+- [ ] Identify PSP equivalent feature for every aspect
+- [ ] Feature Parity Checklist (toggle all, save on exit, visibility icons, etc.)
 - [ ] Filter PSP-specific logic
-- [ ] Catat mismatch ke PSP Knowledge Base
+- [ ] Log mismatches to PSP Knowledge Base
 
 ### [Phase 4] Quality Gate #2 — Code Review
 - [ ] Unified diff review (zero upstream change)
 - [ ] Edge cases (bounds=0, div-by-zero, null config)
 - [ ] Compile ON ✅ | OFF ✅
-- [ ] [PPSSPP-FORK] markers — semua file baru
+- [ ] [PPSSPP-FORK] markers — all new files
 - [ ] Post-commit diff verification
 ```
 
@@ -213,30 +213,30 @@ Gunakan checklist ini SETIAP kali menambah core baru:
 
 ## 🔷 Zero Duplication Rule
 
-> **Setiap tambahan core baru:**
-> ✅ Hanya tambah: `enum Type`, `DetectType`, `Factory`, `CoreFile`, `ButtonMap`, `DefaultLayout`
-> ❌ TIDAK perlu ubah: generic classes (`CoreDragDrop`, `CoreLayoutView`, `CoreSnapGrid`, `CoreCheckBoxChoice`, `CoreTouchVisibilityPopup`)
-> ❌ TIDAK perlu duplikasi: system buttons, popup rendering, grid drawing, drag-drop logic
-> ❌ TIDAK perlu switch baru di: layout view, visibility popup, grid renderer
+> **Every new core addition:**
+> ✅ Only adds: `enum Type`, `DetectType`, `Factory`, `CoreFile`, `ButtonMap`, `DefaultLayout`
+> ❌ Does NOT modify: generic classes (`CoreDragDrop`, `CoreLayoutView`, `CoreSnapGrid`, `CoreCheckBoxChoice`, `CoreTouchVisibilityScreen`)
+> ❌ Does NOT duplicate: system buttons, popup rendering, grid drawing, drag-drop logic
+> ❌ Does NOT need new switch in: layout view, visibility popup, grid renderer
 
 ---
 
-## 🔷 262 GBA References → Path to Generification
+## 🔷 262 GBA References — Path to Generification
 
-Saat ini ada ~262 reference GBA-specific di codebase. Target refactor bertahap:
+Currently ~262 GBA-specific references in the codebase. Incremental refactoring target:
 
 | Phase | Target | File | Status |
 |-------|--------|------|--------|
 | 1 | Class rename | `GBADragDrop` → `CoreDragDrop` | ✅ Done |
 | 2 | Class rename | `GBALayoutView` → `CoreLayoutView` | ✅ Done |
-| 3 | Class rename | `GBATouchVisibilityPopup` → `CoreTouchVisibilityPopup` | ✅ Done |
-| 4 | Switch ke registry | Hardcoded `case CTRL_*` → `GetButtonDefs(coreType_)` | ⏳ |
+| 3 | Class rename | `GBATouchVisibilityPopup` → `CoreTouchVisibilityScreen` | ✅ Done |
+| 4 | Switch to registry | Hardcoded `case CTRL_*` → `GetButtonDefs(coreType_)` | ⏳ |
 | 5 | System buttons | Inline → `CreateSystemTouchButtons()` | ✅ Done |
 | 6 | Binary routing | `if (coreType_ != PSP)` → `switch(coreType_)` | ✅ Done |
 | 7 | Hardcoded paths | String literal → `GetCoreDirectory(type)` | ⏳ |
 | 8 | GBA-prefixed methods | `AddGBATouchButtons` → `AddCoreTouchButtons` | ⏳ |
 
-Setiap phase WAJIB:
+Each phase REQUIRED:
 - ✅ Build ON + OFF
 - ✅ Zero upstream change
 - ✅ PSP parity verified

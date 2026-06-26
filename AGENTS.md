@@ -1,99 +1,99 @@
 # PPSSPP Fork — Agent Instructions
 
-Ini adalah fork PPSSPP dengan fitur kustom yang **harus tetap kompatibel** dengan upstream official [hrydgard/ppsspp](https://github.com/hrydgard/ppsspp).
+This is a PPSSPP fork with custom features that **must remain compatible** with the official upstream [hrydgard/ppsspp](https://github.com/hrydgard/ppsspp).
 
-## Prioritas Utama
+## Core Priorities
 
-1. **Zero breaking change** — Tidak menghapus, mengubah, atau merusak kode PPSSPP asli.
-2. **Upstream compatibility** — Semua perubahan harus bisa di-merge dengan upstream tanpa konflik permanen.
-3. **Modular** — Fitur kustom di file terpisah, tidak menyatu dengan codebase utama.
-4. **Preserve existing behavior** — Jangan ubah cara kerja emulator inti.
+1. **Zero breaking change** — Never delete, modify, or restructure existing PPSSPP code.
+2. **Upstream compatibility** — All changes must be mergeable with upstream without permanent conflicts.
+3. **Modular** — Custom features in separate files, not interleaved with the main codebase.
+4. **Preserve existing behavior** — Do not alter how the core emulator works.
 
 ## File Guidelines
 
-| File | Isi |
-|------|-----|
-| **`AGENTS.md`** (ini) | Prioritas + HARAM/WAJIB + navigasi ke aturan detail |
-| [`docs/agents/quality-gates.md`](docs/agents/quality-gates.md) | **3 Quality Gates**: PSP Feature Parity, Code Review, PSP Parity untuk core baru |
-| [`docs/agents/extensibility.md`](docs/agents/extensibility.md) | **Extensibility Architecture**: CoreButtonRegistry, generic classes, step-by-step tambah core baru |
-| [`docs/agents/psp-knowledge-base.md`](docs/agents/psp-knowledge-base.md) | **Katalog mismatch** PSP-GBA yang sudah di-fix |
-| [`docs/agents/code-standards.md`](docs/agents/code-standards.md) | Standar kode C++, naming, platform handling |
-| [`docs/agents/multi-core-development.md`](docs/agents/multi-core-development.md) | Aturan multi-emulator (GBA, future cores) |
-| [`docs/agents/feature-template.md`](docs/agents/feature-template.md) | Panduan menambah fitur baru |
-| [`docs/agents/fork-maintenance.md`](docs/agents/fork-maintenance.md) | Strategi merge upstream, handle konflik |
-| [`docs/agents/lansync-development.md`](docs/agents/lansync-development.md) | Aturan khusus LAN sync |
-| [`docs/progress-gba-support.md`](docs/progress-gba-support.md) | Progress & status fitur GBA |
+| File | Contents |
+|------|---------|
+| **`AGENTS.md`** (this) | Priorities + FORBIDDEN/REQUIRED rules + navigation to detail rules |
+| [`docs/agents/quality-gates.md`](docs/agents/quality-gates.md) | **3 Quality Gates**: PSP Feature Parity, Code Review, PSP Parity for new cores |
+| [`docs/agents/extensibility.md`](docs/agents/extensibility.md) | **Extensibility Architecture**: CoreButtonRegistry, generic classes, step-by-step new core guide |
+| [`docs/agents/psp-knowledge-base.md`](docs/agents/psp-knowledge-base.md) | **Catalog** of PSP-GBA mismatches that have been fixed |
+| [`docs/agents/code-standards.md`](docs/agents/code-standards.md) | C++ coding standards, naming, platform handling |
+| [`docs/agents/multi-core-development.md`](docs/agents/multi-core-development.md) | Multi-emulator rules (GBA, future cores) |
+| [`docs/agents/feature-template.md`](docs/agents/feature-template.md) | Guide for adding new features |
+| [`docs/agents/fork-maintenance.md`](docs/agents/fork-maintenance.md) | Upstream merge strategy, conflict handling |
+| [`docs/agents/lansync-development.md`](docs/agents/lansync-development.md) | LAN sync specific rules |
+| [`docs/progress-gba-support.md`](docs/progress-gba-support.md) | GBA feature progress & status |
 
-**WAJIB baca** `quality-gates.md` sebelum commit dan `extensibility.md` sebelum menambah core baru.
+**REQUIRED** — Read `quality-gates.md` before committing and `extensibility.md` before adding a new core.
 
-## Aturan Global
+## Global Rules
 
-### 🔴 HARAM
-- ❌ Menghapus, mengubah, atau merestruktur kode upstream yang sudah ada.
-- ❌ Meletakkan file kustom di direktori inti (`Core/`, `GPU/`, `HLE/`, `MIPS/`).
-- ❌ Mengubah alur logika upstream via `#else`/`#endif` di luar blok kustom.
-- ❌ Refactor kode upstream untuk mengakomodasi kode kustom.
+### 🔴 FORBIDDEN
+- ❌ Deleting, modifying, or restructuring existing upstream code.
+- ❌ Placing custom files in core directories (`Core/`, `GPU/`, `HLE/`, `MIPS/`).
+- ❌ Altering upstream control flow via `#else`/`#endif` outside custom blocks.
+- ❌ Refactoring upstream code to accommodate custom code.
 
-### 🟢 WAJIB
-- ✅ Kode kustom di **file terpisah** di direktori non-inti.
-- ✅ Setiap tambahan ke file upstream:
-  1. Dibungkus `#ifdef PPSSPP_<FITUR>` (flag spesifik fitur)
-  2. Ditandai `// [PPSSPP-FORK] NamaFitur: deskripsi`
-  3. Hanya **menambah** baris baru (zero deletion)
-- ✅ Build diverifikasi **DUA kondisi**: `-DPPSSPP_<FITUR>=ON` dan `=OFF` — keduanya sukses.
-- ✅ Setiap fitur baru punya feature flag sendiri (`PPSSPP_<NAMA>`).
-- ✅ Saat conflict merge dengan upstream: **kode upstream yang menang** — kode kustom dipindah/diadjust, bukan sebaliknya.
-- ✅ Pengaturan per-fitur terisolasi di section config terpisah (jangan campur dengan PSP).
+### 🟢 REQUIRED
+- ✅ Custom code in **separate files** in non-core directories.
+- ✅ Every addition to upstream files:
+  1. Wrapped in `#ifdef PPSSPP_<FEATURE>` (feature-specific flag)
+  2. Tagged with `// [PPSSPP-FORK] FeatureName: description`
+  3. Only **adds** new lines (zero deletion)
+- ✅ Build verified in **TWO conditions**: `-DPPSSPP_<FEATURE>=ON` and `=OFF` — both must succeed.
+- ✅ Every new feature has its own feature flag (`PPSSPP_<NAME>`).
+- ✅ On upstream merge conflict: **upstream code wins** — custom code is moved/adjusted, not the other way around.
+- ✅ Per-feature settings isolated in separate config sections (don't mix with PSP).
 
 ### 🟢 Build Flag Convention
 
 | Flag | Scope | Note |
 |------|-------|------|
-| `PPSSPP_MULTICORE` | Top-level — enable semua multi-core | Wajib ON untuk GBA |
-| `PPSSPP_GBA` | (future) | Saat ini masih pakai `PPSSPP_MULTICORE` |
+| `PPSSPP_MULTICORE` | Top-level — enables all multi-core | Required ON for GBA |
+| `PPSSPP_GBA` | (future) | Currently still uses `PPSSPP_MULTICORE` |
 
-- Semua file kustom di `UI/` yang pakai `#ifdef PPSSPP_MULTICORE`: WAJIB ada `// [PPSSPP-FORK]` marker + zero deletion + verifikasi `#ifndef` (PSP path) masih build.
-- Jika suatu fitur perlu dipisah dari multi-core umbrella, buat flag baru.
+- All custom files in `UI/` using `#ifdef PPSSPP_MULTICORE`: MUST have `// [PPSSPP-FORK]` marker + zero deletion + verify `#ifndef` (PSP path) still builds.
+- If a feature needs separation from the multi-core umbrella, create a new flag.
 
 ## Patterns
 
-### 🟢 IsFitur() Pattern — Kurangi #ifdef di Call Site
+### 🟢 IsFeature() Pattern — Reduce #ifdef at Call Site
 
 ```cpp
-// Header — di luar #ifdef
-#ifdef PPSSPP_FITUR
-    bool IsFitur() const { return flag_ != Default; }
+// Header — outside #ifdef
+#ifdef PPSSPP_FEATURE
+    bool IsFeature() const { return flag_ != Default; }
 #else
-    static constexpr bool IsFitur() { return false; }
+    static constexpr bool IsFeature() { return false; }
 #endif
 
-// Call site — tanpa #ifdef (compiler buang dead branch)
-if (IsFitur()) { DoFiturStuff(); }
+// Call site — no #ifdef (compiler eliminates dead branch)
+if (IsFeature()) { DoFeatureStuff(); }
 ```
 
 ### 🟢 Helper Method Extraction
 
-Jika logic kustom >5 baris di file upstream, extract ke helper:
+If custom logic >5 lines in an upstream file, extract to a helper:
 
 ```cpp
-// Di file upstream (call site minimal, ≤3 baris)
-#ifdef PPSSPP_FITUR
-    if (IsFitur()) { UpdateFitur(); return; }
+// In upstream file (minimal call site, ≤3 lines)
+#ifdef PPSSPP_FEATURE
+    if (IsFeature()) { UpdateFeature(); return; }
 #endif
 
-// Helper di file terpisah
-void EmuScreen::UpdateFitur() { /* semua logic */ }
+// Helper in separate file
+void EmuScreen::UpdateFeature() { /* all logic */ }
 ```
 
-Convention: `Init<Fitur>()`, `Shutdown<Fitur>()`, `Update<Fitur>()`, `Render<Fitur>()`.
+Convention: `Init<Feature>()`, `Shutdown<Feature>()`, `Update<Feature>()`, `Render<Feature>()`.
 
-## Navigation — Kapan Baca File Lain
+## Navigation — When to Read Which File
 
-| Situasi | Baca |
-|---------|------|
-| Mau commit | [`quality-gates.md`](docs/agents/quality-gates.md) — Gate #2 Code Review |
-| Implementasi fitur baru (GBA) | [`quality-gates.md`](docs/agents/quality-gates.md) — Gate #1 Feature Parity |
-| Menambah emulator baru (N64, PS1, dll) | [`extensibility.md`](docs/agents/extensibility.md) + [`quality-gates.md`](docs/agents/quality-gates.md) — Gate #3 |
-| Tidak yakin constructor/class/ImageID | [`quality-gates.md`](docs/agents/quality-gates.md) — Anti-Hallucination Rule |
-| Melihat mismatch PSP yang sudah di-fix | [`psp-knowledge-base.md`](docs/agents/psp-knowledge-base.md) |
-| Merge upstream | [`fork-maintenance.md`](docs/agents/fork-maintenance.md) |
+| Situation | Read |
+|-----------|------|
+| About to commit | [`quality-gates.md`](docs/agents/quality-gates.md) — Gate #2 Code Review |
+| Implementing a new feature (GBA) | [`quality-gates.md`](docs/agents/quality-gates.md) — Gate #1 Feature Parity |
+| Adding a new emulator (N64, PS1, etc.) | [`extensibility.md`](docs/agents/extensibility.md) + [`quality-gates.md`](docs/agents/quality-gates.md) — Gate #3 |
+| Unsure about constructor/class/ImageID | [`quality-gates.md`](docs/agents/quality-gates.md) — Anti-Hallucination Rule |
+| Viewing fixed PSP mismatches | [`psp-knowledge-base.md`](docs/agents/psp-knowledge-base.md) |
+| Merging upstream | [`fork-maintenance.md`](docs/agents/fork-maintenance.md) |

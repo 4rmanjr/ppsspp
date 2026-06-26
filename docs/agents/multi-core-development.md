@@ -1,24 +1,24 @@
-# Multi-Core Development — Aturan Khusus Multi-Emulator
+# Multi-Core Development — Multi-Emulator Specific Rules
 
-## Arsitektur
+## Architecture
 
-Semua emulator core (selain PSP) menggunakan **EmuCore abstraction layer**:
+All emulator cores (other than PSP) use the **EmuCore abstraction layer**:
 
 ```
-EmuCore/            → Folder baru, tidak sentuh upstream
-├── EmuCore.h       → Interface abstrak untuk semua core
+EmuCore/            → New folder, doesn't touch upstream
+├── EmuCore.h       → Abstract interface for all cores
 ├── EmuCore.cpp     → Factory: Create() + DetectType()
-├── PSPCore.h/.cpp  → Wrapper PSP (delegasi ke sistem existing)
+├── PSPCore.h/.cpp  → PSP wrapper (delegates to existing system)
 ├── GBACore.h/.cpp  → GBA via libmgba
 └── CMakeLists.txt
 ```
 
-## Adding a New Emulator Core — Panduan Langkah demi Langkah
+## Adding a New Emulator Core — Step-by-Step Guide
 
 ### Step 0: Naming Convention
 
-| Aspek | Convention | Contoh (Core X) |
-|-------|------------|-----------------|
+| Aspect | Convention | Example (Core X) |
+|--------|------------|------------------|
 | Core ID | `UPPER` | `N64`, `PS1` |
 | Core Name | `PascalCase` | `N64`, `PS1` |
 | Feature flag | `PPSSPP_<ID>` | `PPSSPP_N64` |
@@ -33,9 +33,9 @@ EmuCore/            → Folder baru, tidak sentuh upstream
 | Save state dir | `DIRECTORY_SAVESTATE / <CoreName> /` | `SAVESTATE/N64/` |
 | Dev comment | `// [PPSSPP-FORK] <CoreName>:` | `// [PPSSPP-FORK] N64:` |
 
-> **PENTING:** Konsistensi naming memudahkan verifikasi otomatis (grep, script, CI).
+> **IMPORTANT:** Naming consistency enables automated verification (grep, script, CI).
 
-### Step 1: Tambah enum Type
+### Step 1: Add enum Type
 
 **File:** `EmuCore/EmuCore.h`
 
@@ -45,22 +45,22 @@ namespace EmuCore {
 enum class Type {
     PSP,
     GBA,
-    N64,        // ← tambah di sini
+    N64,        // ← add here
 };
 
 }  // namespace EmuCore
 ```
 
-### Step 2: Buat file core
+### Step 2: Create core files
 
 **File:** `EmuCore/<CoreName>Core.h`
 **File:** `EmuCore/<CoreName>Core.cpp`
 
-WAJIB mengikuti interface `EmuCore::Core`:
+MUST follow the `EmuCore::Core` interface:
 
 ```cpp
-// [PPSSPP-FORK] <CoreName>: <deskripsi singkat>
-// <Detail>
+// [PPSSPP-FORK] <CoreName>: <brief description>
+// <Details>
 #pragma once
 
 #include "EmuCore/EmuCore.h"
@@ -100,7 +100,7 @@ public:
     // --- Game Info ---
     void GetGameInfo(std::string &title, std::string &id) const override;
 
-    // --- <CoreName>-specific (opsional) ---
+    // --- <CoreName>-specific (optional) ---
     // void GetMixedAudio(int32_t *buffer, size_t *stereoPairs);
     // bool SaveStateToFile(int slot);
     // bool LoadStateFromFile(int slot);
@@ -112,7 +112,7 @@ private:
 }  // namespace EmuCore
 ```
 
-### Step 3: Daftarkan di DetectType + Factory
+### Step 3: Register in DetectType + Factory
 
 **File:** `EmuCore/EmuCore.cpp`
 
@@ -140,7 +140,7 @@ std::unique_ptr<Core> Create(const Path &romPath) {
 }
 ```
 
-### Step 4: Tambah feature flag di CMake
+### Step 4: Add feature flag to CMake
 
 **File:** `EmuCore/CMakeLists.txt`
 
@@ -160,8 +160,8 @@ if(PPSSPP_MULTICORE)
     target_link_libraries(EmuCore PUBLIC mgba)
 endif()
 
-# --- Tambah untuk core baru ---
-# Jika core baru butuh external library (libn64, dll):
+# --- Add for new core ---
+# If new core needs external library (libn64, etc.):
 # if(PPSSPP_MULTICORE)
 #     add_subdirectory(${CMAKE_SOURCE_DIR}/ext/lib<corename> ${CMAKE_BINARY_DIR}/ext/lib<corename>)
 #     target_sources(EmuCore PRIVATE <CoreName>Core.cpp)
@@ -170,7 +170,7 @@ endif()
 # endif()
 ```
 
-### Step 5: Daftarkan di RecentFilesRegistry
+### Step 5: Register in RecentFilesRegistry
 
 **File:** `UI/NativeApp.cpp`
 
@@ -181,7 +181,7 @@ auto &reg = EmuCore::RecentFilesRegistry::Get();
 reg.Register(EmuCore::RecentFilesEntry{
     (int)EmuCore::Type::<CoreName>,
     "<CoreName>",                    // displayName
-    "<CoreName> Recent",             // iniSection → [<CoreName> Recent] di ppsspp.ini
+    "<CoreName> Recent",             // iniSection → [<CoreName> Recent] in ppsspp.ini
     "RECENT_<CORENAME>",             // specialPath
     &g_recentFiles<CoreName>,        // RecentFilesManager global
     nullptr,
@@ -190,7 +190,7 @@ reg.Register(EmuCore::RecentFilesEntry{
 #endif
 ```
 
-Lalu di function init:
+Then in the init function:
 
 ```cpp
 // [PPSSPP-FORK] <CoreName>: init recent files
@@ -200,9 +200,9 @@ void Init<CoreName>() {
 }
 ```
 
-### Step 6: Tambah config section
+### Step 6: Add config section
 
-**File:** `Core/Config.h` — tambah struct config:
+**File:** `Core/Config.h` — add config struct:
 
 ```cpp
 // [PPSSPP-FORK] <CoreName>: settings
@@ -216,16 +216,16 @@ extern <CoreName>DisplayConfig g_<lower>DisplayConfig;
 extern <CoreName>AudioConfig g_<lower>AudioConfig;
 ```
 
-**File:** `Core/Config.cpp` — load/save di section `[<CoreName>]`:
+**File:** `Core/Config.cpp` — load/save in section `[<CoreName>]`:
 
 ```cpp
 // [PPSSPP-FORK] <CoreName>: load settings
 g_<lower>DisplayConfig.someField = section->Get("someField", defaultVal);
 ```
 
-### Step 7: Integrasi di EmuScreen
+### Step 7: Integrate in EmuScreen
 
-**File:** `UI/EmuScreen.h` — tambah helper:
+**File:** `UI/EmuScreen.h` — add helpers:
 
 ```cpp
 // [PPSSPP-FORK] <CoreName>: helpers
@@ -241,13 +241,13 @@ void Render<CoreName>(Draw::DrawContext *draw);
 **File:** `UI/EmuScreen.cpp` — routing:
 
 ```cpp
-// Di constructor — init core
-// Di destructor — shutdown core
-// Di update loop — run frame + audio
-// Di render — draw
+// In constructor — init core
+// In destructor — shutdown core
+// In update loop — run frame + audio
+// In render — draw
 ```
 
-Gunakan `Is<CoreName>()` pattern biar tanpa `#ifdef` di call site:
+Use the `Is<CoreName>()` pattern to avoid `#ifdef` at call sites:
 
 ```cpp
 // EmuScreen.h — constexpr fallback
@@ -257,7 +257,7 @@ Gunakan `Is<CoreName>()` pattern biar tanpa `#ifdef` di call site:
     static constexpr bool Is<CoreName>() { return false; }
 #endif
 
-// Call site — compiler hapus branch mati
+// Call site — compiler eliminates dead branch
 if (Is<CoreName>()) {
     Do<CoreName>Stuff();
 }
@@ -265,13 +265,13 @@ if (Is<CoreName>()) {
 
 ### Step 8: Per-Core Touch Layout (On-Screen Controls)
 
-Setiap core yang butuh on-screen touch buttons WAJIB mendaftarkan default layout-nya.
+Every core that needs on-screen touch buttons MUST register its default layout.
 
-**Mekanisme:**
+**Mechanism:**
 
-1. Definisikan default buttons di `EmuCore::Config.cpp` lewat `FillDefault<CoreName>TouchLayout()`
-2. Panggil di `EmuCore::InitDefaultTouchConfigs()`
-3. `EmuScreen::AddGBATouchButtons()` (generic) otomatis baca dari config
+1. Define default buttons in `EmuCore::Config.cpp` via `FillDefault<CoreName>TouchLayout()`
+2. Call from `EmuCore::InitDefaultTouchConfigs()`
+3. `EmuScreen::AddGBATouchButtons()` (generic) automatically reads from config
 
 **Config Storage:**
 
@@ -280,21 +280,21 @@ Setiap core yang butuh on-screen touch buttons WAJIB mendaftarkan default layout
 [ControlLayout]
 button0=0,0.82,0.47,0.09,0.09,18
 
-; GBA (baru)
+; GBA (new)
 [GBA ControlLayout]
 button0=0,0.82,0.47,0.09,0.09,A
 button1=1,0.73,0.38,0.09,0.09,B
 ...
 
-; Core baru
+; New core
 [<CoreName> ControlLayout]
 button0=<keyCode>,<x>,<y>,<w>,<h>,<label>
 ...
 ```
 
-**Format baris:** `keyCode,x,y,w,h,label,visible`
+**Line format:** `keyCode,x,y,w,h,label,visible`
 
-**Registrasi default layout di `EmuCore/Config.cpp`:**
+**Default layout registration in `EmuCore/Config.cpp`:**
 
 ```cpp
 void InitDefaultTouchConfigs() {
@@ -309,29 +309,29 @@ void InitDefaultTouchConfigs() {
 }
 ```
 
-**Customize lewat Settings:**
+**Configure via Settings:**
 
 Button "Customize On-Screen Controls" → `CoreTouchLayoutScreen(gamePath, Type::<CORENAME>)`
-Screen ini otomatis baca/save dari section config yang sesuai.
+This screen automatically reads/saves from the appropriate config section.
 
 **Files:** `EmuCore/Config.h`, `EmuCore/Config.cpp`, `UI/CoreTouchLayoutScreen.h/.cpp`
 
-### Step 9: File opsional (jika dibutuhkan)
+### Step 9: Optional files (if needed)
 
-| Komponen | File | Kapan Dibutuhkan |
-|----------|------|------------------|
-| Touch layout (legacy) | `UI/TouchLayout<CoreName>.h/.cpp` | **DEPRECATED** — gunakan per-core config |
-| Settings screen | `UI/<CoreName>SettingsScreen.h/.cpp` | Core punya settings sendiri |
-| Android audio | `android/jni/AndroidAudio.cpp` | Audio routing beda platform |
+| Component | File | When Needed |
+|-----------|------|-------------|
+| Touch layout (legacy) | `UI/TouchLayout<CoreName>.h/.cpp` | **DEPRECATED** — use per-core config |
+| Settings screen | `UI/<CoreName>SettingsScreen.h/.cpp` | Core has its own settings |
+| Android audio | `android/jni/AndroidAudio.cpp` | Audio routing differs by platform |
 | Test | `test_<corename>_core.cpp` | Minimal load + run test |
 
 ---
 
-## Standar Kode Penulisan
+## Code Writing Standards
 
 ### 1. File Structure Convention
 
-Setiap core WAJIB punya struktur file yang sama:
+Every core MUST have the same file structure:
 
 ```
 EmuCore/
@@ -339,7 +339,7 @@ EmuCore/
 ├── <CoreName>Core.cpp    → implementation
 ```
 
-Urutan method di header & implementation HARUS SAMA:
+Method order in header & implementation MUST BE IDENTICAL:
 
 ```cpp
 class <CoreName>Core : public Core {
@@ -364,41 +364,41 @@ private:
 
 ### 2. Comment Convention
 
-Semua kode fork WAJIB pakai marker:
+All fork code MUST use markers:
 
 ```cpp
-// [PPSSPP-FORK] <CoreName>: <deskripsi>
-// <Detail opsional — 1 baris atau multi baris>
+// [PPSSPP-FORK] <CoreName>: <description>
+// <Optional detail — 1 line or multiline>
 ```
 
-Aturan:
-- Baris pertama: `// [PPSSPP-FORK] <CoreName>: <kalimat imperative>`
-- Baris berikutnya: `// <detail>`
-- Bahasa: **English** untuk marker, Indonesia boleh untuk note internal
-- Marker di SETIAP file kustom (header + implementation)
-- Marker di SETIAP blok `#ifdef` di file upstream
+Rules:
+- First line: `// [PPSSPP-FORK] <CoreName>: <imperative sentence>`
+- Following lines: `// <detail>`
+- Language: **English** for markers
+- Marker on EVERY custom file (header + implementation)
+- Marker on EVERY `#ifdef` block in upstream files
 
 ### 3. #ifdef Convention
 
 ```cpp
 #ifdef PPSSPP_<CORENAME>
-    // Kode spesifik core
-    // WAJIB: komentar [PPSSPP-FORK] <CoreName>: ...
+    // Core-specific code
+    // REQUIRED: comment [PPSSPP-FORK] <CoreName>: ...
 #endif
 ```
 
-Aturan:
-- **JANGAN** letakkan `#else` dengan kode upstream di dalamnya
-- **JANGAN** ubah indentasi kode upstream untuk accommodate `#ifdef`
-- Blok `#ifdef` hanya **menambah**, tidak **mengubah** kode sekitar
-- Setiap `#ifdef` WAJIB bisa di-flip OFF dan build tetap sukses
+Rules:
+- **DO NOT** place `#else` with upstream code inside
+- **DO NOT** change upstream code indentation to accommodate `#ifdef`
+- `#ifdef` blocks only **add**, do not **modify** surrounding code
+- Every `#ifdef` MUST be flippable OFF with build still succeeding
 
 ### 4. Method Extraction Pattern
 
-Jika logic kustom > 5 baris di file upstream, extract ke helper:
+If custom logic > 5 lines in an upstream file, extract to a helper:
 
 ```cpp
-// Di file upstream — minimal, cukup 3 baris
+// In upstream file — minimal, just 3 lines
 #ifdef PPSSPP_<CORENAME>
     if (Is<CoreName>()) {
         Update<CoreName>();
@@ -406,16 +406,16 @@ Jika logic kustom > 5 baris di file upstream, extract ke helper:
     }
 #endif
 
-// Implementasi helper — semua logic di sini
-// [PPSSPP-FORK] <CoreName>: <deskripsi>
+// Helper implementation — all logic here
+// [PPSSPP-FORK] <CoreName>: <description>
 void EmuScreen::Update<CoreName>() {
-    // ... semua logic
+    // ... all logic
 }
 ```
 
-Convention naming helper:
-| Pattern | Contoh |
-|---------|--------|
+Helper naming convention:
+| Pattern | Example |
+|---------|---------|
 | `Init<CoreName>()` | `InitGBA()` |
 | `Shutdown<CoreName>()` | `ShutdownGBA()` |
 | `Update<CoreName>()` | `UpdateGBA()` |
@@ -424,7 +424,7 @@ Convention naming helper:
 ### 5. Is<CoreName>() Pattern
 
 ```cpp
-// Header — constexpr fallback untuk compiler hapus dead branch
+// Header — constexpr fallback for compiler dead branch elimination
 #ifdef PPSSPP_<CORENAME>
     bool Is<CoreName>() const;
 #else
@@ -439,12 +439,12 @@ bool EmuScreen::Is<CoreName>() const {
 #endif
 ```
 
-> **Kenapa?** Call site tanpa `#ifdef` = lebih mudah dibaca, lebih sedikit typo.
-> Compiler otomatis buang `if (false)` branch.
+> **Why?** Call site without `#ifdef` = more readable, fewer typos.
+> Compiler automatically eliminates `if (false)` branches.
 
 ### 6. Config Isolation
 
-Setiap core WAJIB punya section config sendiri:
+Every core MUST have its own config section:
 
 ```ini
 ; ppsspp.ini
@@ -461,73 +461,73 @@ setting1=value1
 setting2=value2
 ```
 
-**DILARANG:** Satukan config core berbeda dalam satu section.
-**WAJIB:** Setiap core load/save dari section masing-masing.
+**FORBIDDEN:** Merge different core configs into one section.
+**REQUIRED:** Each core loads/saves from its own section.
 
 ### 7. Feature Flag Convention
 
 | Flag | Scope | Status |
 |------|-------|--------|
-| `PPSSPP_MULTICORE` | Global — enable all multi-core | ✅ Ada |
-| `PPSSPP_GBA` | GBA-specific (future: pisah dari MULTICORE) | ⏳ Belum |
-| `PPSSPP_<CORENAME>` | Per-core baru | ✅ Harus ada |
+| `PPSSPP_MULTICORE` | Global — enable all multi-core | ✅ Active |
+| `PPSSPP_GBA` | GBA-specific (future: separate from MULTICORE) | ⏳ Not yet |
+| `PPSSPP_<CORENAME>` | Per-new-core | ✅ Required |
 
-Aturan:
-- Setiap core baru WAJIB punya flag sendiri: `PPSSPP_<CORENAME>`
-- Flag didefinisikan di `EmuCore/CMakeLists.txt`
-- Build WAJIB diverifikasi ON dan OFF
+Rules:
+- Every new core MUST have its own flag: `PPSSPP_<CORENAME>`
+- Flag defined in `EmuCore/CMakeLists.txt`
+- Build MUST be verified ON and OFF
 
 ---
 
-## Integration Points Map — Semua File yang Perlu Disentuh
+## Integration Points Map — All Files That Need Changes
 
-Berikut adalah **complete map** semua file yang perlu diubah saat menambah core baru.
-Gunakan sebagai checklist.
+Below is the **complete map** of all files that need modification when adding a new core.
+Use as a checklist.
 
-### Wajib Diubah (core files)
+### Required Changes (core files)
 
-| # | File | Perubahan |
-|---|------|-----------|
-| 1 | `EmuCore/EmuCore.h` | Tambah enum `Type::<CoreName>` |
-| 2 | `EmuCore/EmuCore.cpp` | Tambah di `DetectType()` + `Create()` |
-| 3 | `EmuCore/<CoreName>Core.h` | **BARU** — class declaration |
-| 4 | `EmuCore/<CoreName>Core.cpp` | **BARU** — implementation |
-| 5 | `EmuCore/CMakeLists.txt` | Tambah source file |
-| 6 | `Core/Config.h` | Tambah struct config + extern vars |
-| 7 | `Core/Config.cpp` | Tambah load/save section config |
+| # | File | Change |
+|---|------|--------|
+| 1 | `EmuCore/EmuCore.h` | Add enum `Type::<CoreName>` |
+| 2 | `EmuCore/EmuCore.cpp` | Add to `DetectType()` + `Create()` |
+| 3 | `EmuCore/<CoreName>Core.h` | **NEW** — class declaration |
+| 4 | `EmuCore/<CoreName>Core.cpp` | **NEW** — implementation |
+| 5 | `EmuCore/CMakeLists.txt` | Add source file |
+| 6 | `Core/Config.h` | Add config struct + extern vars |
+| 7 | `Core/Config.cpp` | Add load/save config section |
 | 8 | `UI/NativeApp.cpp` | Register RecentFilesRegistry + Init |
-| 9 | `EmuCore/Config.h` | Tambah default touch buttons di `InitDefaultTouchConfigs()` |
-| 10 | `EmuCore/Config.cpp` | Tambah `FillDefault<CoreName>TouchLayout()` |
+| 9 | `EmuCore/Config.h` | Add default touch buttons in `InitDefaultTouchConfigs()` |
+| 10 | `EmuCore/Config.cpp` | Add `FillDefault<CoreName>TouchLayout()` |
 
-### Wajib Diubah (UI integration)
+### Required Changes (UI integration)
 
-| # | File | Perubahan |
-|---|------|-----------|
-| 9 | `UI/EmuScreen.h` | Tambah helper methods + Is<CoreName>() |
+| # | File | Change |
+|---|------|--------|
+| 9 | `UI/EmuScreen.h` | Add helper methods + Is<CoreName>() |
 | 10 | `UI/EmuScreen.cpp` | Init, shutdown, update, render routing |
 | 11 | `UI/EmuScreen.cpp` | Input handling + save/load routing |
 | 12 | `UI/MainScreen.cpp` | Recent tab grouping (auto via registry) |
 
-### Opsional
+### Optional
 
-| # | File | Kapan |
-|---|------|-------|
-| 13 | `UI/TouchLayout<CoreName>.h/.cpp` | **BARU** — jika butuh touch controls |
-| 14 | `UI/<CoreName>SettingsScreen.h/.cpp` | **BARU** — jika butuh settings screen |
-| 15 | `UI/PauseScreen.cpp` | Jika save/load beda dari default |
-| 16 | `Core/KeyMap.h/.cpp` | Jika ada VIRTKEY khusus |
-| 17 | `Util/RecentFiles.h/.cpp` | Jika butuh recent list terpisah |
-| 18 | `ext/lib<corename>/` | Submodule library emulator |
-| 19 | `test_<corename>_core.cpp` | **BARU** — minimal test |
+| # | File | When |
+|---|------|------|
+| 13 | `UI/TouchLayout<CoreName>.h/.cpp` | **NEW** — if touch controls needed |
+| 14 | `UI/<CoreName>SettingsScreen.h/.cpp` | **NEW** — if settings screen needed |
+| 15 | `UI/PauseScreen.cpp` | If save/load differs from default |
+| 16 | `Core/KeyMap.h/.cpp` | If custom VIRTKEY needed |
+| 17 | `Util/RecentFiles.h/.cpp` | If separate recent list needed |
+| 18 | `ext/lib<corename>/` | Submodule emulator library |
+| 19 | `test_<corename>_core.cpp` | **NEW** — minimal test |
 | 20 | `CMakeLists.txt` (root) | Link library + target |
 
 ### Android-Specific
 
-| # | File | Kapan |
-|---|------|-------|
-| 21 | `android/jni/Android.mk` | Tambah source (jika pakai ndk-build) |
-| 22 | `android/jni/AndroidAudio.cpp` | Jika audio routing berbeda |
-| 23 | `AndroidManifest.xml` | Intent filter untuk file extension |
+| # | File | When |
+|---|------|------|
+| 21 | `android/jni/Android.mk` | Add source (if using ndk-build) |
+| 22 | `android/jni/AndroidAudio.cpp` | If audio routing differs |
+| 23 | `AndroidManifest.xml` | Intent filter for file extension |
 | 24 | `PpssppActivity.java` | Handle open file intent |
 
 ---
@@ -593,17 +593,17 @@ if (Is<CoreName>()) {
 
 ## Verification Checklist
 
-Sebelum merge, WAJIB verifikasi:
+Before merge, REQUIRED verification:
 
-- [ ] `-DPPSSPP_<CORENAME>=ON` build sukses
-- [ ] `-DPPSSPP_<CORENAME>=OFF` build sukses (tidak ada kode bocor)
-- [ ] Semua file kustom punya `[PPSSPP-FORK] <CoreName>: ` marker
-- [ ] Config terisolasi di section sendiri (`[<CoreName>]`)
-- [ ] Recent files di section sendiri (`[<CoreName> Recent]`)
-- [ ] VIRTKEY prefix berbeda dari core lain
-- [ ] `EmuCore/EmuCore.h` — enum `Type::<CoreName>` terdaftar
-- [ ] `EmuCore/EmuCore.cpp` — DetectType + Factory routing benar
-- [ ] `EmuScreen::Is<CoreName>()` — constexpr fallback untuk OFF build
-- [ ] DeviceLost + DeviceRestored diimplementasi (jika pakai GPU)
-- [ ] Lazy init GPU resources (di Render() pertama, bukan constructor)
-- [ ] Save state path tidak konflik dengan core lain
+- [ ] `-DPPSSPP_<CORENAME>=ON` build succeeds
+- [ ] `-DPPSSPP_<CORENAME>=OFF` build succeeds (no leaked code)
+- [ ] All custom files have `[PPSSPP-FORK] <CoreName>: ` marker
+- [ ] Config isolated in its own section (`[<CoreName>]`)
+- [ ] Recent files in its own section (`[<CoreName> Recent]`)
+- [ ] VIRTKEY prefix differs from other cores
+- [ ] `EmuCore/EmuCore.h` — enum `Type::<CoreName>` registered
+- [ ] `EmuCore/EmuCore.cpp` — DetectType + Factory routing correct
+- [ ] `EmuScreen::Is<CoreName>()` — constexpr fallback for OFF build
+- [ ] DeviceLost + DeviceRestored implemented (if using GPU)
+- [ ] Lazy init GPU resources (on first Render(), not constructor)
+- [ ] Save state path doesn't conflict with other cores

@@ -1,54 +1,54 @@
-# Feature Template — Menambahkan Fitur Baru
+# Feature Template — Adding New Features
 
-Gunakan checklist ini setiap kali menambahkan fitur kustom baru.
+Use this checklist every time you add a new custom feature.
 
-## 🔴 Aturan Wajib (Pelanggaran = Rollback)
+## 🔴 Mandatory Rules (Violation = Rollback)
 
-1. ❌ **Dilarang** menghapus, mengubah, atau merestruktur kode upstream
-2. ❌ **Dilarang** meletakkan file kustom di `Core/`, `GPU/`, `HLE/`, `MIPS/`
-3. ❌ **Dilarang** refactor upstream untuk akomodasi kode kustom
-4. ❌ **Dilarang** mengubah alur upstream via `#else`/`#endif`
+1. ❌ **Forbidden** to delete, modify, or restructure upstream code
+2. ❌ **Forbidden** to place custom files in `Core/`, `GPU/`, `HLE/`, `MIPS/`
+3. ❌ **Forbidden** to refactor upstream to accommodate custom code
+4. ❌ **Forbidden** to alter upstream flow via `#else`/`#endif`
 
-## Checklist Wajib
+## Required Checklist
 
-### Isolasi
-- [ ] Fitur baru TIDAK mengubah/menghapus kode upstream yang sudah ada
-- [ ] Fitur baru diimplementasikan di **file terpisah**, bukan di file inti PPSSPP
-- [ ] File baru diletakkan di direktori non-inti (contoh: `EmuCore/`, `ext/`, `UI/`, `Common/Net/`, dll)
-- [ ] Semua file baru punya header `// [PPSSPP-FORK] <NamaFitur>`
+### Isolation
+- [ ] New feature does NOT modify/delete existing upstream code
+- [ ] New feature implemented in **separate files**, not in PPSSPP core files
+- [ ] New files placed in non-core directories (e.g., `EmuCore/`, `ext/`, `UI/`, `Common/Net/`, etc.)
+- [ ] All new files have header `// [PPSSPP-FORK] <FeatureName>`
 
 ### Feature Flag
-- [ ] Fitur baru punya **feature flag** sendiri (`PPSSPP_<NAMA>`)
-- [ ] Fitur bisa dinonaktifkan dengan `cmake -DPPSSPP_<NAMA>=OFF` — dan build tetap berhasil ✅
+- [ ] New feature has its own **feature flag** (`PPSSPP_<NAME>`)
+- [ ] Feature can be disabled with `cmake -DPPSSPP_<NAME>=OFF` — build still succeeds ✅
 
-### Jika Terpaksa Menyentuh File Upstream (MAX 5 baris)
-- [ ] Hanya **menambah** baris baru (jangan mengubah/menghapus baris existing)
-- [ ] Kode tambahan dibungkus `#ifdef PPSSPP_<NAMA>`
-- [ ] WAJIB ada komentar `// [PPSSPP-FORK] <NamaFitur>: <penjelasan>`
-- [ ] Tidak ada `#else` yang mengubah alur upstream
+### If Touching Upstream Files (MAX 5 lines)
+- [ ] Only **adds** new lines (does not modify/delete existing lines)
+- [ ] Added code wrapped in `#ifdef PPSSPP_<NAME>`
+- [ ] MUST have comment `// [PPSSPP-FORK] <FeatureName>: <explanation>`
+- [ ] No `#else` that alters upstream flow
 
-### Build Verification (WAJIB Dual)
-- [ ] Build dengan `-DPPSSPP_<NAMA>=ON` — sukses tanpa error/warning
-- [ ] Build dengan `-DPPSSPP_<NAMA>=OFF` — sukses tanpa error/warning
-- [ ] Semua file baru sudah masuk CMakeLists.txt / build system
+### Build Verification (REQUIRED Dual)
+- [ ] Build with `-DPPSSPP_<NAME>=ON` — success without errors/warnings
+- [ ] Build with `-DPPSSPP_<NAME>=OFF` — success without errors/warnings
+- [ ] All new files added to CMakeLists.txt / build system
 
 ### Config & Settings
-- [ ] Pengaturan fitur terisolasi di section config terpisah (jangan campur dengan PSP config)
-- [ ] Default pengaturan aman untuk semua platform
+- [ ] Feature settings isolated in a separate config section (don't mix with PSP config)
+- [ ] Default settings safe for all platforms
 
-### Dokumentasi
-- [ ] Update `docs/agents/fork-maintenance.md` — daftarkan flag baru di tabel
-- [ ] Update `docs/agents/` — tambah/buat file aturan khusus fitur jika perlu
-- [ ] Update `AGENTS.md` — daftarkan file baru di tabel guidelines
-- [ ] Update design doc di `docs/superpowers/specs/` jika ada perubahan arsitektur
+### Documentation
+- [ ] Update `docs/agents/fork-maintenance.md` — register new flag in table
+- [ ] Update `docs/agents/` — add/create feature-specific rules file if needed
+- [ ] Update `AGENTS.md` — register new file in guidelines table
+- [ ] Update design doc in `docs/superpowers/specs/` if architecture changes
 
-## Langkah Implementasi
+## Implementation Steps
 
-1. Tentukan nama fitur dan flag preprocessor (`PPSSPP_<NAMA>`)
-2. Buat file-file baru di direktori yang sesuai
+1. Choose feature name and preprocessor flag (`PPSSPP_<NAME>`)
+2. Create new files in appropriate directories
 3. Update CMakeLists.txt / build system
-4. Update `docs/agents/fork-maintenance.md` — daftarkan flag baru di tabel
-5. Tambah/buat file aturan khusus fitur di `docs/agents/`
-6. Update `AGENTS.md` — daftarkan file baru
+4. Update `docs/agents/fork-maintenance.md` — register new flag in table
+5. Add/create feature-specific rules file in `docs/agents/`
+6. Update `AGENTS.md` — register new file
 7. Test build dual verification (ON + OFF)
-8. Commit dengan pesan: `[feature/<nama>] <deskripsi>`
+8. Commit with message: `[feature/<name>] <description>`
