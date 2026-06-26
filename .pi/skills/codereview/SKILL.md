@@ -1,11 +1,11 @@
 ---
 name: codereview
-description: Review the latest uncommitted changes or last commit for bugs, regressions, and PSP parity violations. Runs Quality Gate #2 from AGENTS.md.
+description: Review the latest changes for bugs, regressions, and PSP parity violations across ALL cores (GBA, future N64, PS1, NDS, etc.). Runs Quality Gate #2 from AGENTS.md.
 ---
 
-# Code Review — Quality Gate Check
+# Code Review — Quality Gate Check (All Cores)
 
-When the user types `/codereview`, perform a complete code review of the latest changes.
+When the user types `/codereview`, perform a complete code review of the latest changes. This skill is **core-agnostic** — it applies to GBA as well as any future emulator (N64, PS1, NDS, SNES, etc.).
 
 ## What to do
 
@@ -27,8 +27,9 @@ When the user types `/codereview`, perform a complete code review of the latest 
    - 🟢 REQUIRED: Config isolated in separate sections
 
 4. **Check PSP parity** (Quality Gate #1):
-   - For every GBA feature changed, find the PSP equivalent and compare behavior
+   - For every core feature changed, find the PSP equivalent and compare behavior
    - Compare: init values, edge case handling, save/exit paths, z-order, opacity
+   - If no PSP equivalent exists (e.g., GBA-only feature), verify against established patterns instead
    - Document any gaps found
 
 5. **Run anti-hallucination check:**
@@ -66,11 +67,15 @@ When the user types `/codereview`, perform a complete code review of the latest 
 
 ### ✅ PSP parity check
 
-| Aspect | PSP | GBA (this change) | Match? |
+*(For each feature changed, compare against the equivalent PSP implementation.)*
+
+| Aspect | PSP | Core (this change) | Match? |
 |--------|-----|-------------------|--------|
 | Init value | `true` | `true` | ✅ |
 | Edge case | null check | null check | ✅ |
 | Save path | `onFinish()` | `onFinish()` | ✅ |
+
+*(If no PSP equivalent exists for the changed code, mark as N/A.)*
 
 ### ✅ AGENTS.md compliance
 
