@@ -2,7 +2,7 @@
 
 **Date:** 2026-06-26
 **Branch:** `feature/lan-sync`
-**Last commit:** `a87ce77ced` — fix(gba): PSP parity for layout editor preview — opacity + distance picking + ClampPointTo
+**Last commit:** `4ba96c062b` — fix(gba): PSP parity for Customize button — popup → full dialog screen
 **Uncommitted work:** — (modified: `UI/EmuScreen.cpp`, `CMakeLists.txt`, `docs/progress-gba-support.md`; new: `EmuCore/GBASpeedControl.h`, `unittest/TestGBASpeedControl.cpp`)
 **Build Linux SDL:** `build-final/PPSSPPSDL` — MULTICORE=ON ✅ (no regression)
 **Build Android `normalRelease`:** ✅ (APK: 53MB, optimized `-O2`)
