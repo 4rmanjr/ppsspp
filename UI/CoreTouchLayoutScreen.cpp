@@ -70,41 +70,36 @@ private:
 	ImageID bgImg_;
 };
 
-// [PPSSPP-FORK] CoreSnapGrid: Snap/grid lines drawn behind touch buttons
-// Mirrors PSP SnapGrid behavior but adapted for per-core layout editor
-class CoreSnapGrid : public UI::View {
-public:
-	CoreSnapGrid(u32 color) : UI::View(), col(color) {}
-	void Draw(UIContext &dc) override {
-		if (g_Config.bTouchSnapToGrid && g_Config.iTouchSnapGridSize >= 2) {
-			dc.Flush();
-			dc.BeginNoTex();
-			float xOff = bounds_.x;
-			float yOff = bounds_.y;
-			int w = (int)bounds_.w;
-			int h = (int)bounds_.h;
-			int spacing = g_Config.iTouchSnapGridSize;
+// [PPSSPP-FORK] CoreSnapGrid: draw grid lines on top of buttons (matching PSP SnapGrid z-order)
+// Instead of a child View, called from CoreLayoutView::Draw() to avoid 10x10 measurement issue
+// PSP SnapGrid is added last in CreateViews (on top of buttons) — we replicate that here
+static void DrawCoreSnapGrid(UIContext &dc, const Bounds &bounds, u32 col) {
+	if (g_Config.bTouchSnapToGrid && g_Config.iTouchSnapGridSize >= 2) {
+		dc.Flush();
+		dc.BeginNoTex();
+		float xOff = bounds.x;
+		float yOff = bounds.y;
+		int spacing = g_Config.iTouchSnapGridSize;
 
-			// Center crosshair
-			dc.Draw()->vLine(w * 0.5f + xOff, yOff, yOff + h, col);
-			dc.Draw()->hLine(xOff, h * 0.5f + yOff, xOff + w, col);
+		float x1 = 0.0f, x2 = bounds.w, y1 = 0.0f, y2 = bounds.h;
 
-			// Grid lines — offset so one line passes through center
-			int halfW = w / 2;
-			int halfH = h / 2;
-			for (int x = halfW % spacing; x < w; x += spacing)
-				dc.Draw()->vLine((float)x + xOff, yOff, yOff + h, col);
-			for (int y = halfH % spacing; y < h; y += spacing)
-				dc.Draw()->hLine(xOff, (float)y + yOff, xOff + w, col);
+		// Center crosshair (thicker, matching PSP)
+		dc.Draw()->Rect((x1+x2)*0.5f + xOff - g_display.pixel_in_dps_x, y1 + yOff, 3.0f * g_display.pixel_in_dps_x, y2 - y1, col);
+		dc.Draw()->Rect(x1 + xOff, (y1+y2)*0.5f + yOff - g_display.pixel_in_dps_y, x2 - x1, 3.0f * g_display.pixel_in_dps_y, col);
 
-			dc.Flush();
-			dc.Begin();
-		}
+		// Grid lines — offset so one line passes through center (matching PSP formula)
+		int ix1 = (int)x1, ix2 = (int)x2, iy1 = (int)y1, iy2 = (int)y2;
+		int centerOffX = (ix1 + ix2) / 2 % spacing;
+		int centerOffY = (iy1 + iy2) / 2 % spacing;
+		for (int x = ix1 + centerOffX; x < ix2; x += spacing)
+			dc.Draw()->vLine((float)x + xOff, y1 + yOff, y2 + yOff, col);
+		for (int y = iy1 + centerOffY; y < iy2; y += spacing)
+			dc.Draw()->hLine(x1 + xOff, (float)y + yOff, x2 + xOff, col);
+
+		dc.Flush();
+		dc.Begin();
 	}
-	std::string DescribeText() const override { return ""; }
-private:
-	u32 col;
-};
+}
 
 // [PPSSPP-FORK] CoreLayoutView: layout preview container for per-core editor
 // Manages drag-drop controls, grid overlay, portrait/landscape mode
@@ -192,6 +187,8 @@ void CoreLayoutView::Draw(UIContext &dc) {
 	using namespace UI;
 	dc.FillRect(Drawable(0x80000000), bounds_);
 	AnchorLayout::Draw(dc);
+	// [PPSSPP-FORK] Draw grid on top of buttons (matching PSP SnapGrid z-order)
+	DrawCoreSnapGrid(dc, bounds_, 0x3FFFFFFF);
 }
 
 void CoreLayoutView::ClearControls() {
@@ -212,8 +209,7 @@ void CoreLayoutView::CreateViews() {
 
 	auto &cfg = EmuCore::GetTouchConfigMutable(coreType_, portrait_);
 
-	// Grid lines drawn behind buttons (mirrors PSP SnapGrid z-order)
-	Add(new CoreSnapGrid(0x3FFFFFFF));
+	// Grid lines are drawn in CoreLayoutView::Draw() on top of buttons (matching PSP SnapGrid z-order)
 
 	for (int i = 0; i < cfg.count; i++) {
 		auto &btn = cfg.buttons[i];

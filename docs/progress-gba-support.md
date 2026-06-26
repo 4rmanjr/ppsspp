@@ -3,7 +3,7 @@
 **Date:** 2026-06-25
 **Branch:** `feature/lan-sync`
 **Last commit:** `02fa70f90c` — Merge upstream/master (14 commits) into feature/lan-sync. Resolved ProcessVKey conflict (input refactoring #21857). Per AGENTS.md: upstream wins, fork adapted.
-**Uncommitted work:** — (clean)
+**Uncommitted work:** — (modified: `UI/EmuScreen.cpp`, `CMakeLists.txt`, `docs/progress-gba-support.md`; new: `EmuCore/GBASpeedControl.h`, `unittest/TestGBASpeedControl.cpp`)
 **Build Linux SDL:** `build-final/PPSSPPSDL` — MULTICORE=ON ✅ (no regression)
 **Build Android `normalRelease`:** ✅ (APK: 53MB, optimized `-O2`)
 **Build Android `goldRelease`:** ✅ (APK: 55MB, optimized `-O2`, +PPSSPP_MULTICORE)
@@ -32,8 +32,8 @@
 | **Audio** | ✅ **FIXED** | sinc resampler + direct SDL |
 | **Save state (F1/F3)** | ✅ **WORKING** | `<SAVESTATE>/GBA_<code>_<title>_<slot>.ppst` |
 | **Save state (pause menu)** | ✅ **WORKING** | SaveSlotView + ScreenshotViewScreen redirect ke GBACore |
-| **Save state thumbnail** | ✅ **WORKING** | `pngSave()` dari `videoBuffer_` ke `.jpg` (auto-detect) |
-| **Speed control** | ❌ **Belum test** | |
+| **Save state thumbnail** | ✅ **WORKING** | `pngSave()` dari `videoBuffer_` ke `.jpg` (auto-detect) — juga terverifikasi di Android ✅ |
+| **Speed control** | ✅ **SELESAI** | Unit test (8/8 passed) + helper `EmuCore/GBASpeedControl.h` |
 | **GBA Settings Screen** | ✅ **SELESAI** | Controls, Display, Audio — tidak ganggu PSP |
 | **Config isolation** | ✅ **SELESAI** | GBA punya settings screen sendiri, Control Mapping filter PSP sections |
 | **Recent tab** | ✅ **WORKING** | PSP & GBA grouping: sync-fill + ScrollView wrapper fix |
@@ -42,7 +42,7 @@
 | **Android gold → PPSSPP_MULTICORE** | ✅ | Ditambah `-DPPSSPP_MULTICORE=ON` di flavor gold |
 | **Speed control** | ❌ **Belum test** | |
 | **Game icon/cover** | ❌ **SKIP** | GBA tidak punya cover download (PPSSPP cari PSP game ID) — bukan bug |
-| **SaveSlotView GBA** | ❌ **Belum** | Masih panggil PSP `SaveState::` — perlu redirect |
+| **SaveSlotView GBA** | ✅ **SELESAI** | Thumbnail save state dari pause menu berfungsi di PC dan Android |
 
 ---
 
@@ -311,15 +311,15 @@ otomatis iterasi registry — tidak perlu edit lagi.
 
 | Item | Priority | Notes |
 |------|----------|-------|
-| **Speed control** | 🟢 Low | Coba test: turbo/slow-motion frame skip di GBA |
-| **SaveSlotView → GBA redirect** | 🟢 Low | Main pause menu slot view masih PSP-only |
+| **Speed control** | ✅ **SELESAI** | Unit test dibuat (`EmuCore/GBASpeedControl.h`). 8/8 passed. |
+| **SaveSlotView → GBA redirect** | ✅ **SELESAI** | Thumbnail save state dari pause menu berfungsi di PC dan Android |
 | **Game icon/cover** | ⚪️ **SKIP** | Bukan bug — GBA tidak punya cover download |
 | **GBA touch layout editor parity** | ✅ **SELESAI** | CoreTouchLayoutScreen: Move/Resize mode, Kustomisasi (popup visibility), Garis Pinggir checkbox + Kisi-kisi slider, Reset. Cocok dengan PSP — terkecuali Border (diganti Garis Pinggir untuk grid control) |
 | **Pause menu editor redirect** | ✅ **SELESAI** | Pause → Edit touch control layout sekarang buka CoreTouchLayoutScreen(GBA) bukan PSP |
 | **GBA root_ cleanup** | 🟢 Low | `CreateViews()` GBA path tambah DevMenu + Resume buttons yang seharusnya hanya muncul di pause. `children=15` — idealnya 10 touch buttons + overlay saat pause |
 | **Editor preview button size (tiny dots)** | ✅ **FIXED** | `GBADragDrop::Draw()` pakai `scale_ = btn_.w * g_layoutScale` — `btn_.w` adalah normalized width (0.09), BUKAN image scale factor. Akibat: `scale_ ≈ 0.072` → render 7px (titik). Fix: `GetContentDimensions()` override + formula `(btn_.w × screenBounds_.w) / image->w` → render 87px ✅. Resize range [0.3, 1.5] → [0.03, 0.30] untuk normalized width semantics. |
 | **Editor preview buttons hide** | 🟡 **BUG** | Tombol di preview `CoreTouchLayoutScreen` tiba-tiba hilang — kemungkinan `LoadTouchConfig()` `cfg.Clear()` hapus default saat INI section ada tapi kosong/korup. Workaround: Reset di editor. Perlu debug: cocokkan `cfg.count` dengan semestinya. |
-| **Editor grid lines (Garis Pinggir)** | ✅ **FIXED (051b76d)** | Grid lines tidak muncul karena class `GBASnapGrid` terhapus saat rewrite. Fix: `vLine`/`hLine` langsung di `GBALayoutView::Draw()` saat `g_Config.bTouchSnapToGrid=true` |
+| **Editor grid lines (Garis Pinggir)** | ✅ **FIXED (ulang)** | Fix sebelumnya (051b76d, `vLine`/`hLine` di `GBALayoutView::Draw()`) rusak saat `GBASnapGrid` class dibuat ulang sebagai child View — `GetContentDimensions()` return (10,10) default. Fix: `DrawCoreSnapGrid()` static function dipanggil langsung dari `CoreLayoutView::Draw()` SETELAH children (PSP SnapGrid z-order). Formula grid identik PSP. |
 
 ### 🔴 Compliance Debt: LAN Sync
 

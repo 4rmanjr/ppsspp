@@ -3253,6 +3253,12 @@ if(PPSSPP_MULTICORE)
 	target_link_libraries(test_gba_core PRIVATE EmuCore ${LinkCommon} Common)
 	target_compile_definitions(test_gba_core PRIVATE PPSSPP_MULTICORE)
 	target_include_directories(test_gba_core PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+
+	# [PPSSPP-FORK] GBASpeedControl: unit test for speed control logic (inline functions only, no EmuCore link needed)
+	add_executable(test_gba_speed EXCLUDE_FROM_ALL unittest/TestGBASpeedControl.cpp)
+	target_compile_definitions(test_gba_speed PRIVATE PPSSPP_MULTICORE)
+	target_include_directories(test_gba_speed PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+	target_link_libraries(test_gba_speed PRIVATE Common)
 endif()
 endif()
 

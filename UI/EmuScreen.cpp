@@ -100,6 +100,7 @@ extern SDL_AudioStream *GetSDLAudioStream();
 #ifdef PPSSPP_MULTICORE
 #include "EmuCore/EmuCore.h"
 #include "EmuCore/GBACore.h"
+#include "EmuCore/GBASpeedControl.h"
 #include "EmuCore/Config.h"
 #include "Common/System/System.h"
 #include "Core/Util/PathUtil.h"
@@ -1526,29 +1527,22 @@ void EmuScreen::UpdateGBA() {
 		readyToFinishBoot_ = false;
 	}
 
-	// Speed control
+	// Speed control — extracted to testable helper (EmuCore/GBASpeedControl.h)
 	static double lastFrameTime = 0.0;
 	double now = time_now_d();
 
-	int fpsLimit = 60;
-	bool fastForward = PSP_CoreParameter().fastForward;
-	FPSLimit limitMode = PSP_CoreParameter().fpsLimit;
+	EmuCore::GBASpeedInput speedInput;
+	speedInput.fastForward = PSP_CoreParameter().fastForward;
+	speedInput.fpsLimit = PSP_CoreParameter().fpsLimit;
+	speedInput.customFps1 = g_Config.iFpsLimit1;
+	speedInput.customFps2 = g_Config.iFpsLimit2;
+	speedInput.renderDuplicateFrames = g_Config.bRenderDuplicateFrames;
+	speedInput.now = now;
 
-	if (limitMode == FPSLimit::CUSTOM1) {
-		fpsLimit = g_Config.iFpsLimit1;
-	} else if (limitMode == FPSLimit::CUSTOM2) {
-		fpsLimit = g_Config.iFpsLimit2;
-	}
+	int framesToRun = EmuCore::ComputeGBAFramesToRun(speedInput, lastFrameTime);
 
-	double targetInterval = 1.0 / fpsLimit;
-	int framesToRun = 0;
-
-	if (fastForward) {
-		framesToRun = g_Config.bRenderDuplicateFrames ? 3 : 8;
+	if (PSP_CoreParameter().fastForward && framesToRun > 0) {
 		NOTICE_LOG(Log::System, "[GBA] Fast forward: frames=%d", framesToRun);
-	} else if (targetInterval <= 0.0 || (now - lastFrameTime) >= targetInterval * 0.95) {
-		framesToRun = 1;
-		lastFrameTime = now;
 	}
 
 		if (framesToRun > 0) {
