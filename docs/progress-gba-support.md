@@ -2,8 +2,7 @@
 
 **Date:** 2026-06-26
 **Branch:** `feature/lan-sync`
-**Last commit:** `0b2efd290e` — chore: merge upstream/master (Vulkan lifetime fix)
-**Uncommitted work:** — (modified: `UI/EmuScreen.cpp`, `CMakeLists.txt`, `docs/progress-gba-support.md`; new: `EmuCore/GBASpeedControl.h`, `unittest/TestGBASpeedControl.cpp`)
+**Last commit:** `03839aedae` — docs: update last-commit hash after git pull
 **Build Linux SDL:** `build-final/PPSSPPSDL` — MULTICORE=ON ✅ (no regression)
 **Build Android `normalRelease`:** ✅ (APK: 53MB, optimized `-O2`)
 **Build Android `goldRelease`:** ✅ (APK: 55MB, optimized `-O2`, +PPSSPP_MULTICORE)
@@ -33,15 +32,13 @@
 | **Save state (F1/F3)** | ✅ **WORKING** | `<SAVESTATE>/GBA_<code>_<title>_<slot>.ppst` |
 | **Save state (pause menu)** | ✅ **WORKING** | SaveSlotView + ScreenshotViewScreen redirect ke GBACore |
 | **Save state thumbnail** | ✅ **WORKING** | `pngSave()` dari `videoBuffer_` ke `.jpg` (auto-detect) — juga terverifikasi di Android ✅ |
-| **Speed control** | ✅ **SELESAI** | Unit test (8/8 passed) + helper `EmuCore/GBASpeedControl.h` |
 | **GBA Settings Screen** | ✅ **SELESAI** | Controls, Display, Audio — tidak ganggu PSP |
 | **Config isolation** | ✅ **SELESAI** | GBA punya settings screen sendiri, Control Mapping filter PSP sections |
 | **Recent tab** | ✅ **WORKING** | PSP & GBA grouping: sync-fill + ScrollView wrapper fix |
 | **Game icon/cover** | ❌ **TIDAK TAMPIL** | PPSSPP download icon untuk PSP game ID |
 | **Android build** | ✅ **SELESAI** | `normalRelease` (53MB) + `goldRelease` (55MB) — optimized, terinstall di device |
 | **Android gold → PPSSPP_MULTICORE** | ✅ | Ditambah `-DPPSSPP_MULTICORE=ON` di flavor gold |
-| **Speed control** | ❌ **Belum test** | |
-| **Game icon/cover** | ❌ **SKIP** | GBA tidak punya cover download (PPSSPP cari PSP game ID) — bukan bug |
+| **Speed control** | ✅ **SELESAI** | Unit test (8/8 passed) + helper `EmuCore/GBASpeedControl.h` |
 | **SaveSlotView GBA** | ✅ **SELESAI** | Thumbnail save state dari pause menu berfungsi di PC dan Android |
 
 ---
@@ -123,9 +120,9 @@ Bug: R↔B terbalik (little-endian byte order). Fix: `(B<<16)|(G<<8)|R`.
 
 ### Limitations
 
-- ❌ Main pause menu slot view (SaveSlotView) masih panggil PSP `SaveState::`
-- ❌ Tidak ada screenshot/thumbnail untuk GBA save state
 - ❌ Tidak ada undo save / rewind untuk GBA
+- ✅ Save state thumbnail sudah WORKING (pngSave dari videoBuffer) — workaround via ScreenshotViewScreen
+- ✅ SaveSlotView sudah functional via ScreenshotViewScreen redirect
 
 ---
 
@@ -141,7 +138,7 @@ Bug: R↔B terbalik (little-endian byte order). Fix: `(B<<16)|(G<<8)|R`.
 | Race condition GBA recent (FIXED) | ✅ | Thread belum proses Load → HasAny=false + Save timpa INI. Fix: `FillSync()` synchronous fill |
 | Data loss cascade (FIXED) | ✅ | GBA recent kosong → `g_Config.Save()` timpa INI → `[GBA Recent]` section hilang. Fix: `FillSync()` cegah data kosong |
 | RecentFilesRegistry | ✅ **SELESAI** | Registry terpusat — tambah core baru = 1 Register() call + InitXXX() Add() |
-| Game icon/cover | ❌ | GBA tidak punya cover download |
+| Game icon/cover | ⚪️ **SKIP** | Bukan bug — GBA tidak punya cover download (PPSSPP cari PSP game ID) |
 | Key mapping terpisah | ✅ **SELESAI** | VIRTKEY_GBA_* (0x40000040+), default keyboard mappings, save/load INI |
 | GBA Settings Screen | ✅ **SELESAI** | `docs/superpowers/plans/2026-06-22-gba-settings-screen.md` — 9 tasks, Controls+Display+Audio |
 | GBA Display Layout | ✅ **SELESAI** | Aspect ratio + integer scaling via GetRenderRect |
@@ -318,7 +315,7 @@ otomatis iterasi registry — tidak perlu edit lagi.
 | **Pause menu editor redirect** | ✅ **SELESAI** | Pause → Edit touch control layout sekarang buka CoreTouchLayoutScreen(GBA) bukan PSP |
 | **GBA root_ cleanup** | 🟢 Low | `CreateViews()` GBA path tambah DevMenu + Resume buttons yang seharusnya hanya muncul di pause. `children=15` — idealnya 10 touch buttons + overlay saat pause |
 | **Editor preview button size (tiny dots)** | ✅ **FIXED** | `GBADragDrop::Draw()` pakai `scale_ = btn_.w * g_layoutScale` — `btn_.w` adalah normalized width (0.09), BUKAN image scale factor. Akibat: `scale_ ≈ 0.072` → render 7px (titik). Fix: `GetContentDimensions()` override + formula `(btn_.w × screenBounds_.w) / image->w` → render 87px ✅. Resize range [0.3, 1.5] → [0.03, 0.30] untuk normalized width semantics. |
-| **Editor preview grouped controls not rendering** | ✅ **FIXED (6353e7a)** | `GBADPadGroup` dan `GBAActionGroup` punya custom `Draw()` yang mungkin gagal di beberapa device Android. Fix: hapus grouped controls — semua 10 tombol jadi individual `CoreDragDrop`, sama persis dengan game screen (`EmuScreen::AddGBATouchButtons`). |
+| **Editor preview grouped controls** | ✅ **FIXED** | Dulu individual karena khawatir custom Draw() gagal di Android. Sekarang pakai `CoreDPadGroup` — grouped D-pad dengan cross pattern, match PSP. Non-D-pad buttons tetap individual. |
 | **Editor preview buttons hide (LoadTouchConfig)** | ✅ **FIXED (5678699)** | Bug #1: `LoadTouchConfig()` `cfg.Clear()` hapus default saat INI section kosong/korup. Fix: parse ke temporary `CoreTouchConfig` dulu. Bug #2: `HasCreatedViews()` pakai `controls_.empty()` → infinite loop jika semua tombol di-hide. Fix: dedicated `bool created_` flag. |
 | **Customize popup arrow icons** | ✅ **FIXED (b0bdc0b)** | Popup `CoreTouchVisibilityPopup` pakai `I_ARROW` (generic) untuk semua arah D-pad. Fix: `I_ARROW_UP/DOWN/LEFT/RIGHT` — konsisten dengan editor preview dan game screen. |
 | **Editor grid lines (Garis Pinggir)** | ✅ **FIXED (ulang)** | Fix sebelumnya (051b76d, `vLine`/`hLine` di `GBALayoutView::Draw()`) rusak saat `GBASnapGrid` class dibuat ulang sebagai child View — `GetContentDimensions()` return (10,10) default. Fix: `DrawCoreSnapGrid()` static function dipanggil langsung dari `CoreLayoutView::Draw()` SETELAH children (PSP SnapGrid z-order). Formula grid identik PSP. |
