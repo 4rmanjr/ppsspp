@@ -82,6 +82,13 @@ void GBASettingsScreen::CreateViews() {
 	// [PPSSPP-FORK] MultiCore: GBA brightness slider (0.5-1.0, beyond 1.0 requires HDR pipeline)
 	list->Add(new PopupSliderChoiceFloat(&g_Config.fGBABrightness, 0.5f, 1.0f, 1.0f, gs->T("Brightness"), 0.05f, screenManager(), ""));
 
+	// [PPSSPP-FORK] MultiCore: GBA gamma correction slider
+	list->Add(new PopupSliderChoiceFloat(&g_Config.fGBAGamma, 1.0f, 2.5f, 1.5f, gs->T("Gamma Correction"), 0.1f, screenManager(), ""));
+
+	// [PPSSPP-FORK] MultiCore: GBA LCD profile selector (relevant when GBALCD shader is active)
+	static const char *lcdProfileOptions[] = {"AGB-001 (Original)", "AGS-001 (SP Frontlit)", "AGS-101 (SP Backlit)"};
+	list->Add(new PopupMultiChoice(&g_Config.iGBALCDProfile, gs->T("LCD Profile"), lcdProfileOptions, 0, 3, I18NCat::GRAPHICS, screenManager()));
+
 	// === Audio ===
 	list->Add(new ItemHeader(au->T("Audio")));
 	list->Add(new PopupSliderChoiceFloat(&g_Config.fGBAVolume, 0.0f, 1.0f, 1.0f, au->T("Volume"), 0.05f, screenManager(), ""));

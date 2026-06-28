@@ -337,11 +337,15 @@ static void LoadGBAOverrides(IniFile &ini) {
 	if (gbaSection->Get("iShowStatusFlags", &val))     g_Config.iShowStatusFlags = val;
 	if (gbaSection->Get("bShowTouchControls", &val))   g_Config.bShowTouchControls = val != 0;
 	if (gbaSection->Get("iGameVolume", &val))          g_Config.iGameVolume = val;
-	// [PPSSPP-FORK] MultiCore: GBA post-processing + brightness overrides
+	// [PPSSPP-FORK] MultiCore: GBA post-processing + brightness + gamma overrides
 	std::string postShader;
 	if (gbaSection->Get("sGBAPostShader", &postShader)) g_Config.sGBAPostShader = postShader;
 	float brightness;
 	if (gbaSection->Get("fGBABrightness", &brightness)) g_Config.fGBABrightness = brightness;
+	float gamma;
+	if (gbaSection->Get("fGBAGamma", &gamma)) g_Config.fGBAGamma = gamma;
+	int lcdProfile;
+	if (gbaSection->Get("iGBALCDProfile", &lcdProfile)) g_Config.iGBALCDProfile = lcdProfile;
 }
 
 // Save GBA-specific config overrides to ppsspp.ini [GBA] section
@@ -353,9 +357,11 @@ static void SaveGBAOverrides(IniFile &ini) {
 	gbaSection->Set("iShowStatusFlags", g_Config.iShowStatusFlags);
 	gbaSection->Set("bShowTouchControls", (int)g_Config.bShowTouchControls);
 	gbaSection->Set("iGameVolume", g_Config.iGameVolume);
-	// [PPSSPP-FORK] MultiCore: save GBA post-processing + brightness
+	// [PPSSPP-FORK] MultiCore: save GBA post-processing + brightness + gamma
 	gbaSection->Set("sGBAPostShader", g_Config.sGBAPostShader);
 	gbaSection->Set("fGBABrightness", g_Config.fGBABrightness);
+	gbaSection->Set("fGBAGamma", g_Config.fGBAGamma);
+	gbaSection->Set("iGBALCDProfile", g_Config.iGBALCDProfile);
 	NOTICE_LOG(Log::System, "[CONFIG] Saved GBA config to [GBA] section");
 }
 

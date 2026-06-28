@@ -425,6 +425,8 @@ public:
 	float fGBAVolume = 1.0f;
 	std::string sGBAPostShader;    // GBA post-shader override (empty = use PSP's vPostShaderNames)
 	float fGBABrightness = 1.0f;   // GBA brightness (0.5-1.0, vertex color scale)
+	float fGBAGamma = 1.5f;       // GBA gamma correction (1.0=off, 2.2=full sRGB comp)
+	int iGBALCDProfile = 0;       // GBA LCD profile (0=AGB-001, 1=AGS-001, 2=AGS-101)
 #endif
 
 	// UI

@@ -338,6 +338,14 @@ Draw::Framebuffer *GBAPostProcessor::Process(Draw::Framebuffer *input) {
 				auto it = g_Config.mPostShaderSetting.find(key);
 				uniforms.setting[s] = (it != g_Config.mPostShaderSetting.end()) ? it->second : info.settings[s].value;
 			}
+
+			// [PPSSPP-FORK] MultiCore: override gamma + LCD profile from global config
+			if (info.section == "GBALCD") {
+				uniforms.setting[2] = (float)g_Config.iGBALCDProfile;  // u_setting.z = profile
+				uniforms.setting[3] = g_Config.fGBAGamma;              // u_setting.w = gamma
+			} else if (info.section == "GBA_GAMMA") {
+				uniforms.setting[0] = g_Config.fGBAGamma;              // u_setting.x = gamma
+			}
 		}
 
 		// Bind pipeline and update uniforms
