@@ -18,7 +18,6 @@ uniform sampler2D sampler0;
 varying vec2 v_texcoord0;
 
 uniform vec2 u_texelDelta;
-uniform vec2 u_pixelDelta;
 uniform vec4 u_setting;
 
 void main()
