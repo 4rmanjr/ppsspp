@@ -238,8 +238,12 @@ static struct VFile *LoadROMFromZip(const Path &path) {
 		ssize_t bytesRead = 0;
 		while ((size_t)bytesRead < st.size) {
 			ssize_t r = zip_fread(zf, buf + bytesRead, st.size - bytesRead);
-			if (r < 0) {
-				ERROR_LOG(Log::System, "[GBA] Error reading zip entry: %s", name);
+			if (r <= 0) {
+				if (r == 0) {
+					ERROR_LOG(Log::System, "[GBA] Premature EOF reading zip entry: %s (expected %llu, got %zd)", name, (unsigned long long)st.size, bytesRead);
+				} else {
+					ERROR_LOG(Log::System, "[GBA] Error reading zip entry: %s", name);
+				}
 				free(buf);
 				zip_fclose(zf);
 				zip_close(z);
@@ -292,7 +296,7 @@ bool GBACore::LoadROMInternal(const Path &path) {
 		}
 	}
 
-	// Not a zip (or zip with no .gba entry) — fall back to direct file open
+	// [PPSSPP-FORK] MultiCore: not a zip (or zip with no .gba entry) — fall back to direct file open
 	if (!vf) {
 #if defined(__ANDROID__) && defined(ANDROID)
 		if (pathStr.find("content://") == 0) {
