@@ -94,47 +94,34 @@ Integer 4×: 960×640 → centered + borders (might not fit on small screens)
 | Integer scale | `iGBAIntegerScale` | 0=off, 1=auto, 2=2×, 3=3×, 4=4× | 0 (off) |
 | Auto mode | — | Choose largest integer that fits viewport | Only when `iGBAIntegerScale=1` |
 
-### Task 2.1 — Add config
+### Task 2.1 — Upgrade config (bool → int)
 
 **Files:**
-- New: `EmuCore/Config.h` — add to GBA config section
-- Modify: `EmuCore/GBACore.h` — add scale state
+- Modify: `Core/Config.h` — GBA config section
+- Modify: `Core/Config.cpp` — save/load
 
-- [ ] Add `int iGBAIntegerScale = 0;` to GBA config (in `EmuCore/Config.h` or `Core/Config.h`)
-- [ ] Add `int currentScale_ = 1;` to `GBACore` class for computed scale
-- [ ] **Commit**: `feat(gba-gfx): Phase 2.1 — add integer scale config`
+- [x] Replace `bool bGBAIntegerScaling` with `int iGBAIntegerScale = 0`
+- [x] Update save/load in Config.cpp to use `iGBAIntegerScale` instead of `bGBAIntegerScaling`
+- [x] Remove all stale references to old bool
+- [x] **Commit**: `feat(gba-gfx): Phase 2 — Integer Scaling (Off/Auto/2x/3x/4x)` *(all-in-one commit)*
 
 ### Task 2.2 — Update GetRenderRect() for integer scaling
 
 **Files:**
 - Modify: `EmuCore/GBACore.cpp` — `GetRenderRect()`
 
-- [ ] Read `g_Config.iGBAIntegerScale`
-- [ ] If 0: use current behavior (stretch to fill)
-- [ ] If 1 (auto): compute `scale = floor(min(viewW / GBA_WIDTH, viewH / GBA_HEIGHT))`, min 1
-- [ ] If 2/3/4: use fixed `scale = iGBAIntegerScale`
-- [ ] Compute scaled `w = GBA_WIDTH * scale`, `h = GBA_HEIGHT * scale`
-- [ ] Center in viewport: `x = (viewW - w) * 0.5f`, `y = (viewH - h) * 0.5f`
-- [ ] Update `gbaScaleUniform_` if shader needs it
+- [x] If 0: off (stretch to fill, current behavior)
+- [x] If 1 (auto): compute `scale = max(1, min(w/240, h/160))`
+- [x] If 2/3/4: use fixed `scale = iGBAIntegerScale`
+- [x] Compute scaled `w = GBA_WIDTH * scale`, `h = GBA_HEIGHT * scale`
+- [x] Centering already handled after `GetRenderRect()` returns (existing `x = (viewW - w)/2`)
 
-```cpp
-// GetRenderRect() logic
-int scale = 0;
-if (g_Config.iGBAIntegerScale == 0) {
-    // stretch to fill (current behavior)
-} else {
-    if (g_Config.iGBAIntegerScale == 1) {  // auto
-        scale = std::min((int)(viewW / GBA_WIDTH), (int)(viewH / GBA_HEIGHT));
-        if (scale < 1) scale = 1;
-    } else {
-        scale = g_Config.iGBAIntegerScale;
-    }
-    w = GBA_WIDTH * scale;
-    h = GBA_HEIGHT * scale;
-    x = (viewW - w) * 0.5f;
-    y = (viewH - h) * 0.5f;
-}
-```
+### Task 2.3 — Replace toggle in GBA Settings Screen
+
+**Files:**
+- Modify: `UI/GBASettingsScreen.cpp`
+
+- [x] Replace `CheckBox` with `PopupMultiChoice` (Off/Auto/2x/3x/4x)```
 
 - [ ] **Commit**: `feat(gba-gfx): Phase 2.2 — integer scaling in GetRenderRect()`
 
