@@ -567,19 +567,25 @@ void GBACore::Render(Draw::DrawContext *draw) {
 		Draw::SamplerState *samplers[1] = { gbaSampler_ };
 		draw->BindSamplerStates(0, 1, samplers);
 
+		// [PPSSPP-FORK] MultiCore: brightness via vertex color RGB
+		int brightByte = (int)(g_Config.fGBABrightness * 255.0f);
+		if (brightByte > 255) brightByte = 255;
+		if (brightByte < 0) brightByte = 0;
+		uint32_t brightColor = (0xFF << 24) | (brightByte << 16) | (brightByte << 8) | brightByte;
+
 		GBAVertex verts[6] = {
-			{ qX, qY, 0.0f, 0.0f, 0.0f, 0xFFFFFFFF },
-			{ qX + qW, qY, 0.0f, 1.0f, 0.0f, 0xFFFFFFFF },
-			{ qX + qW, qY + qH, 0.0f, 1.0f, 1.0f, 0xFFFFFFFF },
-			{ qX, qY, 0.0f, 0.0f, 0.0f, 0xFFFFFFFF },
-			{ qX + qW, qY + qH, 0.0f, 1.0f, 1.0f, 0xFFFFFFFF },
-			{ qX, qY + qH, 0.0f, 0.0f, 1.0f, 0xFFFFFFFF },
+			{ qX, qY, 0.0f, 0.0f, 0.0f, brightColor },
+			{ qX + qW, qY, 0.0f, 1.0f, 0.0f, brightColor },
+			{ qX + qW, qY + qH, 0.0f, 1.0f, 1.0f, brightColor },
+			{ qX, qY, 0.0f, 0.0f, 0.0f, brightColor },
+			{ qX + qW, qY + qH, 0.0f, 1.0f, 1.0f, brightColor },
+			{ qX, qY + qH, 0.0f, 0.0f, 1.0f, brightColor },
 		};
 
 		VsTexColUB ub{};
 		Lin::Matrix4x4 ortho = ComputeOrthoMatrix((float)vpW, (float)vpH, draw->GetDeviceCaps().coordConvention);
 		memcpy(ub.WorldViewProj, ortho.getReadPtr(), sizeof(Lin::Matrix4x4));
-		ub.tint = g_Config.fGBABrightness;  // [PPSSPP-FORK] MultiCore: apply brightness
+		ub.tint = 0.0f;  // [PPSSPP-FORK] MultiCore: no hue shift (brightness via vertex color)
 		ub.saturation = 1.0f;
 		draw->UpdateDynamicUniformBuffer(&ub, sizeof(ub));
 		draw->DrawUP(verts, 6);

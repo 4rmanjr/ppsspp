@@ -79,8 +79,8 @@ void GBASettingsScreen::CreateViews() {
 		RecreateViews();
 	});
 
-	// [PPSSPP-FORK] MultiCore: GBA brightness slider
-	list->Add(new PopupSliderChoiceFloat(&g_Config.fGBABrightness, 0.5f, 2.0f, 1.0f, gs->T("Brightness"), 0.05f, screenManager(), ""));
+	// [PPSSPP-FORK] MultiCore: GBA brightness slider (0.5-1.0, beyond 1.0 requires HDR pipeline)
+	list->Add(new PopupSliderChoiceFloat(&g_Config.fGBABrightness, 0.5f, 1.0f, 1.0f, gs->T("Brightness"), 0.05f, screenManager(), ""));
 
 	// === Audio ===
 	list->Add(new ItemHeader(au->T("Audio")));
