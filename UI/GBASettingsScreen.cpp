@@ -10,6 +10,7 @@
 #include "Common/Data/Text/I18n.h"
 #include "UI/ControlMappingScreen.h"
 #include "UI/CoreTouchLayoutScreen.h"
+#include "GPU/Common/PostShader.h"   // [PPSSPP-FORK] MultiCore: post-shader list
 #include "EmuCore/Config.h"
 
 using namespace UI;
@@ -19,6 +20,7 @@ void GBASettingsScreen::CreateViews() {
 	auto co = GetI18NCategory(I18NCat::CONTROLS);
 	auto au = GetI18NCategory(I18NCat::AUDIO);
 	auto di = GetI18NCategory(I18NCat::DIALOG);
+	auto ps = GetI18NCategory(I18NCat::POSTSHADERS);
 
 	root_ = new ScrollView(ORIENT_VERTICAL, new LinearLayoutParams(FILL_PARENT, WRAP_CONTENT));
 	LinearLayout *list = root_->Add(new LinearLayout(ORIENT_VERTICAL, new LinearLayoutParams(FILL_PARENT, WRAP_CONTENT)));
@@ -44,6 +46,41 @@ void GBASettingsScreen::CreateViews() {
 
 	static const char *scaleOptions[] = {"Off", "Auto", "2x", "3x", "4x"};
 	list->Add(new PopupMultiChoice(&g_Config.iGBAIntegerScale, gs->T("Integer Scaling"), scaleOptions, 0, 5, I18NCat::GRAPHICS, screenManager()));
+
+	// [PPSSPP-FORK] MultiCore: GBA post-processing shader selector
+	// Build list of available post-shaders + "Use PSP Setting" entry
+	ReloadAllPostShaderInfo(screenManager()->getDrawContext());
+	const auto &allShaders = GetAllPostShaderInfo();
+	std::vector<std::string> shaderDisplay;
+	std::vector<std::string> shaderValues;
+	shaderDisplay.push_back(ps->T("UsePSP", "Use PSP Setting"));  // Display: descriptive
+	shaderValues.push_back("");                                      // Value: empty = use PSP
+	for (const auto &shader : allShaders) {
+		if (shader.visible && !shader.isStereo) {
+			shaderDisplay.push_back(ps->T(shader.section.c_str(), shader.name));
+			shaderValues.push_back(shader.section);
+		}
+	}
+	list->Add(new PopupMultiChoiceDynamic(&g_Config.sGBAPostShader, gs->T("Post-Processing Shader"), shaderDisplay, I18NCat::POSTSHADERS, screenManager(), &shaderValues));
+
+	// [PPSSPP-FORK] MultiCore: Quick toggle to enable GBA LCD Simulation
+	Choice *lcdToggle;
+	if (g_Config.sGBAPostShader == "GBALCD") {
+		lcdToggle = list->Add(new Choice(gs->T("Disable GBA LCD Simulation")));
+	} else {
+		lcdToggle = list->Add(new Choice(gs->T("Enable GBA LCD Simulation")));
+	}
+	lcdToggle->OnClick.Add([this](EventParams &) {
+		if (g_Config.sGBAPostShader == "GBALCD") {
+			g_Config.sGBAPostShader.clear();
+		} else {
+			g_Config.sGBAPostShader = "GBALCD";
+		}
+		RecreateViews();
+	});
+
+	// [PPSSPP-FORK] MultiCore: GBA brightness slider
+	list->Add(new PopupSliderChoiceFloat(&g_Config.fGBABrightness, 0.5f, 2.0f, 1.0f, gs->T("Brightness"), 0.05f, screenManager(), ""));
 
 	// === Audio ===
 	list->Add(new ItemHeader(au->T("Audio")));

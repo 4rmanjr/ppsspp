@@ -423,6 +423,8 @@ public:
 	int iGBATexFiltering = 1;      // 0=nearest, 1=linear
 	int iGBAIntegerScale = 0;      // 0=off, 1=auto, 2=2x, 3=3x, 4=4x
 	float fGBAVolume = 1.0f;
+	std::string sGBAPostShader;    // GBA post-shader override (empty = use PSP's vPostShaderNames)
+	float fGBABrightness = 1.0f;   // GBA brightness (0.5-2.0)
 #endif
 
 	// UI

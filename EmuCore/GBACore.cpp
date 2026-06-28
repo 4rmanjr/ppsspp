@@ -544,9 +544,16 @@ void GBACore::Render(Draw::DrawContext *draw) {
 
 	using namespace Draw;
 
-	// [PPSSPP-FORK] MultiCore: update post-processor from config (shares PSP's vPostShaderNames)
+	// [PPSSPP-FORK] MultiCore: update post-processor from config
+	// Uses sGBAPostShader if non-empty, else falls back to PSP's vPostShaderNames
 	if (gbaPostProcessor_) {
-		gbaPostProcessor_->UpdatePostShader(g_Config.vPostShaderNames, screenW, screenH);
+		std::vector<std::string> gbaShaderNames;
+		if (!g_Config.sGBAPostShader.empty()) {
+			gbaShaderNames.push_back(g_Config.sGBAPostShader);
+		} else {
+			gbaShaderNames = g_Config.vPostShaderNames;
+		}
+		gbaPostProcessor_->UpdatePostShader(gbaShaderNames, screenW, screenH);
 	}
 
 	// [PPSSPP-FORK] MultiCore: drawQuad lambda replaces old inline quad code
@@ -572,7 +579,7 @@ void GBACore::Render(Draw::DrawContext *draw) {
 		VsTexColUB ub{};
 		Lin::Matrix4x4 ortho = ComputeOrthoMatrix((float)vpW, (float)vpH, draw->GetDeviceCaps().coordConvention);
 		memcpy(ub.WorldViewProj, ortho.getReadPtr(), sizeof(Lin::Matrix4x4));
-		ub.tint = 1.0f;
+		ub.tint = g_Config.fGBABrightness;  // [PPSSPP-FORK] MultiCore: apply brightness
 		ub.saturation = 1.0f;
 		draw->UpdateDynamicUniformBuffer(&ub, sizeof(ub));
 		draw->DrawUP(verts, 6);
