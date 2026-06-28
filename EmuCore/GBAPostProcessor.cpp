@@ -330,7 +330,7 @@ Draw::Framebuffer *GBAPostProcessor::Process(Draw::Framebuffer *input) {
 			uniforms.gl_HalfPixel[1] = v_pixel_delta * 0.5f;
 
 			// Shader settings from config
-			for (int s = 0; s < 4 && s < (int)info.settings.size(); s++) {
+			for (int s = 0; s < 4; s++) {
 				std::string key = info.section;
 				char suffix[32];
 				snprintf(suffix, sizeof(suffix), "SettingCurrentValue%d", s + 1);
