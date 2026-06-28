@@ -42,7 +42,8 @@ void GBASettingsScreen::CreateViews() {
 	static const char *filterOptions[] = {"Nearest", "Linear"};
 	list->Add(new PopupMultiChoice(&g_Config.iGBATexFiltering, gs->T("Texture Filtering"), filterOptions, 0, 2, I18NCat::GRAPHICS, screenManager()));
 
-	list->Add(new CheckBox(&g_Config.bGBAIntegerScaling, gs->T("Integer Scaling")));
+	static const char *scaleOptions[] = {"Off", "Auto", "2x", "3x", "4x"};
+	list->Add(new PopupMultiChoice(&g_Config.iGBAIntegerScale, gs->T("Integer Scaling"), scaleOptions, 0, 5, I18NCat::GRAPHICS, screenManager()));
 
 	// === Audio ===
 	list->Add(new ItemHeader(au->T("Audio")));

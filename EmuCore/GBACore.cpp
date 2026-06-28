@@ -470,11 +470,14 @@ void GBACore::GetRenderRect(float &x, float &y, float &w, float &h, float viewW,
 		break;
 	}
 
-	// Integer scaling: snap to nearest multiple of GBA resolution
-	if (g_Config.bGBAIntegerScaling) {
-		int scaleW = (int)(w / GBA_WIDTH);
-		int scaleH = (int)(h / GBA_HEIGHT);
-		int scale = std::max(1, std::min(scaleW, scaleH));
+	// Integer scaling: 0=off, 1=auto, 2=2x, 3=3x, 4=4x
+	if (g_Config.iGBAIntegerScale > 0) {
+		int scale;
+		if (g_Config.iGBAIntegerScale == 1) {  // auto: largest integer that fits
+			scale = std::max(1, std::min((int)(w / GBA_WIDTH), (int)(h / GBA_HEIGHT)));
+		} else {
+			scale = g_Config.iGBAIntegerScale;
+		}
 		w = (float)(GBA_WIDTH * scale);
 		h = (float)(GBA_HEIGHT * scale);
 	}
