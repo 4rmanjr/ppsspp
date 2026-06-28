@@ -26,68 +26,53 @@ SESUDAH:
 mGBA rawBuffer (M_RGB5_TO_BGR8) → upload (RAW) → GPU → shader unpack → screen
 ```
 
-### Task 1.1 — Change texture format to B8G8R8A8
+### Task 1.1 — Remove CPU loop, upload raw buffer directly
 
 **Files:**
 - Modify: `EmuCore/GBACore.cpp`
 - Modify: `EmuCore/GBACore.h`
 
-- [ ] Change `texDesc.format` from `R8G8B8A8_UNORM` to `B8G8R8A8_UNORM` in `InitRendering()`
-- [ ] Remove `videoBuffer_` allocation (member variable + allocation in init)
-- [ ] Remove `videoBuffer_` declaration from `GBACore.h`
-- [ ] In `Render()`, upload `rawVideoBuffer_` directly as `texDesc.initData` (bypass conversion loop)
-- [ ] Delete the `for (y) for (x)` conversion loop entirely
+- [x] In `RunFrame()`: delete the CPU `for(y) for(x)` conversion loop entirely
+- [x] In `InitRendering()`: change blend to opaque (`{ false, 0xF }`) — raw buffer has alpha=0
+- [x] In `Render()`: upload `rawVideoBuffer_` instead of `videoBuffer_` via `UpdateTextureLevels`
+- [x] Keep `R8G8B8A8_UNORM` format (data byte order R,G,B,0 maps correctly to RGBA channels)
+- [x] In `SaveStateToFile()`: convert raw→RGBA inline for PNG thumbnail
+- [x] Update `GetVideoBuffer()` to return `rawVideoBuffer_`
 
 ```cpp
-// InitRendering() — change texture format
-texDesc.format = DataFormat::B8G8R8A8_UNORM;  // was R8G8B8A8_UNORM
+// RunFrame() — no CPU loop, just debug log
+// Capture video — mGBA rendered into rawVideoBuffer_ via setVideoBuffer
+// No CPU conversion needed: upload raw buffer directly to GPU
+// (rawVideoBuffer_ byte order: R,G,B,0 in little-endian memory)
 
-// Render() — direct upload, no CPU loop
-draw_->UpdateTexture(gbaTexture_, 0, 0, GBA_WIDTH, GBA_HEIGHT, rawVideoBuffer_, GBA_WIDTH * 4);
-// (rawVideoBuffer_ is mColor* = uint32_t*, BGR packed in high bits)
+// InitRendering() — opaque blend
+// [PPSSPP-FORK] MultiCore: opaque blend — raw GBA buffer has no alpha (byte3=0)
+BlendState *blend = draw->CreateBlendState({ false, 0xF });
+
+// Render() — upload raw buffer directly
+const uint8_t *data = reinterpret_cast<const uint8_t *>(rawVideoBuffer_);
+draw->UpdateTextureLevels(gbaTexture_, &data, nullptr, 1);
 ```
 
-- [ ] **Commit**: `feat(gba-gfx): Phase 1.1 — GPU pixel conversion, remove CPU loop`
+- [x] **Commit**: `feat(gba-gfx): Phase 1.1 — GPU pixel conversion, remove CPU loop`
 
-### Task 1.2 — Update shader to unpack BGR→RGBA
+### Task 1.2 — (SKIPPED — not needed)
 
-**Files:**
-- Modify: Shader preset or custom vertex/fragment shader for GBA
+Original plan: custom shader with BGR→RGB swizzle. Not needed because:
+- We kept `R8G8B8A8_UNORM` format (not `B8G8R8A8`)
+- Data byte order R,G,B,0 maps correctly to RGBA
+- Disabled alpha blending instead of forcing alpha=1.0 in shader
+- Simpler: no backend-specific shader code needed
 
-PPSSPP's `VS_TEXTURE_COLOR_2D` + `FS_TEXTURE_COLOR_2D` already work with any RGBA texture format. But `B8G8R8A8_UNORM` stores bytes as `[B, G, R, A]` in memory (little-endian). Thin3D reads it as `byte0=B, byte1=G, byte2=R, byte3=A`. The shader samples it as `texture.r = B, texture.g = G, texture.b = R`.
-
-So we need a custom fragment shader that swizzles the channels:
-
-```glsl
-// gba_video_shader — unpack BGR to RGB
-// Input texture is B8G8R8A8 (stored as R=B, G=G, B=R in shader)
-uniform sampler2D tex;
-in vec2 v_texcoord;
-out vec4 fragColor;
-
-void main() {
-    vec4 c = texture(tex, v_texcoord);
-    fragColor = vec4(c.b, c.g, c.r, c.a);  // swizzle B↔R
-}
-```
-
-- [ ] Remove dependency on preset shaders (`GetVshaderPreset`/`GetFshaderPreset`)
-- [ ] Create custom vertex shader or reuse existing
-- [ ] Create custom fragment shader with BGR→RGB swizzle
-- [ ] Compile and set via `CreateGraphicsPipeline`
-- [ ] **Commit**: `feat(gba-gfx): Phase 1.2 — custom shader for BGR→RGB unpack`
-
-### Task 1.3 — Remove stale code and verify
+### Task 1.3 — Remove stale videoBuffer_ code
 
 **Files:**
 - Modify: `EmuCore/GBACore.h`
-- Modify: `EmuCore/GBACore.cpp`
 
-- [ ] Remove `videoBuffer_` member from `GBACore.h`
-- [ ] Remove `videoBuffer_` cleanup in `ShutdownRendering()`
-- [ ] Remove `videoBuffer_` zeroing in constructor
-- [ ] Remove `dummyData` (was used for initial texture creation with zero data)
-- [ ] **Commit**: `feat(gba-gfx): Phase 1.3 — cleanup stale videoBuffer_ code`
+- [x] Remove `videoBuffer_` member declaration (stale, no longer filled)
+- [x] Remove stale comment about RGBA8888 format
+
+- [x] **Commit**: `feat(gba-gfx): Phase 1.3 — cleanup stale videoBuffer_ member`
 
 ---
 
