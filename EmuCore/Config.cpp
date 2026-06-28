@@ -382,10 +382,9 @@ void LoadConfig(Type coreType) {
 		LoadGBAOverrides(ini);
 	}
 
-	// [PPSSPP-FORK] MultiCore: ALWAYS force touch controls ON for GBA
-	// Must be AFTER LoadGBAOverrides, which may read stale false from INI.
-	// Desktop users can disable via GBA Settings screen if needed.
-	g_Config.bShowTouchControls = true;
+	// [PPSSPP-FORK] MultiCore: LoadGBAOverrides handles bShowTouchControls from INI.
+	// No forced override — user can toggle via GBA Settings screen.
+	// ApplyGBADefaults above already defaults to true for first-run.
 }
 
 void SaveConfig(Type coreType) {

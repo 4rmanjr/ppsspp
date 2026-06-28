@@ -31,9 +31,14 @@ void GBASettingsScreen::CreateViews() {
 	list->Add(new Choice(co->T("Control Mapping")))->OnClick.Add([this](EventParams &) {
 		screenManager()->push(new ControlMappingScreen(gamePath_));
 	});
-	list->Add(new Choice(co->T("Customize On-Screen Controls")))->OnClick.Add([this](EventParams &) {
+	// [PPSSPP-FORK] MultiCore: Controls section — add touch toggle matching PSP GameSettingsScreen
+	list->Add(new CheckBox(&g_Config.bShowTouchControls, co->T("On-screen touch controls")));
+
+	Choice *touchLayoutChoice = list->Add(new Choice(co->T("Customize On-Screen Controls")));
+	touchLayoutChoice->OnClick.Add([this](EventParams &) {
 		screenManager()->push(new CoreTouchLayoutScreen(gamePath_, EmuCore::Type::GBA));
 	});
+	touchLayoutChoice->SetEnabledPtr(&g_Config.bShowTouchControls);
 
 	// === Display ===
 	list->Add(new ItemHeader(gs->T("Display")));
