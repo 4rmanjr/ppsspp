@@ -6,6 +6,7 @@
 
 
 #include "EmuCore/EmuCore.h"
+#include "EmuCore/GBAPostProcessor.h"
 #include "Common/GPU/thin3d.h"
 
 // Forward declare mGBA types (included only in .cpp)
@@ -134,6 +135,10 @@ private:
 	Draw::Texture *gbaTexture_ = nullptr;
 	Draw::Pipeline *gbaPipeline_ = nullptr;
 	Draw::SamplerState *gbaSampler_ = nullptr;
+
+	// [PPSSPP-FORK] MultiCore: offscreen framebuffer for post-processing pipeline
+	Draw::Framebuffer *gbaOffscreenFB_ = nullptr;
+	GBAPostProcessor *gbaPostProcessor_ = nullptr;
 };
 
 }  // namespace EmuCore

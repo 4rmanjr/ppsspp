@@ -25,6 +25,7 @@ add_library(EmuCore STATIC
     EmuCore.cpp
     PSPCore.cpp
     GBACore.cpp
+    GBAPostProcessor.cpp
     Config.cpp
     RecentFilesRegistry.cpp
 )

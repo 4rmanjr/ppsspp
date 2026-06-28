@@ -18,6 +18,8 @@
 #include "Core/Config.h"
 #include "Core/Util/PathUtil.h"
 
+#include "GPU/Common/PostShader.h"
+
 #include <mgba/core/core.h>
 #include <mgba/core/log.h>
 #include <mgba/gba/core.h>
@@ -427,14 +429,41 @@ void GBACore::InitRendering(Draw::DrawContext *draw) {
 	texDesc.initData.push_back(dummyData.data());
 	gbaTexture_ = draw->CreateTexture(texDesc);
 
-	NOTICE_LOG(Log::System, "[GBA] InitRendering COMPLETE — pipeline=%p texture=%p sampler=%p",
-		gbaPipeline_, gbaTexture_, gbaSampler_);
+	// [PPSSPP-FORK] MultiCore: offscreen framebuffer for post-processing pipeline
+	FramebufferDesc fbDesc{};
+	fbDesc.width = GBA_WIDTH;
+	fbDesc.height = GBA_HEIGHT;
+	fbDesc.depth = 1;
+	fbDesc.numLayers = 1;
+	fbDesc.multiSampleLevel = 0;
+	fbDesc.z_stencil = false;
+	fbDesc.tag = "GBA_offscreen";
+	gbaOffscreenFB_ = draw->CreateFramebuffer(fbDesc);
+
+	// [PPSSPP-FORK] MultiCore: create post-processor, init with GBA native resolution
+	gbaPostProcessor_ = new GBAPostProcessor(draw);
+	gbaPostProcessor_->Init(GBA_WIDTH, GBA_HEIGHT);
+
+	NOTICE_LOG(Log::System, "[GBA] InitRendering COMPLETE — pipeline=%p texture=%p sampler=%p offscreen=%p",
+		gbaPipeline_, gbaTexture_, gbaSampler_, gbaOffscreenFB_);
 }
 
 void GBACore::ShutdownRendering() {
 	if (gbaPipeline_) { gbaPipeline_->Release(); gbaPipeline_ = nullptr; }
 	if (gbaTexture_)  { gbaTexture_->Release();  gbaTexture_ = nullptr; }
 	if (gbaSampler_)  { gbaSampler_->Release();  gbaSampler_ = nullptr; }
+
+	// [PPSSPP-FORK] MultiCore: release post-processing resources
+	if (gbaPostProcessor_) {
+		gbaPostProcessor_->Shutdown();
+		delete gbaPostProcessor_;
+		gbaPostProcessor_ = nullptr;
+	}
+	if (gbaOffscreenFB_) {
+		gbaOffscreenFB_->Release();
+		gbaOffscreenFB_ = nullptr;
+	}
+
 	NOTICE_LOG(Log::System, "[GBA] ShutdownRendering — all GPU resources released");
 }
 
@@ -507,13 +536,7 @@ void GBACore::Render(Draw::DrawContext *draw) {
 	const uint8_t *data = reinterpret_cast<const uint8_t *>(rawVideoBuffer_);
 	draw->UpdateTextureLevels(gbaTexture_, &data, nullptr, 1);
 
-	// Bind pipeline + sampler + texture
-	draw->BindPipeline(gbaPipeline_);
-	Draw::SamplerState *samplers[1] = { gbaSampler_ };
-	draw->BindSamplerStates(0, 1, samplers);
-	draw->BindTexture(0, gbaTexture_);
-
-	// Calculate viewport from config-driven aspect ratio
+	// Calculate output rect from config-driven aspect ratio
 	int screenW = g_display.pixel_xres;
 	int screenH = g_display.pixel_yres;
 	float drawW, drawH, drawX, drawY;
@@ -521,30 +544,67 @@ void GBACore::Render(Draw::DrawContext *draw) {
 
 	using namespace Draw;
 
-	// Build a textured fullscreen quad (2 triangles = 6 verts, non-indexed)
-	const float left = drawX;
-	const float right = drawX + drawW;
-	const float top = drawY;
-	const float bottom = drawY + drawH;
+	// [PPSSPP-FORK] MultiCore: update post-processor from config (shares PSP's vPostShaderNames)
+	if (gbaPostProcessor_) {
+		gbaPostProcessor_->UpdatePostShader(g_Config.vPostShaderNames, screenW, screenH);
+	}
 
-	GBAVertex verts[6] = {
-		{ left,  top,    0.0f, 0.0f, 0.0f, 0xFFFFFFFF },
-		{ right, top,    0.0f, 1.0f, 0.0f, 0xFFFFFFFF },
-		{ right, bottom, 0.0f, 1.0f, 1.0f, 0xFFFFFFFF },
-		{ left,  top,    0.0f, 0.0f, 0.0f, 0xFFFFFFFF },
-		{ right, bottom, 0.0f, 1.0f, 1.0f, 0xFFFFFFFF },
-		{ left,  bottom, 0.0f, 0.0f, 1.0f, 0xFFFFFFFF },
+	// Helper lambda: draw a textured quad on the current render target
+	auto drawQuad = [&](float qX, float qY, float qW, float qH, int vpW, int vpH) {
+		Viewport vp{ 0.0f, 0.0f, (float)vpW, (float)vpH, 0.0f, 1.0f };
+		draw->SetViewport(vp);
+		draw->SetScissorRect(0, 0, vpW, vpH);
+
+		draw->BindPipeline(gbaPipeline_);
+		Draw::SamplerState *samplers[1] = { gbaSampler_ };
+		draw->BindSamplerStates(0, 1, samplers);
+
+		GBAVertex verts[6] = {
+			{ qX, qY, 0.0f, 0.0f, 0.0f, 0xFFFFFFFF },
+			{ qX + qW, qY, 0.0f, 1.0f, 0.0f, 0xFFFFFFFF },
+			{ qX + qW, qY + qH, 0.0f, 1.0f, 1.0f, 0xFFFFFFFF },
+			{ qX, qY, 0.0f, 0.0f, 0.0f, 0xFFFFFFFF },
+			{ qX + qW, qY + qH, 0.0f, 1.0f, 1.0f, 0xFFFFFFFF },
+			{ qX, qY + qH, 0.0f, 0.0f, 1.0f, 0xFFFFFFFF },
+		};
+
+		VsTexColUB ub{};
+		Lin::Matrix4x4 ortho = ComputeOrthoMatrix((float)vpW, (float)vpH, draw->GetDeviceCaps().coordConvention);
+		memcpy(ub.WorldViewProj, ortho.getReadPtr(), sizeof(Lin::Matrix4x4));
+		ub.tint = 1.0f;
+		ub.saturation = 1.0f;
+		draw->UpdateDynamicUniformBuffer(&ub, sizeof(ub));
+		draw->DrawUP(verts, 6);
 	};
 
-	// Update uniform buffer (matching VsTexColUB layout)
-	VsTexColUB ub{};
-	Lin::Matrix4x4 ortho = ComputeOrthoMatrix((float)screenW, (float)screenH, draw->GetDeviceCaps().coordConvention);
-	memcpy(ub.WorldViewProj, ortho.getReadPtr(), sizeof(Lin::Matrix4x4));
-	ub.tint = 1.0f;
-	ub.saturation = 1.0f;
-	draw->UpdateDynamicUniformBuffer(&ub, sizeof(ub));
+	if (gbaPostProcessor_ && gbaPostProcessor_->IsActive()) {
+		// === PATH WITH POST-PROCESSING ===
 
-	draw->DrawUP(verts, 6);
+		// Step 1: Render GBA quad to offscreen framebuffer (unbind before Process)
+		BindFramebufferAsRenderTarget(gbaOffscreenFB_, { RPAction::DONT_CARE, RPAction::DONT_CARE, RPAction::DONT_CARE }, "GBA_offscreen");
+		draw->BindTexture(0, gbaTexture_);
+		drawQuad(0.0f, 0.0f, (float)GBA_WIDTH, (float)GBA_HEIGHT, GBA_WIDTH, GBA_HEIGHT);
+
+		// Unbind offscreen FB before post-process (Process reads it as texture)
+		BindFramebufferAsRenderTarget(nullptr, { RPAction::DONT_CARE, RPAction::DONT_CARE, RPAction::DONT_CARE }, "GBA_unbind");
+
+		// Step 2: Run post-processing chain (may create temp FBs internally)
+		Framebuffer *outputFB = gbaPostProcessor_->Process(gbaOffscreenFB_);
+
+		// Step 2.5: Unbind whatever Process left as render target
+		BindFramebufferAsRenderTarget(nullptr, { RPAction::DONT_CARE, RPAction::DONT_CARE, RPAction::DONT_CARE }, "GBA_unbind2");
+
+		// Step 3: Present processed output to backbuffer
+		BindFramebufferAsTexture(outputFB, 0, Aspect::COLOR_BIT, 0);
+		drawQuad(drawX, drawY, drawW, drawH, screenW, screenH);
+
+		// Unbind texture to leave clean state
+		draw->BindTexture(0, nullptr);
+	} else {
+		// === PATH WITHOUT POST-PROCESSING (direct to backbuffer) ===
+		draw->BindTexture(0, gbaTexture_);
+		drawQuad(drawX, drawY, drawW, drawH, screenW, screenH);
+	}
 }
 
 void GBACore::DeviceLost() {
@@ -554,6 +614,7 @@ void GBACore::DeviceLost() {
 void GBACore::DeviceRestored(Draw::DrawContext *draw) {
 	// Rendering resources will be lazily recreated on next Render() call.
 	NOTICE_LOG(Log::System, "[GBA] DeviceRestored — lazy reinit on next render");
+	// Post-processor is also lazily reinitialized via InitRendering -> new GBAPostProcessor(draw)
 }
 
 int GBACore::GetAudioSampleRate() const {
