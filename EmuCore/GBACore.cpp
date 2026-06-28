@@ -277,27 +277,14 @@ void GBACore::RunFrame() {
 	}
 
 	// Capture video — mGBA rendered into rawVideoBuffer_ via setVideoBuffer
-	// Convert from mColor (BGR packed in uint32) to RGBA8888 (Thin3D format)
-	// mGBA stores B in high bits, G middle, R low bits:
-	//   M_RGB5_TO_BGR8 = (B5<<19) | (G5<<11) | (R5<<3)
-	// Thin3D R8G8B8A8 expects little-endian: byte0=R, byte1=G, byte2=B, byte3=A
-	for (int y = 0; y < GBA_HEIGHT; y++) {
-		for (int x = 0; x < GBA_WIDTH; x++) {
-			mColor c = rawVideoBuffer_[y * GBA_WIDTH + x];
-			// Extract RGB from mGBA's BGR-packed uint32
-			uint8_t r = c & 0xFF;
-			uint8_t g = (c >> 8) & 0xFF;
-			uint8_t b = (c >> 16) & 0xFF;
-			// Pack as RGBA (not BGR!) — Thin3D expects byte0=R, byte1=G, byte2=B, byte3=A
-			videoBuffer_[y * GBA_WIDTH + x] = (0xFF << 24) | (b << 16) | (g << 8) | r;
-		}
-	}
+	// No CPU conversion needed: upload raw buffer directly to GPU
+	// (rawVideoBuffer_ byte order: R,G,B,0 in little-endian memory)
 
 	// Debug: verify render is working
 	static int vdebugCount = 0;
 	if (++vdebugCount <= 5) {
-		NOTICE_LOG(Log::System, "[GBA] Render frame %d: raw[0]=0x%08X converted[0]=0x%08X",
-			vdebugCount, rawVideoBuffer_[0], videoBuffer_[0]);
+		NOTICE_LOG(Log::System, "[GBA] Render frame %d: raw[0]=0x%08X",
+			vdebugCount, rawVideoBuffer_[0]);
 	}
 
 	// Resample audio from mGBA's internal buffer (32768 Hz) to PPSSPP rate (44100 Hz)
@@ -410,7 +397,8 @@ void GBACore::InitRendering(Draw::DrawContext *draw) {
 	};
 	InputLayout *inputLayout = draw->CreateInputLayout(inputDesc);
 
-	BlendState *blend = draw->CreateBlendState({ true, 0xF, BlendFactor::ONE, BlendFactor::ONE_MINUS_SRC_ALPHA });
+	// [PPSSPP-FORK] MultiCore: opaque blend — raw GBA buffer has no alpha (byte3=0)
+	BlendState *blend = draw->CreateBlendState({ false, 0xF });
 	DepthStencilState *depth = draw->CreateDepthStencilState({ false, false, Comparison::LESS });
 	RasterState *raster = draw->CreateRasterState({});
 
@@ -513,8 +501,8 @@ void GBACore::Render(Draw::DrawContext *draw) {
 			return;
 	}
 
-	// Upload GBA framebuffer to texture
-	const uint8_t *data = reinterpret_cast<const uint8_t *>(videoBuffer_);
+	// Upload GBA framebuffer to texture (raw buffer: byte order R,G,B,0)
+	const uint8_t *data = reinterpret_cast<const uint8_t *>(rawVideoBuffer_);
 	draw->UpdateTextureLevels(gbaTexture_, &data, nullptr, 1);
 
 	// Bind pipeline + sampler + texture
@@ -824,7 +812,18 @@ bool GBACore::SaveStateToFile(int slot) {
 		// AsyncImageFileView uses ImageFileType::DETECT which reads magic bytes,
 		// so PNG format with .jpg extension works correctly.
 		Path thumbPath = dir / StringFromFormat("GBA_%s_%d.jpg", prefix.c_str(), slot);
-		pngSave(thumbPath, videoBuffer_, GBA_WIDTH, GBA_HEIGHT, 4);
+		// [PPSSPP-FORK] GPU pixel conv: convert raw buffer (R,G,B,0) to RGBA (alpha=255) for PNG
+		{
+			uint32_t thumb[GBA_WIDTH * GBA_HEIGHT];
+			for (int i = 0; i < GBA_WIDTH * GBA_HEIGHT; i++) {
+				mColor c = rawVideoBuffer_[i];
+				uint8_t r = c & 0xFF;
+				uint8_t g = (c >> 8) & 0xFF;
+				uint8_t b = (c >> 16) & 0xFF;
+				thumb[i] = (0xFF << 24) | (b << 16) | (g << 8) | r;
+			}
+			pngSave(thumbPath, thumb, GBA_WIDTH, GBA_HEIGHT, 4);
+		}
 	} else {
 		WARN_LOG(Log::SaveState, "[GBA] Failed to write file: %s", path.c_str());
 	}
