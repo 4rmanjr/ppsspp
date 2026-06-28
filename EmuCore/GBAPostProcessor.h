@@ -65,6 +65,10 @@ private:
 	// Vertex buffer for fullscreen quads (12 verts: 4 final + 4 pass + 4 first)
 	Draw::Buffer *vdata_ = nullptr;
 
+	// Cached samplers (created once, reused every frame)
+	Draw::SamplerState *samplerNearest_ = nullptr;
+	Draw::SamplerState *samplerLinear_ = nullptr;
+
 	// Shader chain
 	std::vector<Draw::Pipeline *> shaderPipelines_;
 	std::vector<ShaderInfo> shaderInfo_;

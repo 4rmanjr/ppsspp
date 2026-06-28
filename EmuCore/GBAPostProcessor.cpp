@@ -34,6 +34,10 @@ void GBAPostProcessor::Init(int srcWidth, int srcHeight) {
 	using namespace Draw;
 	vdata_ = draw_->CreateBuffer(sizeof(QuadVertex) * 12, BufferUsageFlag::DYNAMIC | BufferUsageFlag::VERTEXDATA);
 
+	// Create cached samplers for post-shader passes
+	samplerNearest_ = draw_->CreateSamplerState({ TextureFilter::NEAREST, TextureFilter::NEAREST, TextureFilter::NEAREST, 0.0f, TextureAddressMode::CLAMP_TO_EDGE, TextureAddressMode::CLAMP_TO_EDGE, TextureAddressMode::CLAMP_TO_EDGE });
+	samplerLinear_ = draw_->CreateSamplerState({ TextureFilter::LINEAR, TextureFilter::LINEAR, TextureFilter::LINEAR, 0.0f, TextureAddressMode::CLAMP_TO_EDGE, TextureAddressMode::CLAMP_TO_EDGE, TextureAddressMode::CLAMP_TO_EDGE });
+
 	initialized_ = true;
 }
 
@@ -42,6 +46,14 @@ void GBAPostProcessor::Shutdown() {
 	if (vdata_) {
 		vdata_->Release();
 		vdata_ = nullptr;
+	}
+	if (samplerNearest_) {
+		samplerNearest_->Release();
+		samplerNearest_ = nullptr;
+	}
+	if (samplerLinear_) {
+		samplerLinear_->Release();
+		samplerLinear_ = nullptr;
 	}
 	initialized_ = false;
 }
@@ -356,16 +368,11 @@ Draw::Framebuffer *GBAPostProcessor::Process(Draw::Framebuffer *input) {
 		draw_->BindPipeline(pipeline);
 		draw_->UpdateDynamicUniformBuffer(&uniforms, sizeof(uniforms));
 
-		// Bind sampler
-		Draw::SamplerState *sampler = info.isUpscalingFilter
-			? draw_->CreateSamplerState({ Draw::TextureFilter::NEAREST, Draw::TextureFilter::NEAREST, Draw::TextureFilter::NEAREST, 0.0f, Draw::TextureAddressMode::CLAMP_TO_EDGE, Draw::TextureAddressMode::CLAMP_TO_EDGE, Draw::TextureAddressMode::CLAMP_TO_EDGE })
-			: draw_->CreateSamplerState({ Draw::TextureFilter::LINEAR, Draw::TextureFilter::LINEAR, Draw::TextureFilter::LINEAR, 0.0f, Draw::TextureAddressMode::CLAMP_TO_EDGE, Draw::TextureAddressMode::CLAMP_TO_EDGE, Draw::TextureAddressMode::CLAMP_TO_EDGE });
-
+		// Bind sampler (reuse cached)
+		Draw::SamplerState *sampler = info.isUpscalingFilter ? samplerNearest_ : samplerLinear_;
 		draw_->BindSamplerStates(0, 1, &sampler);
 		draw_->BindVertexBuffer(vdata_, vertOffset);
 		draw_->Draw(4, 0);
-
-		sampler->Release();
 
 		// Rotate: current output becomes next input
 		currentInput = outputFB;
