@@ -11,6 +11,7 @@
 #include "Common/Log.h"
 #include "Common/TimeUtil.h"
 #include "Core/Config.h"
+#include "Core/HW/Display.h"
 #include "GPU/Common/PostShader.h"
 #include "GPU/GPUState.h"
 
