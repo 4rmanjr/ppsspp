@@ -16,8 +16,16 @@ When the user types `/codereview`, perform a complete code review of the latest 
 2. **Trace every code path** in the modified files:
    - Follow function calls from entry point to return
    - Check if variables are properly initialized before use
-   - Verify edge cases (null checks, division-by-zero guards, empty bounds)
+   - Verify edge cases (null checks, division-by-zero guards, empty bounds, invalid indices)
    - Validate coordinate math (screen space vs parent-relative)
+   - **`.size()` type check:** Before reading code that calls `.size()` on a value, verify the type supports it. Plain C arrays (`Type arr[N]`) have NO `.size()` member — this is a P1 compile error. When in doubt, `grep -n 'arr\['` on the declaration to confirm it's a vector, not a C array.
+   - **Division-by-zero in GLSL:** Scan `.fsh` files for `1.0 /` or `1.0f /` expressions. Verify the divisor is guarded (e.g., `if (gamma > 0.01)` or slider range > 0). If unguarded, flag P4.
+   - **Cross-file string consistency:** When code matches on string literals (e.g., `info.section == "GBALCD"`), verify the actual value by reading the source that produces it — INI section name, enum stringification, const/define. A mismatch is P2 (silent logic error).
+   - **Config field completeness:** For every new field added to `Config.h`, verify:
+     * ✅ Saved in `Config.cpp` (Set call)
+     * ✅ Loaded in `Config.cpp` (Get call)
+     * ✅ Default value matches between declaration and UI slider default
+     * ✅ UI control exists (if user-facing) or is intentionally internal
 
 3. **Check against AGENTS.md rules:**
    - 🔴 FORBIDDEN: No upstream code deleted/modified/restructured
@@ -44,14 +52,23 @@ When the user types `/codereview`, perform a complete code review of the latest 
      * Scale: same semantics as PSP?
      * Rotation: same angle convention?
 
-6. **Categorize issues:**
+6. **Fix verification** (ONLY if a P1/P2 fix was applied):
+   - Re-read the fixed code block with its surrounding context.
+   - Check: does the fix introduce ANY new code path not present before? (Expected for functional fixes; unexpected for surface-level fixes like `.size()` → `4`).
+   - Check: are the old callers that relied on the buggy behavior now broken? (Trace callers of the fixed function).
+   - Check: if loop bounds changed, does the new bound exceed array allocation? `for (s = 0; s < N; s++)` must have `array[N]` or larger.
+   - Check: if the fix is in a shader, does the new calculation preserve output range (no NaN/Inf in GLSL)?
+   - Check: does the fix maintain PSP parity? Compare with upstream PPSSPP's equivalent code path.
+   - If any of the above fails, P1 — revert and rethink the fix.
+
+7. **Categorize issues:**
    - P1: Compile error / crash (must fix NOW)
    - P2: Logic error (wrong behavior, incorrect coordinate math)
    - P3: PSP parity gap (behavior differs from upstream)
    - P4: Code quality (missing guard, fragile pattern)
    - P5: Nitpick (missing marker, naming, minor)
 
-7. **Report findings** using this exact template:
+8. **Report findings** using this exact template:
 
 ```
 ## Review: <commit-hash-or-working-tree>
