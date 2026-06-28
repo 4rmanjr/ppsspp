@@ -30,9 +30,9 @@ void GBAPostProcessor::Init(int srcWidth, int srcHeight) {
 	srcWidth_ = srcWidth;
 	srcHeight_ = srcHeight;
 
-	// Create vertex buffer (12 verts: 4 final, 4 passes, 4 first pass)
+	// Create vertex buffer (4 verts for TRIANGLE_STRIP fullscreen quad)
 	using namespace Draw;
-	vdata_ = draw_->CreateBuffer(sizeof(QuadVertex) * 12, BufferUsageFlag::DYNAMIC | BufferUsageFlag::VERTEXDATA);
+	vdata_ = draw_->CreateBuffer(sizeof(QuadVertex) * 4, BufferUsageFlag::DYNAMIC | BufferUsageFlag::VERTEXDATA);
 
 	// Create cached samplers for post-shader passes
 	samplerNearest_ = draw_->CreateSamplerState({ TextureFilter::NEAREST, TextureFilter::NEAREST, TextureFilter::NEAREST, 0.0f, TextureAddressMode::CLAMP_TO_EDGE, TextureAddressMode::CLAMP_TO_EDGE, TextureAddressMode::CLAMP_TO_EDGE });
@@ -86,6 +86,7 @@ bool GBAPostProcessor::UpdatePostShader(const std::vector<std::string> &shaderNa
 
 	if (shaderNames.empty()) {
 		usePostShader_ = false;
+		currentShaderNames_.clear();
 		return false;
 	}
 
@@ -94,11 +95,13 @@ bool GBAPostProcessor::UpdatePostShader(const std::vector<std::string> &shaderNa
 	std::vector<const ShaderInfo *> chain = GetFullPostShadersChain(shaderNames);
 	if (chain.empty()) {
 		usePostShader_ = false;
+		currentShaderNames_.clear();
 		return false;
 	}
 
 	if (!CompileShaders(chain)) {
 		usePostShader_ = false;
+		currentShaderNames_.clear();
 		return false;
 	}
 
@@ -240,24 +243,21 @@ bool GBAPostProcessor::CompileShaders(const std::vector<const ShaderInfo *> &cha
 		shaderPipelines_.push_back(pipeline);
 		shaderInfo_.push_back(*info);
 
-		// Allocate temp framebuffer for this pass (unless it's the last and no next)
-		bool isLast = (i + 1 >= chain.size());
-		if (!isLast || info->outputResolution) {
-			int fbW = info->outputResolution ? screenWidth_ : srcWidth_;
-			int fbH = info->outputResolution ? screenHeight_ : srcHeight_;
-			// For chained shaders, previous FB dimensions might differ
-			if (!tempFramebuffers_.empty()) {
-				Draw::Framebuffer *prev = tempFramebuffers_.back();
-				draw_->GetFramebufferDimensions(prev, &fbW, &fbH);
-			}
-
-			Draw::Framebuffer *fb = draw_->CreateFramebuffer({ fbW, fbH, 1, 1, 0, false, "gba_post_temp" });
-			if (!fb) {
-				ERROR_LOG(Log::FrameBuf, "GBAPostProcessor: Failed to allocate temp FB for %s", info->section.c_str());
-				return false;
-			}
-			tempFramebuffers_.push_back(fb);
+		// Allocate temp framebuffer for this pass (GBA always needs an output FB)
+		int fbW = info->outputResolution ? screenWidth_ : srcWidth_;
+		int fbH = info->outputResolution ? screenHeight_ : srcHeight_;
+		// For chained shaders, use previous FB's size (unless outputResolution overrides)
+		if (!tempFramebuffers_.empty() && !info->outputResolution) {
+			Draw::Framebuffer *prev = tempFramebuffers_.back();
+			draw_->GetFramebufferDimensions(prev, &fbW, &fbH);
 		}
+
+		Draw::Framebuffer *fb = draw_->CreateFramebuffer({ fbW, fbH, 1, 1, 0, false, "gba_post_temp" });
+		if (!fb) {
+			ERROR_LOG(Log::FrameBuf, "GBAPostProcessor: Failed to allocate temp FB for %s", info->section.c_str());
+			return false;
+		}
+		tempFramebuffers_.push_back(fb);
 	}
 
 	return true;
@@ -269,58 +269,34 @@ Draw::Framebuffer *GBAPostProcessor::Process(Draw::Framebuffer *input) {
 
 	draw_->Invalidate(Draw::InvalidationFlags::CACHED_RENDER_STATE);
 
-	int lastWidth = srcWidth_;
-	int lastHeight = srcHeight_;
-
-	// Build vertices for each pass
-	QuadVertex verts[12] = {};
-	const float y0 = -1.0f;
-	const float y1 = 1.0f;
-
-	// Pass vertices: fullscreen quad (-1,-1 to 1,1)
-	verts[4] = { -1.0f, y0, 0.0f, 0.0f, 0.0f, 0xFFFFFFFF };
-	verts[5] = {  1.0f, y0, 0.0f, 1.0f, 0.0f, 0xFFFFFFFF };
-	verts[6] = { -1.0f, y1, 0.0f, 0.0f, 1.0f, 0xFFFFFFFF };
-	verts[7] = {  1.0f, y1, 0.0f, 1.0f, 1.0f, 0xFFFFFFFF };
-
-	// First pass vertices: uses full UV rect
-	verts[8] = { -1.0f, y0, 0.0f, 0.0f, 0.0f, 0xFFFFFFFF };
-	verts[9] = {  1.0f, y0, 0.0f, 1.0f, 0.0f, 0xFFFFFFFF };
-	verts[10] = { -1.0f, y1, 0.0f, 0.0f, 1.0f, 0xFFFFFFFF };
-	verts[11] = {  1.0f, y1, 0.0f, 1.0f, 1.0f, 0xFFFFFFFF };
+	// Upload fullscreen quad vertices (used by every pass)
+	QuadVertex verts[4] = {};
+	verts[0] = { -1.0f, -1.0f, 0.0f, 0.0f, 0.0f, 0xFFFFFFFF };
+	verts[1] = {  1.0f, -1.0f, 0.0f, 1.0f, 0.0f, 0xFFFFFFFF };
+	verts[2] = { -1.0f,  1.0f, 0.0f, 0.0f, 1.0f, 0xFFFFFFFF };
+	verts[3] = {  1.0f,  1.0f, 0.0f, 1.0f, 1.0f, 0xFFFFFFFF };
 
 	draw_->UpdateBuffer(vdata_, (const uint8_t *)verts, 0, sizeof(verts), Draw::UPDATE_DISCARD);
 
+	int lastWidth = srcWidth_;
+	int lastHeight = srcHeight_;
 	Draw::Framebuffer *currentInput = input;
+
+	_assert_msg_(shaderPipelines_.size() <= tempFramebuffers_.size(), "GBAPostProcessor: tempFB count < pipeline count");
 
 	for (size_t i = 0; i < shaderPipelines_.size(); i++) {
 		Draw::Pipeline *pipeline = shaderPipelines_[i];
 		const ShaderInfo &info = shaderInfo_[i];
 
-		bool isLast = (i + 1 >= shaderPipelines_.size());
-		bool needsOutputFB = !isLast || info.outputResolution;
-
-		Draw::Framebuffer *outputFB = nullptr;
+		// Output FB always exists (allocated in CompileShaders for every pass)
+		Draw::Framebuffer *outputFB = tempFramebuffers_[i];
 		int outW, outH;
-
-		if (needsOutputFB && i < tempFramebuffers_.size()) {
-			outputFB = tempFramebuffers_[i];
-			draw_->GetFramebufferDimensions(outputFB, &outW, &outH);
-		} else if (isLast && !info.outputResolution) {
-			// Final pass renders to backbuffer (called by caller)
-			// Return input as-is — caller will blit manually
-			return currentInput;
-		} else {
-			// Should not happen
-			return input;
-		}
-
-		int vertOffset = (i == 0) ? (int)sizeof(QuadVertex) * 8 : (int)sizeof(QuadVertex) * 4;
+		draw_->GetFramebufferDimensions(outputFB, &outW, &outH);
 
 		// Bind output FB as render target
 		draw_->BindFramebufferAsRenderTarget(outputFB, { Draw::RPAction::DONT_CARE, Draw::RPAction::DONT_CARE, Draw::RPAction::DONT_CARE }, "GBAPost");
 
-		// Bind input as texture
+		// Bind input (previous pass output) as texture
 		draw_->BindFramebufferAsTexture(currentInput, 0, Draw::Aspect::COLOR_BIT, 0);
 
 		// Set viewport to output FB size
@@ -371,7 +347,7 @@ Draw::Framebuffer *GBAPostProcessor::Process(Draw::Framebuffer *input) {
 		// Bind sampler (reuse cached)
 		Draw::SamplerState *sampler = info.isUpscalingFilter ? samplerNearest_ : samplerLinear_;
 		draw_->BindSamplerStates(0, 1, &sampler);
-		draw_->BindVertexBuffer(vdata_, vertOffset);
+		draw_->BindVertexBuffer(vdata_, 0);
 		draw_->Draw(4, 0);
 
 		// Rotate: current output becomes next input

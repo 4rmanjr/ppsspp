@@ -549,6 +549,7 @@ void GBACore::Render(Draw::DrawContext *draw) {
 		gbaPostProcessor_->UpdatePostShader(g_Config.vPostShaderNames, screenW, screenH);
 	}
 
+	// [PPSSPP-FORK] MultiCore: drawQuad lambda replaces old inline quad code
 	// Helper lambda: draw a textured quad on the current render target
 	auto drawQuad = [&](float qX, float qY, float qW, float qH, int vpW, int vpH) {
 		Viewport vp{ 0.0f, 0.0f, (float)vpW, (float)vpH, 0.0f, 1.0f };

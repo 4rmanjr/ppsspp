@@ -62,7 +62,7 @@ private:
 	int screenWidth_ = 0;
 	int screenHeight_ = 0;
 
-	// Vertex buffer for fullscreen quads (12 verts: 4 final + 4 pass + 4 first)
+	// Vertex buffer for fullscreen quad (4 verts)
 	Draw::Buffer *vdata_ = nullptr;
 
 	// Cached samplers (created once, reused every frame)
