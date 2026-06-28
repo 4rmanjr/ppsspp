@@ -238,7 +238,7 @@ Create a custom shader that simulates the original GBA LCD screen characteristic
 
 - [x] Write `gba_lcd.fsh` with grid, tint, desaturation, sub-pixel, vignette
 - [x] Register in `defaultshaders.ini` as `[GBALCD]`
-- [ ] **Commit**: `feat(gba-gfx): Phase 4.1 — GBA LCD simulation shader`
+- [x] **Commit**: `feat(gba-gfx): Phase 4.1 — GBA LCD simulation shader`
 
 ### Task 4.2 — Install shader in build
 
@@ -246,7 +246,7 @@ Create a custom shader that simulates the original GBA LCD screen characteristic
 - (No changes needed — `file(GLOB_RECURSE SHADER_FILES assets/shaders/*)` picks up new .fsh automatically)
 
 - [x] Verify: CMakeLists.txt uses GLOB_RECURSE for shaders — no manual registration needed
-- [ ] **Commit**: (included in 4.1 commit)
+- [x] **Commit**: (included in 4.1 commit)
 
 ---
 
