@@ -7,6 +7,7 @@
 
 #include <cstring>
 #include <cstdlib>
+#include <cctype>
 #include <fcntl.h>
 
 #include "Common/Log.h"
@@ -29,6 +30,9 @@
 #include <mgba-util/vfs.h>
 #include <mgba-util/audio-buffer.h>
 #include <mgba-util/audio-resampler.h>
+
+// [PPSSPP-FORK] MultiCore: libzip for loading .gba ROMs from .zip archives
+#include "ext/libzip/zip.h"
 
 // [PPSSPP-FORK] MultiCore: save state thumbnail
 #include "Common/Data/Format/PNGLoad.h"
@@ -183,6 +187,85 @@ GBACore::~GBACore() {
 		INFO_LOG(Log::System, "[GBA] Core deinitialized, save flushed");
 		core_ = nullptr;
 	}
+
+// [PPSSPP-FORK] MultiCore: Load .gba ROM from inside a .zip archive using libzip.
+// Returns a VFile* that must be closed by the caller, or nullptr on failure.
+static struct VFile *LoadROMFromZip(const Path &path) {
+	int errcode = 0;
+	zip_t *z = zip_open(path.c_str(), ZIP_RDONLY, &errcode);
+	if (!z) {
+		ERROR_LOG(Log::System, "[GBA] Failed to open zip archive: %s (errcode=%d)", path.c_str(), errcode);
+		return nullptr;
+	}
+
+	zip_int64_t numEntries = zip_get_num_entries(z, 0);
+	for (zip_int64_t i = 0; i < numEntries; i++) {
+		struct zip_stat st;
+		if (zip_stat_index(z, i, 0, &st) < 0)
+			continue;
+
+		// Check if entry name ends with .gba (case insensitive)
+		const char *name = st.name;
+		if (!name)
+			continue;
+		size_t nameLen = strlen(name);
+		if (nameLen < 4)
+			continue;
+		if (tolower((unsigned char)name[nameLen - 4]) != '.' ||
+			tolower((unsigned char)name[nameLen - 3]) != 'g' ||
+			tolower((unsigned char)name[nameLen - 2]) != 'b' ||
+			tolower((unsigned char)name[nameLen - 1]) != 'a')
+			continue;
+
+		INFO_LOG(Log::System, "[GBA] Found .gba entry in zip: %s (size=%llu)", name, (unsigned long long)st.size);
+
+		struct zip_file *zf = zip_fopen_index(z, i, 0);
+		if (!zf) {
+			ERROR_LOG(Log::System, "[GBA] Failed to open zip entry: %s", name);
+			zip_close(z);
+			return nullptr;
+		}
+
+		// Allocate buffer and read the entire entry
+		uint8_t *buf = (uint8_t *)malloc(st.size);
+		if (!buf) {
+			ERROR_LOG(Log::System, "[GBA] Failed to allocate %llu bytes for ROM", (unsigned long long)st.size);
+			zip_fclose(zf);
+			zip_close(z);
+			return nullptr;
+		}
+
+		ssize_t bytesRead = 0;
+		while ((size_t)bytesRead < st.size) {
+			ssize_t r = zip_fread(zf, buf + bytesRead, st.size - bytesRead);
+			if (r < 0) {
+				ERROR_LOG(Log::System, "[GBA] Error reading zip entry: %s", name);
+				free(buf);
+				zip_fclose(zf);
+				zip_close(z);
+				return nullptr;
+			}
+			bytesRead += r;
+		}
+
+		zip_fclose(zf);
+		zip_close(z);
+
+		// Wrap buffer in mGBA VFile (VFileMemChunk copies the data, then we can free buf)
+		struct VFile *vf = VFileMemChunk(buf, bytesRead);
+		free(buf);
+		if (!vf) {
+			ERROR_LOG(Log::System, "[GBA] Failed to create VFile from zip entry: %s", name);
+			return nullptr;
+		}
+
+		INFO_LOG(Log::System, "[GBA] Loaded ROM from zip: %s (%llu bytes -> %zd bytes)", name, (unsigned long long)st.size, bytesRead);
+		return vf;
+	}
+
+	ERROR_LOG(Log::System, "[GBA] No .gba file found in zip: %s", path.c_str());
+	zip_close(z);
+	return nullptr;
 }
 
 bool GBACore::LoadROM(const Path &path) {
@@ -195,25 +278,40 @@ bool GBACore::LoadROMInternal(const Path &path) {
 
 	INFO_LOG(Log::System, "[GBA] Loading ROM: %s", path.c_str());
 
-	// Open ROM file via mGBA's VFile
 	struct VFile *vf = nullptr;
-#if defined(__ANDROID__) && defined(ANDROID)
-	// Android SAF: content:// URIs can't use POSIX open, must use ContentResolver FD
-	if (path.ToString().find("content://") == 0) {
-		int fd = Android_OpenContentUriFd(path.ToString(), Android_OpenContentUriMode::READ);
-		if (fd >= 0) {
-			vf = VFileFromFD(fd);
-		} else {
-			ERROR_LOG(Log::System, "[GBA] Failed to open content URI via SAF: %s", path.c_str());
+
+	// [PPSSPP-FORK] MultiCore: detect .zip archives and extract .gba ROM using libzip
+	std::string pathStr = path.ToString();
+	size_t extPos = pathStr.rfind('.');
+	if (extPos != std::string::npos) {
+		std::string ext = pathStr.substr(extPos);
+		for (size_t i = 0; i < ext.size(); i++)
+			ext[i] = tolower((unsigned char)ext[i]);
+		if (ext == ".zip") {
+			vf = LoadROMFromZip(path);
 		}
-	} else {
-		vf = VFileOpen(path.c_str(), O_RDONLY);
 	}
-#else
-	vf = VFileOpen(path.c_str(), O_RDONLY);
-#endif
+
+	// Not a zip (or zip with no .gba entry) — fall back to direct file open
 	if (!vf) {
-		ERROR_LOG(Log::System, "[GBA] Failed to open ROM file: %s", path.c_str());
+#if defined(__ANDROID__) && defined(ANDROID)
+		if (pathStr.find("content://") == 0) {
+			int fd = Android_OpenContentUriFd(pathStr, Android_OpenContentUriMode::READ);
+			if (fd >= 0) {
+				vf = VFileFromFD(fd);
+			} else {
+				ERROR_LOG(Log::System, "[GBA] Failed to open content URI via SAF: %s", path.c_str());
+			}
+		} else {
+			vf = mDirectorySetOpenPath(&core_->dirs, path.c_str(), core_->isROM);
+		}
+#else
+		vf = mDirectorySetOpenPath(&core_->dirs, path.c_str(), core_->isROM);
+#endif
+	}
+
+	if (!vf) {
+		ERROR_LOG(Log::System, "[GBA] Failed to open ROM (direct or in archive): %s", path.c_str());
 		return false;
 	}
 
