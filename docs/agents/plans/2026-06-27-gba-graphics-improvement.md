@@ -157,45 +157,54 @@ GBA → render → offscreen texture → postprocess chain → screen
 ### Task 3.1 — Create offscreen framebuffer for GBA
 
 **Files:**
-- Modify: `EmuCore/GBACore.h` — add framebuffer members
-- Modify: `EmuCore/GBACore.cpp` — render to framebuffer
+- Modify: `EmuCore/GBACore.h` — add framebuffer + post-processor members
+- Modify: `EmuCore/GBACore.cpp` — offscreen FB create/destroy/render
+- New: `EmuCore/GBAPostProcessor.h` — post-processor class
+- New: `EmuCore/GBAPostProcessor.cpp` — post-processor impl
+- Modify: `EmuCore/CMakeLists.txt` — add GBAPostProcessor.cpp
 
-- [ ] Add `Draw::Framebuffer *gbaOffscreen_ = nullptr;` to GBACore
-- [ ] Create framebuffer in `InitRendering()`
-- [ ] In `Render()`, set render target to offscreen framebuffer
-- [ ] After rendering, bind offscreen texture as input for postprocess
-- [ ] **Commit**: `feat(gba-gfx): Phase 3.1 — GBA offscreen framebuffer`
+- [x] Add `Draw::Framebuffer *gbaOffscreenFB_ = nullptr;` to GBACore
+- [x] Create framebuffer in `InitRendering()`
+- [x] In `Render()`, render GBA quad to offscreen FB first
+- [x] Then present offscreen FB → backbuffer (scaled via GetRenderRect)
+- [x] Destroy in `ShutdownRendering()`
+- [x] Create GBAPostProcessor (wraps shader compilation + chain execution)
+- [x] **Commit**: `feat(gba-gfx): Phase 3 — offscreen FB + post-processing pipeline`
 
-### Task 3.2 — Route GBA through PresentationCommon postprocess
-
-**Files:**
-- Modify: `GPU/Common/PresentationCommon.cpp` — add GBA entry point
-- Modify: `EmuCore/GBACore.cpp` — call postprocess
-
-- [ ] Add method `RenderWithPostprocess(offscreenTex)` to PresentationCommon
-- [ ] Or create a standalone postprocess helper (avoids touching PresentationCommon)
-- [ ] Apply `g_Config.vPostShaderNames` chain to GBA offscreen texture
-- [ ] **Commit**: `feat(gba-gfx): Phase 3.2 — GBA post-processing pipeline`
-
-### Task 3.3 — Share config or create GBA-specific shader config
+### Task 3.2 — Route GBA through post-process pipeline
 
 **Files:**
-- Modify: `Core/Config.h`
+- Create: `EmuCore/GBAPostProcessor.h/cpp` — standalone post-process helper
+  (Option B: avoids touching upstream PresentationCommon)
 
-- [ ] Option A: Share `g_Config.vPostShaderNames` with PSP (simpler, user picks 1 shader for both)
-- [ ] Option B: Create `g_Config.vPostShaderNamesGBA` (independent, more complex)
-- [ ] **Recommendation**: Option A first (PSP shaders already configured), Option B if separate needed
+```
+GBAPostProcessor:
+  - Compiles post-shaders from .fsh/.vsh files (same pool as PSP)
+  - Manages temp framebuffers for shader chain passes
+  - Runs shader chain: input → temp1 → temp2 → ... → output
+  - Returns output framebuffer for GBACore to present
+```
 
-- [ ] **Commit**: `feat(gba-gfx): Phase 3.3 — post-process config`
+- [x] Load/reload shaders via `ReloadAllPostShaderInfo` / `GetFullPostShadersChain`
+- [x] Compile shader modules with translation (GLSL→HLSL/GLSL/VulkanSL)
+- [x] Create pipelines with post-shader uniform descriptors
+- [x] Allocate temp FBs as needed
+- [x] Run shader passes in Process() with correct input/output binding
+- [x] **Commit**: `feat(gba-gfx): Phase 3 — offscreen FB + post-processing pipeline`
+
+### Task 3.3 — Config (Option A: share PSP's vPostShaderNames)
+
+**Files:**
+- (No config changes needed — reads `g_Config.vPostShaderNames` directly)
+
+- [x] GBAPostProcessor reads `g_Config.vPostShaderNames` on each Render()
+- [x] Caching: only recompiles if shader names changed
+- [x] **Commit**: included in Phase 3 commit
 
 ### Task 3.4 — Shader selector in GBA Settings Screen
 
-**Files:**
-- Modify: `UI/GBASettingsScreen.cpp`
-
-- [ ] Add "Post-processing shader" selector (reuse existing PPSSPP shader chooser)
-- [ ] Show preview of active shader
-- [ ] **Commit**: `feat(gba-gfx): Phase 3.4 — shader UI`
+- [ ] *(Deferred — currently shares PSP shader config. User enables shaders in PSP settings and GBA applies them.)*
+- [ ] *(Future: add GBA-specific shader config if separate control needed.)*
 
 ---
 
