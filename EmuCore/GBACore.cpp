@@ -276,9 +276,8 @@ void GBACore::RunFrame() {
 		INFO_LOG(Log::System, "[GBA] Frame %d", frameCount);
 	}
 
-	// Capture video — mGBA rendered into rawVideoBuffer_ via setVideoBuffer
-	// No CPU conversion needed: upload raw buffer directly to GPU
-	// (rawVideoBuffer_ byte order: R,G,B,0 in little-endian memory)
+	// [PPSSPP-FORK] MultiCore: no CPU conversion — upload raw buffer directly to GPU
+	// rawVideoBuffer_ byte order: R,G,B,0 in little-endian memory (matches R8G8B8A8_UNORM)
 
 	// Debug: verify render is working
 	static int vdebugCount = 0;
@@ -501,7 +500,7 @@ void GBACore::Render(Draw::DrawContext *draw) {
 			return;
 	}
 
-	// Upload GBA framebuffer to texture (raw buffer: byte order R,G,B,0)
+	// [PPSSPP-FORK] MultiCore: upload raw GBA framebuffer (no CPU conversion)
 	const uint8_t *data = reinterpret_cast<const uint8_t *>(rawVideoBuffer_);
 	draw->UpdateTextureLevels(gbaTexture_, &data, nullptr, 1);
 
@@ -814,7 +813,7 @@ bool GBACore::SaveStateToFile(int slot) {
 		Path thumbPath = dir / StringFromFormat("GBA_%s_%d.jpg", prefix.c_str(), slot);
 		// [PPSSPP-FORK] GPU pixel conv: convert raw buffer (R,G,B,0) to RGBA (alpha=255) for PNG
 		{
-			uint32_t thumb[GBA_WIDTH * GBA_HEIGHT];
+			std::vector<uint32_t> thumb(GBA_WIDTH * GBA_HEIGHT);
 			for (int i = 0; i < GBA_WIDTH * GBA_HEIGHT; i++) {
 				mColor c = rawVideoBuffer_[i];
 				uint8_t r = c & 0xFF;
@@ -822,7 +821,7 @@ bool GBACore::SaveStateToFile(int slot) {
 				uint8_t b = (c >> 16) & 0xFF;
 				thumb[i] = (0xFF << 24) | (b << 16) | (g << 8) | r;
 			}
-			pngSave(thumbPath, thumb, GBA_WIDTH, GBA_HEIGHT, 4);
+			pngSave(thumbPath, thumb.data(), GBA_WIDTH, GBA_HEIGHT, 4);
 		}
 	} else {
 		WARN_LOG(Log::SaveState, "[GBA] Failed to write file: %s", path.c_str());

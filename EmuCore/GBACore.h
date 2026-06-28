@@ -59,7 +59,7 @@ public:
 	// Convert PSP key bitmask to GBA key bitmask
 	static uint32_t PSPSKeysToGBA(uint32_t pspKeys);
 
-	// Get the raw video buffer from mGBA (R,G,B,0 in little-endian byte order, 240x160)
+	// [PPSSPP-FORK] MultiCore: get raw video buffer (R,G,B,0 byte order, 240x160)
 	const uint32_t *GetVideoBuffer() const { return rawVideoBuffer_; }
 
 	// [PPSSPP-FORK] MultiCore: configure save memory directory for SRAM/Flash
@@ -97,7 +97,7 @@ private:
 
 	mCore *core_ = nullptr;
 
-	// Raw mGBA output buffer (R,G,B,0 byte order, uint32_t per pixel)
+	// [PPSSPP-FORK] MultiCore: raw mGBA output buffer (R,G,B,0 byte order, uint32_t per pixel)
 	uint32_t rawVideoBuffer_[GBA_WIDTH * GBA_HEIGHT]{};
 
 	// Audio constants
