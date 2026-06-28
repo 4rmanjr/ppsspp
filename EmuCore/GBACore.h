@@ -97,10 +97,7 @@ private:
 
 	mCore *core_ = nullptr;
 
-	// Video buffer (RGBA8888)
-	uint32_t videoBuffer_[GBA_WIDTH * GBA_HEIGHT]{};
-
-	// Raw mGBA output buffer (XBGR8 format, mColor)
+	// Raw mGBA output buffer (R,G,B,0 byte order, uint32_t per pixel)
 	uint32_t rawVideoBuffer_[GBA_WIDTH * GBA_HEIGHT]{};
 
 	// Audio constants
