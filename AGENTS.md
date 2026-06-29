@@ -100,16 +100,14 @@ cd android && ./gradlew assembleGoldRelease
 Output APK: `android/build/outputs/apk/gold/release/android-gold-release-unsigned.apk`
 
 > **Signing:** Gunakan **debug signing** (default Android debug keystore `~/.android/debug.keystore`).
-> Cukup jalankan `jarsigner` atau gunakan `apksigner`:
+> ⚠️ **JANGAN pernah build `assembleGoldDebug`** — selalu pakai `assembleGoldRelease`.
+> Setelah build, sign manual:
 > ```bash
-> cd android
-> ./gradlew assembleGoldDebug
-> ```
-> Atau untuk release unsigned + sign manual:
-> ```bash
-> apksigner sign --ks ~/.android/debug.keystore \
->   --ks-pass pass:android \
->   build/outputs/apk/gold/release/android-gold-release-unsigned.apk
+> jarsigner -sigalg SHA256withRSA -digestalg SHA-256 \
+>   -keystore ~/.android/debug.keystore \
+>   -storepass android -keypass android \
+>   android/build/outputs/apk/gold/release/android-gold-release-unsigned.apk \
+>   androiddebugkey
 > ```
 
 ## Navigation — When to Read Which File
