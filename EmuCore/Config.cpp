@@ -163,6 +163,11 @@ void LoadTouchConfig(Type coreType) {
 		}
 		// Only replace defaults if we parsed valid buttons
 		if (parsedCount > 0) {
+			// [PPSSPP-FORK] Read D-pad spacing from INI (fallback to default if missing)
+			float parsedSpacing;
+			if (sec->Get("dpadSpacing", &parsedSpacing)) {
+				parsed.dpadSpacing = parsedSpacing;
+			}
 			cfg = parsed;
 		}
 	}
@@ -191,6 +196,11 @@ void LoadTouchConfig(Type coreType) {
 			}
 		}
 		if (parsedCount > 0) {
+			// [PPSSPP-FORK] Read D-pad spacing from INI (fallback to default if missing)
+			float parsedSpacing;
+			if (secP->Get("dpadSpacing", &parsedSpacing)) {
+				parsed.dpadSpacing = parsedSpacing;
+			}
 			cfgP = parsed;
 		}
 	}
@@ -210,6 +220,8 @@ void SaveTouchConfig(Type coreType) {
 		Section *sec = ini.GetOrCreateSection(GetTouchConfigSection(coreType, false));
 		sec->Clear();
 		const CoreTouchConfig &cfg = GetTouchConfig(coreType, false);
+		// [PPSSPP-FORK] Save D-pad spacing
+		sec->Set("dpadSpacing", cfg.dpadSpacing);
 		for (int i = 0; i < cfg.count; i++) {
 			char key[32], val[128];
 			snprintf(key, sizeof(key), "btn%d", i);
@@ -228,6 +240,8 @@ void SaveTouchConfig(Type coreType) {
 		Section *sec = ini.GetOrCreateSection(GetTouchConfigSection(coreType, true));
 		sec->Clear();
 		const CoreTouchConfig &cfg = GetTouchConfig(coreType, true);
+		// [PPSSPP-FORK] Save D-pad spacing
+		sec->Set("dpadSpacing", cfg.dpadSpacing);
 		for (int i = 0; i < cfg.count; i++) {
 			char key[32], val[128];
 			snprintf(key, sizeof(key), "btn%d", i);

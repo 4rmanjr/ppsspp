@@ -30,6 +30,8 @@ public:
 	virtual void SavePosition() = 0;
 	virtual float GetScaleVal() const = 0;
 	virtual void SetScaleVal(float s) = 0;
+	virtual float GetSpacingVal() const { return 0.0f; }
+	virtual void SetSpacingVal(float s) { }
 	virtual bool Contains(float x, float y) = 0;
 };
 
@@ -96,17 +98,27 @@ class CoreDPadGroup : public CoreDragDropBase {
 public:
 	CoreDPadGroup(EmuCore::CoreTouchButton &up, EmuCore::CoreTouchButton &down,
 				  EmuCore::CoreTouchButton &left, EmuCore::CoreTouchButton &right,
-				  const Bounds &screenBounds)
+				  float spacing, EmuCore::CoreTouchConfig &cfg, const Bounds &screenBounds)
 		: CoreDragDropBase("gba_dpad", ImageID::invalid(), ImageID::invalid(), ImageID::invalid(), 1.0f,
 			new UI::AnchorLayoutParams(
 				((up.x + down.x + left.x + right.x) * 0.25f) * screenBounds.w,
 				((up.y + down.y + left.y + right.y) * 0.25f) * screenBounds.h,
 				UI::NONE, UI::NONE, UI::Centering::Both)),
-		  up_(up), down_(down), left_(left), right_(right), screenBounds_(screenBounds) {
+		  up_(up), down_(down), left_(left), right_(right), cfg_(cfg), screenBounds_(screenBounds) {
 		// Ensure all 4 buttons share the same size
 		float avgW = (up_.w + down_.w + left_.w + right_.w) * 0.25f;
 		up_.w = down_.w = left_.w = right_.w = avgW;
 		up_.h = down_.h = left_.h = right_.h = avgW;
+
+		// [PPSSPP-FORK] PSP parity: calculate D-pad spacing from actual button positions
+		// on load so existing layouts are respected. After editing, spacing_ is controlled
+		// independently via horizontal drag (matching PSP's PSPDPadButtons behavior).
+		float cx = (up.x + down.x + left.x + right.x) * 0.25f;
+		float cy = (up.y + down.y + left.y + right.y) * 0.25f;
+		float dv = fabs(up.y - cy) + fabs(down.y - cy);
+		float dh = fabs(left.x - cx) + fabs(right.x - cx);
+		spacing_ = (dv > 0.0f || dh > 0.0f) ? (dv + dh) * 0.25f : spacing;
+		if (spacing_ < 0.01f) spacing_ = 0.01f;
 	}
 
 	bool IsDownVisually() const override { return false; }
@@ -114,9 +126,10 @@ public:
 	void GetContentDimensions(const UIContext &dc, float &w, float &h) const override {
 		const AtlasImage *image = dc.Draw()->GetAtlas()->getImage(ImageID("I_DIR"));
 		if (image && image->w > 0) {
-			// [PPSSPP-FORK] Bounding box depends directly on scale (up_.w) to allow real-time layout sizing
-			w = up_.w * 2.00f * screenBounds_.w;
-			h = up_.w * 2.00f * screenBounds_.h;
+			// [PPSSPP-FORK] Bounding box accounts for both scale and spacing (arms extend beyond button size)
+			float armSpan = std::max(up_.w * screenBounds_.w, spacing_ * screenBounds_.w);
+			w = armSpan * 2.0f;
+			h = armSpan * 2.0f;
 		} else {
 			w = 0;
 			h = 0;
@@ -145,7 +158,8 @@ public:
 
 		float cpx = bounds_.centerX();
 		float cpy = bounds_.centerY();
-		float dist_pixels = desiredW * 0.5f;
+		// [PPSSPP-FORK] PSP parity: use independent spacing instead of hardcoded half-width
+		float dist_pixels = spacing_ * screenBounds_.w;
 
 		for (int i = 0; i < 4; i++) {
 			float px = cpx + xoff[i] * dist_pixels;
@@ -170,9 +184,8 @@ public:
 	void SavePosition() override {
 		float cx = (bounds_.centerX() - screenBounds_.x) / screenBounds_.w;
 		float cy = (bounds_.centerY() - screenBounds_.y) / screenBounds_.h;
-		// Distribute center back to individual buttons with their offset pattern
-		// D-pad: UP above center, DOWN below, LEFT left, RIGHT right
-		float dist = up_.w * 0.5f; // half button width as default spacing
+		// [PPSSPP-FORK] PSP parity: use independent spacing instead of hardcoded half-width
+		float dist = spacing_;
 		up_.x = cx;
 		up_.y = cy - dist;
 		down_.x = cx;
@@ -181,6 +194,8 @@ public:
 		left_.y = cy;
 		right_.x = cx + dist;
 		right_.y = cy;
+		// [PPSSPP-FORK] Persist spacing back to config
+		cfg_.dpadSpacing = spacing_;
 	}
 
 	float GetScaleVal() const override { return up_.w; }
@@ -189,6 +204,10 @@ public:
 		up_.w = down_.w = left_.w = right_.w = s;
 		up_.h = down_.h = left_.h = right_.h = s;
 	}
+
+	// [PPSSPP-FORK] PSP parity: independent D-pad spacing control
+	float GetSpacingVal() const override { return spacing_; }
+	void SetSpacingVal(float s) override { spacing_ = s; }
 
 	bool Contains(float x, float y) override {
 		const float t = 0.25f;
@@ -202,6 +221,8 @@ public:
 
 private:
 	EmuCore::CoreTouchButton &up_, &down_, &left_, &right_;
+	EmuCore::CoreTouchConfig &cfg_;  // [PPSSPP-FORK] Config reference for persisting dpadSpacing
+	float spacing_ = 0.085f;  // [PPSSPP-FORK] Normalized arm distance from center (fraction of screen width)
 	Bounds screenBounds_;
 };
 
@@ -262,6 +283,7 @@ private:
 	float startObjX_ = -1.0f, startObjY_ = -1.0f;
 	float startDragX_ = -1.0f, startDragY_ = -1.0f;
 	float startScale_ = -1.0f;
+	float startSpacing_ = -1.0f;  // [PPSSPP-FORK] PSP parity: D-pad spacing at drag start
 	EmuCore::Type coreType_;
 	std::vector<CoreDragDropBase *> controls_;
 	bool created_ = false;
@@ -301,11 +323,19 @@ bool CoreLayoutView::Touch(const TouchInput &touch) {
 		} else if (mode_ == 1) {
 			// btn_.w is normalized width (fraction of screen, default ~0.10).
 			// Resize range [0.03, 0.30] = 3%-30% of screen width.
-			float diff = -(touch.y - startDragY_) * 0.0015f;
-			float ns = startScale_ + diff;
+			float diffY = -(touch.y - startDragY_) * 0.0015f;
+			float ns = startScale_ + diffY;
 			if (ns < 0.03f) ns = 0.03f;
 			if (ns > 0.30f) ns = 0.30f;
 			picked_->SetScaleVal(ns);
+
+			// [PPSSPP-FORK] PSP parity: horizontal drag controls D-pad spacing independently
+			// Vertical = scale, Horizontal = spacing (matching PSP TouchControlLayoutScreen)
+			float diffX = (touch.x - startDragX_) * 0.0015f;
+			float nsp = startSpacing_ + diffX;
+			if (nsp < 0.015f) nsp = 0.015f;
+			if (nsp > 0.30f) nsp = 0.30f;
+			picked_->SetSpacingVal(nsp);
 		}
 	}
 	if ((touch.flags & TouchInputFlags::DOWN) && !picked_) {
@@ -317,6 +347,7 @@ bool CoreLayoutView::Touch(const TouchInput &touch) {
 			startObjX_ = params->left;
 			startObjY_ = params->top;
 			startScale_ = picked_->GetScaleVal();
+			startSpacing_ = picked_->GetSpacingVal();  // [PPSSPP-FORK] PSP parity: save spacing at drag start
 		}
 	}
 	if ((touch.flags & TouchInputFlags::UP) && picked_) {
@@ -395,7 +426,8 @@ void CoreLayoutView::CreateViews() {
 
 	// Create grouped D-pad if all 4 buttons exist and at least one is visible
 	if (dpUp && dpDown && dpLeft && dpRight && dpadVisible) {
-		auto *dpad = new CoreDPadGroup(*dpUp, *dpDown, *dpLeft, *dpRight, b);
+		// [PPSSPP-FORK] Pass dpadSpacing + config ref for independent spacing persistence
+		auto *dpad = new CoreDPadGroup(*dpUp, *dpDown, *dpLeft, *dpRight, cfg.dpadSpacing, cfg, b);
 		controls_.push_back(dpad);
 		Add(dpad);
 	}
