@@ -4,6 +4,7 @@
 
 #include "Common/GPU/Shader.h"
 #include "Common/GPU/ShaderTranslation.h"
+#include "Common/GPU/MiscTypes.h"
 #include "Common/GPU/thin3d.h"
 #include "Common/System/System.h"
 #include "Common/System/OSD.h"
@@ -65,10 +66,6 @@ void GBAPostProcessor::DeviceLost() {
 void GBAPostProcessor::DeviceRestored(Draw::DrawContext *draw) {
 	draw_ = draw;
 	Init(srcWidth_, srcHeight_);
-}
-
-bool GBAPostProcessor::IsActive() const {
-	return usePostShader_;
 }
 
 bool GBAPostProcessor::UpdatePostShader(const std::vector<std::string> &shaderNames, int screenWidth, int screenHeight) {
@@ -267,7 +264,7 @@ Draw::Framebuffer *GBAPostProcessor::Process(Draw::Framebuffer *input) {
 	if (!initialized_ || !usePostShader_ || shaderPipelines_.empty())
 		return input;
 
-	draw_->Invalidate(Draw::InvalidationFlags::CACHED_RENDER_STATE);
+	draw_->Invalidate(InvalidationFlags::CACHED_RENDER_STATE);
 
 	// Upload fullscreen quad vertices (used by every pass)
 	QuadVertex verts[4] = {};

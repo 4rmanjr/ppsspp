@@ -37,7 +37,9 @@ target_include_directories(EmuCore PRIVATE ${CMAKE_SOURCE_DIR})
 # indirectly through the mCore vtable.
 target_link_libraries(EmuCore PRIVATE -Wl,--whole-archive mgba -Wl,--no-whole-archive)
 
+# [PPSSPP-FORK] MultiCore: link libzip for .zip ROM loading
+target_link_libraries(EmuCore PRIVATE libzip)
+
 # mGBA include paths for EmuCore compilation
-# Must match mGBA library's compile definitions for ABI compatibility
 target_compile_definitions(EmuCore PRIVATE ENABLE_VFS ENABLE_VFS_FD ENABLE_DIRECTORIES)
 target_include_directories(EmuCore PRIVATE ${CMAKE_SOURCE_DIR}/ext/libmgba/include)

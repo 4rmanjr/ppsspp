@@ -1403,7 +1403,8 @@ void Config::Load(const char *iniFileName, const char *controllerIniFilename) {
 	Section *gbaSettings = iniFile.GetOrCreateSection("GBA");
 	gbaSettings->Get("iGBAAspectRatio", &iGBAAspectRatio);
 	gbaSettings->Get("iGBATexFiltering", &iGBATexFiltering);
-	gbaSettings->Get("iGBAIntegerScale", &iGBAIntegerScale, 0);
+	gbaSettings->Get("iGBAIntegerScale", &iGBAIntegerScale);
+	if (!gbaSettings->HasKey("iGBAIntegerScale")) iGBAIntegerScale = 0;
 	gbaSettings->Get("fGBAVolume", &fGBAVolume);
 #endif
 

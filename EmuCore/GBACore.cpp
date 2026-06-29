@@ -187,6 +187,7 @@ GBACore::~GBACore() {
 		INFO_LOG(Log::System, "[GBA] Core deinitialized, save flushed");
 		core_ = nullptr;
 	}
+}
 
 // [PPSSPP-FORK] MultiCore: Load .gba ROM from inside a .zip archive using libzip.
 // Returns a VFile* that must be closed by the caller, or nullptr on failure.
@@ -697,21 +698,21 @@ void GBACore::Render(Draw::DrawContext *draw) {
 		// === PATH WITH POST-PROCESSING ===
 
 		// Step 1: Render GBA quad to offscreen framebuffer (unbind before Process)
-		BindFramebufferAsRenderTarget(gbaOffscreenFB_, { RPAction::DONT_CARE, RPAction::DONT_CARE, RPAction::DONT_CARE }, "GBA_offscreen");
+		draw->BindFramebufferAsRenderTarget(gbaOffscreenFB_, { RPAction::DONT_CARE, RPAction::DONT_CARE, RPAction::DONT_CARE }, "GBA_offscreen");
 		draw->BindTexture(0, gbaTexture_);
 		drawQuad(0.0f, 0.0f, (float)GBA_WIDTH, (float)GBA_HEIGHT, GBA_WIDTH, GBA_HEIGHT);
 
 		// Unbind offscreen FB before post-process (Process reads it as texture)
-		BindFramebufferAsRenderTarget(nullptr, { RPAction::DONT_CARE, RPAction::DONT_CARE, RPAction::DONT_CARE }, "GBA_unbind");
+		draw->BindFramebufferAsRenderTarget(nullptr, { RPAction::DONT_CARE, RPAction::DONT_CARE, RPAction::DONT_CARE }, "GBA_unbind");
 
 		// Step 2: Run post-processing chain (may create temp FBs internally)
 		Framebuffer *outputFB = gbaPostProcessor_->Process(gbaOffscreenFB_);
 
 		// Step 2.5: Unbind whatever Process left as render target
-		BindFramebufferAsRenderTarget(nullptr, { RPAction::DONT_CARE, RPAction::DONT_CARE, RPAction::DONT_CARE }, "GBA_unbind2");
+		draw->BindFramebufferAsRenderTarget(nullptr, { RPAction::DONT_CARE, RPAction::DONT_CARE, RPAction::DONT_CARE }, "GBA_unbind2");
 
 		// Step 3: Present processed output to backbuffer
-		BindFramebufferAsTexture(outputFB, 0, Aspect::COLOR_BIT, 0);
+		draw->BindFramebufferAsTexture(outputFB, 0, Aspect::COLOR_BIT, 0);
 		drawQuad(drawX, drawY, drawW, drawH, screenW, screenH);
 
 		// Unbind texture to leave clean state

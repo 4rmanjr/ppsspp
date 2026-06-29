@@ -58,11 +58,11 @@ void GBASettingsScreen::CreateViews() {
 	const auto &allShaders = GetAllPostShaderInfo();
 	std::vector<std::string> shaderDisplay;
 	std::vector<std::string> shaderValues;
-	shaderDisplay.push_back(ps->T("UsePSP", "Use PSP Setting"));  // Display: descriptive
+	shaderDisplay.push_back(std::string(ps->T("UsePSP", "Use PSP Setting")));  // Display: descriptive
 	shaderValues.push_back("");                                      // Value: empty = use PSP
 	for (const auto &shader : allShaders) {
 		if (shader.visible && !shader.isStereo) {
-			shaderDisplay.push_back(ps->T(shader.section.c_str(), shader.name));
+			shaderDisplay.push_back(std::string(ps->T(shader.section.c_str(), shader.name)));
 			shaderValues.push_back(shader.section);
 		}
 	}
