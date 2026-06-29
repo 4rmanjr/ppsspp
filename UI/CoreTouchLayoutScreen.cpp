@@ -109,10 +109,13 @@ public:
 	void GetContentDimensions(const UIContext &dc, float &w, float &h) const override {
 		const AtlasImage *image = dc.Draw()->GetAtlas()->getImage(ImageID("I_DIR"));
 		if (image && image->w > 0) {
-			// Estimate: D-pad spans ~2x button width in each direction
-			float btnW = up_.w * screenBounds_.w;
-			w = btnW * 3.0f + image->w * (btnW / image->w);
-			h = w;
+			// [PPSSPP-FORK] Bounding box from actual button positions
+			float minX = std::min({up_.x, down_.x, left_.x, right_.x}) - up_.w * 0.5f;
+			float maxX = std::max({up_.x, down_.x, left_.x, right_.x}) + up_.w * 0.5f;
+			float minY = std::min({up_.y, down_.y, left_.y, right_.y}) - up_.h * 0.5f;
+			float maxY = std::max({up_.y, down_.y, left_.y, right_.y}) + up_.h * 0.5f;
+			w = (maxX - minX) * screenBounds_.w;
+			h = (maxY - minY) * screenBounds_.h;
 		} else {
 			w = 0;
 			h = 0;
@@ -133,23 +136,34 @@ public:
 
 		ImageID dirImage = g_Config.iTouchButtonStyle ? ImageID("I_DIR_LINE") : ImageID("I_DIR");
 
-		static const float xoff[4] = {1, 0, -1, 0};
-		static const float yoff[4] = {0, 1, 0, -1};
+		// [PPSSPP-FORK] Render each arrow at its actual saved position
+		// so preview honestly reflects gameplay positions.
+		static const float angles[4] = {0.0f, M_PI / 2.0f, M_PI, 3.0f * M_PI / 2.0f};
+		EmuCore::CoreTouchButton *btns[4] = {&right_, &down_, &left_, &up_};
 
-		float cx = bounds_.centerX();
-		float cy = bounds_.centerY();
-		float dist = D_pad_Radius * scale_;
+		// Compute center for overlay arrow offset
+		float cx = (up_.x + down_.x + left_.x + right_.x) * 0.25f;
+		float cy = (up_.y + down_.y + left_.y + right_.y) * 0.25f;
+		float cpx = screenBounds_.x + cx * screenBounds_.w;
+		float cpy = screenBounds_.y + cy * screenBounds_.h;
 
 		for (int i = 0; i < 4; i++) {
-			float x = cx + xoff[i] * dist;
-			float y = cy + yoff[i] * dist;
-			float angle = (float)i * M_PI / 2.0f;
-			float innerDist = dist + 4.0f * scale_;
-			float ix = cx + xoff[i] * innerDist;
-			float iy = cy + yoff[i] * innerDist;
+			float px = screenBounds_.x + btns[i]->x * screenBounds_.w;
+			float py = screenBounds_.y + btns[i]->y * screenBounds_.h;
 
-			dc.Draw()->DrawImageRotated(dirImage, x, y, scale_, angle + M_PI, colorBg, false);
-			dc.Draw()->DrawImageRotated(ImageID("I_ARROW"), ix, iy, scale_, angle + M_PI, color, false);
+			// Overlay arrow — slightly further from center along same direction
+			float dx = px - cpx;
+			float dy = py - cpy;
+			float len = sqrtf(dx * dx + dy * dy);
+			float arrowOff = 4.0f * scale_;
+			float ix = px, iy = py;
+			if (len > 0.0f) {
+				ix = px + (dx / len) * arrowOff;
+				iy = py + (dy / len) * arrowOff;
+			}
+
+			dc.Draw()->DrawImageRotated(dirImage, px, py, scale_, angles[i] + M_PI, colorBg, false);
+			dc.Draw()->DrawImageRotated(ImageID("I_ARROW"), ix, iy, scale_, angles[i] + M_PI, color, false);
 		}
 	}
 
