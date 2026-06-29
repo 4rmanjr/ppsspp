@@ -28,7 +28,7 @@
 | **Input (keyboard)** | ✅ **WORKING** | A/S/Z/X/Space/arrows |
 | **Save RAM (SRAM)** | ✅ **WORKING** | Auto-load/flash via mGBA |
 | **ESC pause** | ✅ **WORKING** | Direct handler di UnsyncKey |
-| **Audio** | ✅ **FIXED** | sinc resampler + direct SDL |
+| **Audio** | ✅ **FIXED** | sinc resampler + direct SDL (PC) & Android audio bridge (System_AudioPushSamples) |
 | **Save state (F1/F3)** | ✅ **WORKING** | `<SAVESTATE>/GBA_<code>_<title>_<slot>.ppst` |
 | **Save state (pause menu)** | ✅ **WORKING** | SaveSlotView + ScreenshotViewScreen redirect ke GBACore |
 | **Save state thumbnail** | ✅ **WORKING** | `pngSave()` dari `videoBuffer_` ke `.jpg` (auto-detect) — juga terverifikasi di Android ✅ |
@@ -319,6 +319,7 @@ otomatis iterasi registry — tidak perlu edit lagi.
 | **Editor preview buttons hide (LoadTouchConfig)** | ✅ **FIXED (5678699)** | Bug #1: `LoadTouchConfig()` `cfg.Clear()` hapus default saat INI section kosong/korup. Fix: parse ke temporary `CoreTouchConfig` dulu. Bug #2: `HasCreatedViews()` pakai `controls_.empty()` → infinite loop jika semua tombol di-hide. Fix: dedicated `bool created_` flag. |
 | **Customize popup arrow icons** | ✅ **FIXED (b0bdc0b)** | Popup `CoreTouchVisibilityPopup` pakai `I_ARROW` (generic) untuk semua arah D-pad. Fix: `I_ARROW_UP/DOWN/LEFT/RIGHT` — konsisten dengan editor preview dan game screen. |
 | **Editor grid lines (Garis Pinggir)** | ✅ **FIXED (ulang)** | Fix sebelumnya (051b76d, `vLine`/`hLine` di `GBALayoutView::Draw()`) rusak saat `GBASnapGrid` class dibuat ulang sebagai child View — `GetContentDimensions()` return (10,10) default. Fix: `DrawCoreSnapGrid()` static function dipanggil langsung dari `CoreLayoutView::Draw()` SETELAH children (PSP SnapGrid z-order). Formula grid identik PSP. |
+| **GBA touch layout quality parity** | ✅ **FIXED** | Menyelaraskan editor GBA dengan PSP: (1) Menambah batas target sentuhan minimum 80px di editor preview agar tombol kustom kecil mudah digeser jari. (2) Snapping grid simetris dengan `roundf` relatif terhadap pusat guna mencegah lompatan/gap visual asimetris. (3) D-pad resizing real-time dihitung linier dari skala (`up_.w * 2.0f`) untuk mencegah pergeseran titik pusat. (4) Penyelesaian bug dangling pointer `std::string_view` pada outline tombol di editor dan gameplay, serta mengaktifkan background solid saat tombol ditekan (PSP down-state parity). |
 
 ### 🔴 Compliance Debt: LAN Sync
 
