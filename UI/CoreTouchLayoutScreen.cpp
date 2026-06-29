@@ -66,12 +66,12 @@ public:
 		MultiTouchButton::Draw(dc);
 	}
 
-	void SavePosition() {
+	void SavePosition() override {
 		btn_.x = (bounds_.centerX() - screenBounds_.x) / screenBounds_.w;
 		btn_.y = (bounds_.centerY() - screenBounds_.y) / screenBounds_.h;
 	}
-	float GetScaleVal() const { return btn_.w; }
-	void SetScaleVal(float s) { btn_.w = btn_.h = s; }
+	float GetScaleVal() const override { return btn_.w; }
+	void SetScaleVal(float s) override { btn_.w = btn_.h = s; }
 	bool Contains(float x, float y) override {
 		// Minimum touch target size (matching mobile accessibility standards, e.g., 80 pixels/dps)
 		// to make picking smaller buttons easier in the preview editor container.
