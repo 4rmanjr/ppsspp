@@ -101,15 +101,21 @@ Output APK: `android/build/outputs/apk/gold/release/android-gold-release-unsigne
 
 > **Signing:** Gunakan **project-level debug keystore** yang sudah di-commit (`debug.keystore` di root project).
 > ⚠️ **JANGAN pernah build `assembleGoldDebug`** — selalu pakai `assembleGoldRelease`.
-> Setelah build, sign manual:
+> Setelah build, align + sign dengan `apksigner` (butuh v2/v3 untuk Android 11+):
 > ```bash
-> jarsigner -sigalg SHA256withRSA -digestalg SHA-256 \
->   -keystore debug.keystore \
->   -storepass android -keypass android \
+> zipalign -f -p 4 \
 >   android/build/outputs/apk/gold/release/android-gold-release-unsigned.apk \
->   debug
+>   android/build/outputs/apk/gold/release/android-gold-release-aligned.apk
+>
+> apksigner sign \
+>   --ks debug.keystore \
+>   --ks-pass pass:android \
+>   --ks-key-alias debug \
+>   --key-pass pass:android \
+>   android/build/outputs/apk/gold/release/android-gold-release-aligned.apk
 > ```
 > Alias: `debug` (cek dengan `keytool -list -keystore debug.keystore -storepass android`).
+> `zipalign` dan `apksigner` ada di `$ANDROID_HOME/build-tools/<version>/`.
 
 ## Navigation — When to Read Which File
 
