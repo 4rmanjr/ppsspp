@@ -1595,47 +1595,42 @@ void EmuScreen::UpdateGBA() {
 		for (int f = 0; f < framesToRun; f++) {
 			activeCore_->RunFrame();
 
-			// Only push audio for the LAST frame
-			// Intermediate frames: clear resampler to prevent accumulation
-			if (f == framesToRun - 1) {
-				size_t stereoPairs = 0;
+			// [PPSSPP-FORK] GBA Audio Improvement: Push audio for ALL ran frames to prevent crackling/underruns during lag
+			size_t stereoPairs = 0;
 #if !defined(MOBILE_DEVICE)
-				const int16_t *audio16 = gba->GetRawAudio(&stereoPairs);
+			const int16_t *audio16 = gba->GetRawAudio(&stereoPairs);
 
-				static int audioDebug = 0;
-				if (++audioDebug <= 5 || audioDebug % 180 == 0) {
-					NOTICE_LOG(Log::System, "[GBA] Audio frame %d: stereoPairs=%zu frames=%d", audioDebug, stereoPairs, framesToRun);
-				}
-				if (stereoPairs > 0 && audio16) {
-					// Desktop (SDL): direct push bypasses PPSSPP StereoResampler
-					// audio16 is native int16 data (SDL expects S16 format)
-					SDL_AudioStream *s = GetSDLAudioStream();
-					if (s) {
-						SDL_PutAudioStreamData(s, audio16, (int)(stereoPairs * 2 * sizeof(int16_t)));
+			static int audioDebug = 0;
+			if (++audioDebug <= 5 || audioDebug % 180 == 0) {
+				NOTICE_LOG(Log::System, "[GBA] Audio frame %d: stereoPairs=%zu frames=%d", audioDebug, stereoPairs, framesToRun);
+			}
+			if (stereoPairs > 0 && audio16) {
+				// Desktop (SDL): direct push bypasses PPSSPP StereoResampler
+				// audio16 is native int16 data (SDL expects S16 format)
+				SDL_AudioStream *s = GetSDLAudioStream();
+				if (s) {
+					SDL_PutAudioStreamData(s, audio16, (int)(stereoPairs * 2 * sizeof(int16_t)));
 
-						static int audioDbg = 0;
-						if (++audioDbg <= 5 || audioDbg % 180 == 0) {
-							int queued = SDL_GetAudioStreamQueued(s) / (int)(2 * sizeof(int16_t));
-							NOTICE_LOG(Log::System, "[GBA] SDL audio: pushed=%zu queued=%d", stereoPairs, queued);
-						}
+					static int audioDbg = 0;
+					if (++audioDbg <= 5 || audioDbg % 180 == 0) {
+						int queued = SDL_GetAudioStreamQueued(s) / (int)(2 * sizeof(int16_t));
+						NOTICE_LOG(Log::System, "[GBA] SDL audio: pushed=%zu queued=%d", stereoPairs, queued);
 					}
 				}
-#else
-				// [PPSSPP-FORK] Android / Mobile: mixed int32 audio bridge via PPSSPP mixer
-				int32_t mixBuffer[GBA_AUDIO_BUF_SIZE * 2];
-				gba->GetMixedAudio(mixBuffer, &stereoPairs);
-
-				static int audioDebug = 0;
-				if (++audioDebug <= 5 || audioDebug % 180 == 0) {
-					NOTICE_LOG(Log::System, "[GBA] Android audio frame %d: pairs=%zu frames=%d", audioDebug, stereoPairs, framesToRun);
-				}
-				if (stereoPairs > 0) {
-					System_AudioPushSamples(mixBuffer, (int)stereoPairs, 1.0f);
-				}
-#endif
-			} else {
-				gba->ClearAudio();
 			}
+#else
+			// [PPSSPP-FORK] Android / Mobile: mixed int32 audio bridge via PPSSPP mixer
+			int32_t mixBuffer[GBA_AUDIO_BUF_SIZE * 2];
+			gba->GetMixedAudio(mixBuffer, &stereoPairs);
+
+			static int audioDebug = 0;
+			if (++audioDebug <= 5 || audioDebug % 180 == 0) {
+				NOTICE_LOG(Log::System, "[GBA] Android audio frame %d: pairs=%zu frames=%d", audioDebug, stereoPairs, framesToRun);
+			}
+			if (stereoPairs > 0) {
+				System_AudioPushSamples(mixBuffer, (int)stereoPairs, 1.0f);
+			}
+#endif
 		}
 
 		// Forward input (apply same keys to all frames)

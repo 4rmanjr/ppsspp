@@ -121,6 +121,12 @@ private:
 	float dcCapRawL_ = 0.0f;  // Used by GetRawAudio (self-decay capacitor)
 	float dcCapRawR_ = 0.0f;
 
+	// [PPSSPP-FORK] GBA Audio Improvement: Low-pass filter states (EMA) to roll off harsh 8-bit quantization noise
+	float lowPassL_ = 0.0f;
+	float lowPassR_ = 0.0f;
+	float lowPassRawL_ = 0.0f;
+	float lowPassRawR_ = 0.0f;
+
 	// Audio rate from mGBA core (changes with SOUNDBIAS, but always derived from 32768 Hz base)
 	unsigned coreSampleRate_ = 32768;
 

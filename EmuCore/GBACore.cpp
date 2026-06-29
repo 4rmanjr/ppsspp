@@ -828,6 +828,16 @@ void GBACore::ClearAudio() {
 	auto *r = static_cast<struct mAudioResampler*>(resampler_);
 	r->timestamp = 0.0;
 	audioStereoPairs_ = 0;
+
+	// [PPSSPP-FORK] GBA Audio Improvement: Reset filter states
+	dcCapL_ = 0.0f;
+	dcCapR_ = 0.0f;
+	dcCapRawL_ = 0.0f;
+	dcCapRawR_ = 0.0f;
+	lowPassL_ = 0.0f;
+	lowPassR_ = 0.0f;
+	lowPassRawL_ = 0.0f;
+	lowPassRawR_ = 0.0f;
 }
 
 const int16_t *GBACore::GetRawAudio(size_t *stereoPairs) {
@@ -859,8 +869,12 @@ const int16_t *GBACore::GetRawAudio(size_t *stereoPairs) {
 		outL *= g_Config.fGBAVolume;
 		outR *= g_Config.fGBAVolume;
 
-		tempBuf[i * 2] = outL;
-		tempBuf[i * 2 + 1] = outR;
+		// [PPSSPP-FORK] GBA Audio Improvement: Low-pass filter (cutoff ~4.8 kHz) to remove tinny quantization noise
+		lowPassRawL_ += (outL - lowPassRawL_) * 0.40f;
+		lowPassRawR_ += (outR - lowPassRawR_) * 0.40f;
+
+		tempBuf[i * 2] = lowPassRawL_;
+		tempBuf[i * 2 + 1] = lowPassRawR_;
 	}
 
 	// [PPSSPP-FORK] MultiCore: SIMD clamp + convert (4-8x faster than scalar)
@@ -914,8 +928,12 @@ void GBACore::GetMixedAudio(int32_t *buffer, size_t *stereoPairs) {
 		outL *= g_Config.fGBAVolume;
 		outR *= g_Config.fGBAVolume;
 
-		tempFloat[i * 2] = outL;
-		tempFloat[i * 2 + 1] = outR;
+		// [PPSSPP-FORK] GBA Audio Improvement: Low-pass filter (cutoff ~4.8 kHz) to remove tinny quantization noise
+		lowPassL_ += (outL - lowPassL_) * 0.40f;
+		lowPassR_ += (outR - lowPassR_) * 0.40f;
+
+		tempFloat[i * 2] = lowPassL_;
+		tempFloat[i * 2 + 1] = lowPassR_;
 	}
 
 	// [PPSSPP-FORK] MultiCore: SIMD clamp + convert float→int16 (4-8x faster than scalar)
