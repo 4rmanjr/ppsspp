@@ -89,6 +89,18 @@ void EmuScreen::UpdateFeature() { /* all logic */ }
 
 Convention: `Init<Feature>()`, `Shutdown<Feature>()`, `Update<Feature>()`, `Render<Feature>()`.
 
+## Build Android APK
+
+### Gold Release (arm64-v8a only)
+
+```bash
+cd android && ./gradlew assembleGoldRelease
+```
+
+Output APK: `android/build/outputs/apk/gold/release/android-gold-release-unsigned.apk`
+
+> **Note:** This produces an **unsigned** APK. To install on a device, set up a keystore at `android/keystore/release.keystore` or configure `RELEASE_STORE_FILE` in a `local.properties` / gradle properties file.
+
 ## Navigation — When to Read Which File
 
 | Situation | Read |
