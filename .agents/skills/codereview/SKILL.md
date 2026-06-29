@@ -104,6 +104,12 @@ When the user types `/codereview`, perform a complete code review of the latest 
     - P4: Code quality (missing guard, fragile pattern, missing bounds clamp)
     - P5: Nitpick (missing marker, naming, minor)
 
+10b. **Proses Verifikasi Ganda (Double-Verification)**
+    Sebelum menulis laporan akhir, lakukan verifikasi putaran kedua (Pass 2) terhadap semua temuan yang telah dikumpulkan pada Pass 1 menggunakan teknik "Attack & Defend":
+    - **Verify the Context (Bukan Cuma Diff):** Untuk setiap isu P1, P1-SEC, dan P2 yang ditemukan, jangan hanya melihat potongan kode yang berubah. Buka dan baca minimal 20 baris sebelum dan sesudah kode tersebut untuk memastikan tidak ada logika penyeimbang (mitigasi) yang sudah dibuat di tempat lain.
+    - **The "Grep" Mandate (Anti-Halusinasi Fungsi):** Jika Anda menandai suatu fungsi sebagai "Deprecated" atau "Salah Parameter", Anda WAJIB melakukan simulasi pencarian (`grep -n` atau `git log`) pada file terkait untuk membuktikan status fungsi tersebut secara empiris sebelum menuliskannya di laporan.
+    - **False Positive Filter:** Uji ulang setiap temuan P1-SEC (Buffer overflow/Integer wrap). Tanyakan pada diri sendiri: "Apakah variabel input ini benar-benar bisa dikontrol oleh user/ROM, ataukah ini variabel internal yang sudah divalidasi saat inisialisasi awal?" Jika sudah divalidasi di awal, turunkan status menjadi P4 atau hapus.
+
 11. **Report findings** using this exact template:
 
 ```
