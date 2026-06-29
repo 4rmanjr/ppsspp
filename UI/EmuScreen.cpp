@@ -1369,9 +1369,59 @@ void EmuScreen::AddCoreTouchButtons(const Bounds &bounds, DeviceOrientation orie
 	const ImageID roundImg = g_Config.iTouchButtonStyle ? ImageID("I_ROUND_LINE") : ImageID("I_ROUND");
 	// Fetch UIContext once, reuse for all button atlas lookups
 	UIContext *ctx = screenManager()->getUIContext();
+
+	// Find D-pad buttons for grouping (matching CoreDPadGroup logic in editor)
+	const EmuCore::CoreTouchButton *dpUp = nullptr, *dpDown = nullptr;
+	const EmuCore::CoreTouchButton *dpLeft = nullptr, *dpRight = nullptr;
+	bool dpadVisible = false;
+	for (int i = 0; i < cfg.count; i++) {
+		const auto &btn = cfg.buttons[i];
+		switch (btn.keyCode) {
+		case CTRL_UP:    dpUp = &btn;    if (btn.visible) dpadVisible = true; break;
+		case CTRL_DOWN:  dpDown = &btn;  if (btn.visible) dpadVisible = true; break;
+		case CTRL_LEFT:  dpLeft = &btn;  if (btn.visible) dpadVisible = true; break;
+		case CTRL_RIGHT: dpRight = &btn; if (btn.visible) dpadVisible = true; break;
+		}
+	}
+
+	// Add grouped D-pad if all 4 D-pad buttons exist and at least one is visible
+	if (dpUp && dpDown && dpLeft && dpRight && dpadVisible) {
+		float cx = (dpUp->x + dpDown->x + dpLeft->x + dpRight->x) * 0.25f * bounds.w;
+		float cy = (dpUp->y + dpDown->y + dpLeft->y + dpRight->y) * 0.25f * bounds.h;
+		const ImageID dirImage = g_Config.iTouchButtonStyle ? ImageID("I_DIR_LINE") : ImageID("I_DIR");
+		float bgScale = 0.8f;
+		if (ctx) {
+			const AtlasImage *atlasImg = ctx->Draw()->GetAtlas()->getImage(dirImage);
+			if (atlasImg && atlasImg->w > 0) {
+				bgScale = (dpUp->w * bounds.w) / (float)atlasImg->w;
+			}
+		}
+		float spacing = 1.0f;
+		if (bgScale > 0.0f) {
+			spacing = ((dpRight->x - dpLeft->x) * 0.5f * bounds.w) / (D_pad_Radius * bgScale);
+		}
+		auto *dpad = new PSPDpad(
+			dirImage,
+			"D-pad",
+			ImageID("I_DIR"),
+			ImageID("I_ARROW"),
+			bgScale,
+			spacing,
+			new AnchorLayoutParams(cx, cy, UI::NONE, UI::NONE, Centering::Both)
+		);
+		root_->Add(dpad);
+	}
+
 	for (int i = 0; i < cfg.count; i++) {
 		const auto &btn = cfg.buttons[i];
 		if (!btn.visible) continue;
+
+		// Skip individual D-pad buttons since they are grouped into PSPDpad above
+		if (btn.keyCode == CTRL_UP || btn.keyCode == CTRL_DOWN ||
+			btn.keyCode == CTRL_LEFT || btn.keyCode == CTRL_RIGHT) {
+			continue;
+		}
+
 		ImageID bgImg = roundImg;
 		ImageID icon;
 		{
@@ -1386,7 +1436,7 @@ void EmuScreen::AddCoreTouchButtons(const Bounds &bounds, DeviceOrientation orie
 		float cx = btn.x * bounds.w;
 		float cy = btn.y * bounds.h;
 		// Compute image scale from normalized width btn_.w
-		// btn_.w = fraction of screen width (default ~0.10 = 10%%)
+		// btn_.w = fraction of screen width (default ~0.10 = 10%)
 		float bgScale = 0.8f; // fallback
 		if (ctx) {
 			const AtlasImage *atlasImg = ctx->Draw()->GetAtlas()->getImage(bgImg);

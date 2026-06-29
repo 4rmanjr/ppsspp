@@ -136,20 +136,19 @@ public:
 
 		ImageID dirImage = g_Config.iTouchButtonStyle ? ImageID("I_DIR_LINE") : ImageID("I_DIR");
 
-		// [PPSSPP-FORK] Render each arrow at its actual saved position
-		// so preview honestly reflects gameplay positions.
+		// [PPSSPP-FORK] Render D-pad arrows relative to current dragging center
+		// (matching PSP behavior to support smooth dragging/snapping in preview).
 		static const float angles[4] = {0.0f, M_PI / 2.0f, M_PI, 3.0f * M_PI / 2.0f};
-		EmuCore::CoreTouchButton *btns[4] = {&right_, &down_, &left_, &up_};
+		static const float xoff[4] = {1.0f, 0.0f, -1.0f, 0.0f};
+		static const float yoff[4] = {0.0f, 1.0f, 0.0f, -1.0f};
 
-		// Compute center for overlay arrow offset
-		float cx = (up_.x + down_.x + left_.x + right_.x) * 0.25f;
-		float cy = (up_.y + down_.y + left_.y + right_.y) * 0.25f;
-		float cpx = screenBounds_.x + cx * screenBounds_.w;
-		float cpy = screenBounds_.y + cy * screenBounds_.h;
+		float cpx = bounds_.centerX();
+		float cpy = bounds_.centerY();
+		float dist_pixels = desiredW * 0.5f;
 
 		for (int i = 0; i < 4; i++) {
-			float px = screenBounds_.x + btns[i]->x * screenBounds_.w;
-			float py = screenBounds_.y + btns[i]->y * screenBounds_.h;
+			float px = cpx + xoff[i] * dist_pixels;
+			float py = cpy + yoff[i] * dist_pixels;
 
 			// Overlay arrow — slightly further from center along same direction
 			float dx = px - cpx;
@@ -290,9 +289,9 @@ bool CoreLayoutView::Touch(const TouchInput &touch) {
 				float grid = (float)g_Config.iTouchSnapGridSize;
 				float cx = vr.centerX();
 				float cy = vr.centerY();
-				// Snap relative to center (matching PSP snap anchoring)
-				nx -= fmod(nx - cx, grid);
-				ny -= fmod(ny - cy, grid);
+				// Snap to the nearest grid line relative to center (preventing fmod asymmetry/jumps)
+				nx = cx + roundf((nx - cx) / grid) * grid;
+				ny = cy + roundf((ny - cy) / grid) * grid;
 			}
 			Point2D clamped = ClampPointTo(Point2D(nx, ny), vr);
 			nx = clamped.x;
