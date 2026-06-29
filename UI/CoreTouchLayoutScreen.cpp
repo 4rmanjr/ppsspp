@@ -73,9 +73,14 @@ public:
 	float GetScaleVal() const { return btn_.w; }
 	void SetScaleVal(float s) { btn_.w = btn_.h = s; }
 	bool Contains(float x, float y) override {
-		const float t = 0.25f;
-		Bounds tb(bounds_.x - t * bounds_.w * 0.5f, bounds_.y - t * bounds_.h * 0.5f,
-			bounds_.w * (1.0f + t), bounds_.h * (1.0f + t));
+		// Minimum touch target size (matching mobile accessibility standards, e.g., 80 pixels/dps)
+		// to make picking smaller buttons easier in the preview editor container.
+		float minTarget = 80.0f;
+		float targetW = std::max(bounds_.w * 1.25f, minTarget);
+		float targetH = std::max(bounds_.h * 1.25f, minTarget);
+		float cx = bounds_.centerX();
+		float cy = bounds_.centerY();
+		Bounds tb(cx - targetW * 0.5f, cy - targetH * 0.5f, targetW, targetH);
 		return tb.Contains(x, y);
 	}
 private:
