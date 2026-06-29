@@ -114,13 +114,9 @@ public:
 	void GetContentDimensions(const UIContext &dc, float &w, float &h) const override {
 		const AtlasImage *image = dc.Draw()->GetAtlas()->getImage(ImageID("I_DIR"));
 		if (image && image->w > 0) {
-			// [PPSSPP-FORK] Bounding box from actual button positions
-			float minX = std::min({up_.x, down_.x, left_.x, right_.x}) - up_.w * 0.5f;
-			float maxX = std::max({up_.x, down_.x, left_.x, right_.x}) + up_.w * 0.5f;
-			float minY = std::min({up_.y, down_.y, left_.y, right_.y}) - up_.h * 0.5f;
-			float maxY = std::max({up_.y, down_.y, left_.y, right_.y}) + up_.h * 0.5f;
-			w = (maxX - minX) * screenBounds_.w;
-			h = (maxY - minY) * screenBounds_.h;
+			// [PPSSPP-FORK] Bounding box depends directly on scale (up_.w) to allow real-time layout sizing
+			w = up_.w * 2.00f * screenBounds_.w;
+			h = up_.w * 2.00f * screenBounds_.h;
 		} else {
 			w = 0;
 			h = 0;
