@@ -420,7 +420,15 @@ void CoreLayoutView::CreateViews() {
 			const auto *def = EmuCore::GetButtonDef(coreType_, btn.keyCode);
 			if (def) {
 				icon = ImageID(def->imageID);
-				bg = g_Config.iTouchButtonStyle ? ImageID(std::string(def->bgID) + "_LINE") : ImageID(def->bgID);
+				// [PPSSPP-FORK] PSP parity: resolve static string for outline to avoid dangling std::string_view
+				const char *bgName = def->bgID;
+				if (g_Config.iTouchButtonStyle) {
+					if (strcmp(bgName, "I_ROUND") == 0) bgName = "I_ROUND_LINE";
+					else if (strcmp(bgName, "I_RECT") == 0) bgName = "I_RECT_LINE";
+					else if (strcmp(bgName, "I_SHOULDER") == 0) bgName = "I_SHOULDER_LINE";
+					else if (strcmp(bgName, "I_STICK_BG") == 0) bgName = "I_STICK_BG_LINE";
+				}
+				bg = ImageID(bgName);
 				doFlip = def->flipH;
 			} else {
 				icon = ImageID("I_CROSS");

@@ -1423,14 +1423,25 @@ void EmuScreen::AddCoreTouchButtons(const Bounds &bounds, DeviceOrientation orie
 		}
 
 		ImageID bgImg = roundImg;
+		ImageID bgDownImg = roundImg;
 		ImageID icon;
 		{
 			const auto *def = EmuCore::GetButtonDef(coreType_, btn.keyCode);
 			if (def) {
 				icon = ImageID(def->imageID);
-				bgImg = g_Config.iTouchButtonStyle ? ImageID(std::string(def->bgID) + "_LINE") : ImageID(def->bgID);
+				// [PPSSPP-FORK] PSP parity: resolve static string for outline to avoid dangling std::string_view
+				const char *bgName = def->bgID;
+				if (g_Config.iTouchButtonStyle) {
+					if (strcmp(bgName, "I_ROUND") == 0) bgName = "I_ROUND_LINE";
+					else if (strcmp(bgName, "I_RECT") == 0) bgName = "I_RECT_LINE";
+					else if (strcmp(bgName, "I_SHOULDER") == 0) bgName = "I_SHOULDER_LINE";
+					else if (strcmp(bgName, "I_STICK_BG") == 0) bgName = "I_STICK_BG_LINE";
+				}
+				bgImg = ImageID(bgName);
+				bgDownImg = ImageID(def->bgID); // Pressed is always solid fill
 			} else {
 				icon = ImageID("I_CROSS");
+				bgDownImg = ImageID("I_ROUND");
 			}
 		}
 		float cx = btn.x * bounds.w;
@@ -1448,7 +1459,7 @@ void EmuScreen::AddCoreTouchButtons(const Bounds &bounds, DeviceOrientation orie
 			btn.keyCode,
 			std::string("GBA_") + btn.label,
 			bgImg,
-			bgImg,
+			bgDownImg,
 			icon,
 			bgScale,
 			new AnchorLayoutParams(cx, cy, UI::NONE, UI::NONE, Centering::Both)
