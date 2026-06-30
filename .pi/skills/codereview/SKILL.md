@@ -3,6 +3,8 @@ name: codereview
 description: Review the latest changes for bugs, regressions, and PSP parity violations across ALL cores (GBA, N64, PS1, NDS, etc.). Runs Quality Gate #2 from AGENTS.md.
 ---
 
+// [PPSSPP-FORK] Codereview: code review skill (mirror of .agents/skills/codereview/SKILL.md)
+
 # Code Review — Quality Gate Check (All Cores)
 
 When the user types `/codereview`, perform a complete code review of the latest changes. This skill is **core-agnostic** — it applies to any non-PSP emulator (GBA, N64, PS1, NDS, SNES, etc.).
@@ -14,7 +16,7 @@ When the user types `/codereview`, perform a complete code review of the latest 
    - If compile errors → **STOP**. Report as P1. Do NOT proceed with further review until fixed.
    - Note the warning count as a baseline for fix verification.
 
-   - **Test Gate — run relevant tests:** After the build succeeds, identify tests related to changed files (`grep -rn 'TestFunc\|<test_name>' unittest/`). Run `./build/PPSSPPUnitTest ALL` or the specific test. For core logic changes: `python test.py` (headless PSP tests). If tests fail → STOP. Report with the test output.
+   - **Test Gate — run relevant tests:** After the build succeeds, identify tests related to changed files (`grep -rn 'TestFunc\|<test_name>' unittest/`). Run `./build/PPSSPPUnitTest ALL` or the specific test (requires `-DUNITTEST=ON` at cmake configure time; if the binary is missing, skip this step). For core logic changes: `python test.py` (headless PSP tests). If tests fail → STOP. Report with the test output.
 
 1. **Determine what to review**
    - If there are uncommitted changes (`git status --short` shows modified files), review the working tree diff.
