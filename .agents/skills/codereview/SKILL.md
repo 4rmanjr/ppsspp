@@ -9,9 +9,21 @@ When the user types `/codereview`, perform a complete code review of the latest 
 
 ## What to do
 
+0. **Build Gate — compile first**
+   - Run `cmake --build build -j$(nproc) 2>&1 | tail -30`. Check for compile errors.
+   - If compile errors → **STOP**. Report as P1. Do NOT proceed with further review until fixed.
+   - Note the warning count as a baseline for fix verification.
+
+   - **Test Gate — run relevant tests:** After the build succeeds, identify tests related to changed files (`grep -rn 'TestFunc\|<test_name>' unittest/`). Run `./build/PPSSPPUnitTest ALL` or the specific test. For core logic changes: `python test.py` (headless PSP tests). If tests fail → STOP. Report with the test output.
+
 1. **Determine what to review**
    - If there are uncommitted changes (`git status --short` shows modified files), review the working tree diff.
    - Otherwise, review the latest commit (`git diff HEAD~1`).
+   - **Commit message check:** Format must follow `[feature/<name>] <desc>` or `fix(<scope>): <desc>`. If not → P5.
+   - **Diff health check:**
+     * `git diff --check` — whitespace errors? Flag P5.
+     * `grep '<<<<<<< \|=======\|>>>>>>> '` — unresolved merge markers? Flag P1.
+     * Files changed > 20? Suggest splitting the commit.
 
 2. **Trace every code path** in the modified files:
    - Follow function calls from entry point to return
@@ -21,12 +33,20 @@ When the user types `/codereview`, perform a complete code review of the latest 
    - **`.size()` type check:** Before reading code that calls `.size()` on a value, verify the type supports it. Plain C arrays (`Type arr[N]`) have NO `.size()` member — this is a P1 compile error. When in doubt, `grep -n 'arr\['` on the declaration to confirm it's a vector, not a C array.
    - **`std::string_view` lifetime check:** When instantiating `ImageID` (which wraps `std::string_view`), verify the target string's lifetime. Creating `ImageID` from a temporary string concatenation (e.g. `std::string(def->bgID) + "_LINE"`) creates a dangling pointer when the temporary string is destroyed. Use static string literals or persistent mappings instead. Flag P1/P2 if found.
    - **Division-by-zero in GLSL:** Scan `.fsh` files for `1.0 /` or `1.0f /` expressions. Verify the divisor is guarded (e.g., `if (gamma > 0.01)` or slider range > 0). If unguarded, flag P4.
-   - **Cross-file string consistency:** When code matches on string literals (e.g., `info.section == "GBALCD"`), verify the actual value by reading the source that produces it — INI section name, enum stringification, const/define. A mismatch is P2 (silent logic error).
-   - **Config field completeness:** For every new field added to `Config.h`, verify:
-     * ✅ Saved in `Config.cpp` (Set call)
-     * ✅ Loaded in `Config.cpp` (Get call)
-     * ✅ Default value matches between declaration and UI slider default
-     * ✅ UI control exists (if user-facing) or is intentionally internal
+    - **Cross-file string consistency:** When code matches on string literals (e.g., `info.section == "GBALCD"`), verify the actual value by reading the source that produces it — INI section name, enum stringification, const/define. A mismatch is P2 (silent logic error).
+    - **Config field completeness:** For every new field added to `Config.h`, verify:
+      * ✅ Saved in `Config.cpp` (Set call)
+      * ✅ Loaded in `Config.cpp` (Get call)
+      * ✅ Default value matches between declaration and UI slider default
+      * ✅ UI control exists (if user-facing) or is intentionally internal
+    - **Config migration check:** When removing/renaming existing config fields, existing user config files become stale. Verify forward-compat handling (load old key and migrate, or provide fallback default). Flag P4 if missing.
+    - **Implicit narrowing:** Check for `size_t → int`, `u32 → int`, `int → float` in new arithmetic. C++ implicit narrowing causes silent precision loss. Flag P4.
+    - **`const` correctness:** New member functions that don't modify `this` should be `const`. Flag P5.
+    - **Virtual destructor:** Every new class with `virtual` methods must have a `virtual` destructor. Flag P4 (UB on delete).
+    - **`std::move` on const:** `std::move(const T)` silently degrades to copy. Verify the source is non-const. Flag P4.
+    - **Noexcept on callbacks:** Audio callbacks, IRQ handlers, signal handlers must be `noexcept`. Flag P4.
+    - **Lock ordering / deadlock:** When adding new mutex locks, verify lock order is consistent with existing locks in the same call chain. Inconsistent ordering → deadlock risk. Flag P2.
+    - **Static init order:** Global `static X` that depends on `static Y` in another translation unit is undefined (static init order fiasco). Use function-local statics instead. Flag P2.
 
 3. **Memory safety & security checks** — Run these on every modified file:
    - **Buffer bounds:** For every `memcpy`, `memset`, `strcpy`, `sprintf`, verify the destination has enough space. ROM parsing code is especially risky — input is untrusted. Flag any copy where the size comes from ROM data without a `min(size, MAX)` clamp.
@@ -65,6 +85,12 @@ When the user types `/codereview`, perform a complete code review of the latest 
    - 🟢 REQUIRED: `[PPSSPP-FORK]` markers on all fork additions
    - 🟢 REQUIRED: Feature flags wrap custom code (zero upstream leakage)
    - 🟢 REQUIRED: Config isolated in separate sections
+   - **New file checklist** — for every new `.cpp`/`.h` file introduced:
+     * ✅ Directory: non-core (`UI/`, `EmuCore/`, `Common/`, `ext/`, `SDL/`) — NOT `Core/`/`GPU/`/`HLE/`/`MIPS/`
+     * ✅ File header: `// [PPSSPP-FORK] <FeatureName>: <description>`
+     * ✅ Include guard: `#pragma once` (project convention)
+     * ✅ Namespace: `EmuCore::` for multi-emu, none for UI files
+     * ✅ No upstream code duplication — if the file parallels an upstream file, use a thin wrapper not a copy
 
 7. **Check PSP parity** (Quality Gate #1):
    - For every core feature changed, find the PSP equivalent and compare behavior
@@ -104,13 +130,30 @@ When the user types `/codereview`, perform a complete code review of the latest 
     - P4: Code quality (missing guard, fragile pattern, missing bounds clamp)
     - P5: Nitpick (missing marker, naming, minor)
 
-10b. **Proses Verifikasi Ganda (Double-Verification)**
-    Sebelum menulis laporan akhir, lakukan verifikasi putaran kedua (Pass 2) terhadap semua temuan yang telah dikumpulkan pada Pass 1 menggunakan teknik "Attack & Defend":
-    - **Verify the Context (Bukan Cuma Diff):** Untuk setiap isu P1, P1-SEC, dan P2 yang ditemukan, jangan hanya melihat potongan kode yang berubah. Buka dan baca minimal 20 baris sebelum dan sesudah kode tersebut untuk memastikan tidak ada logika penyeimbang (mitigasi) yang sudah dibuat di tempat lain.
-    - **The "Grep" Mandate (Anti-Halusinasi Fungsi):** Jika Anda menandai suatu fungsi sebagai "Deprecated" atau "Salah Parameter", Anda WAJIB melakukan simulasi pencarian (`grep -n` atau `git log`) pada file terkait untuk membuktikan status fungsi tersebut secara empiris sebelum menuliskannya di laporan.
-    - **False Positive Filter:** Uji ulang setiap temuan P1-SEC (Buffer overflow/Integer wrap). Tanyakan pada diri sendiri: "Apakah variabel input ini benar-benar bisa dikontrol oleh user/ROM, ataukah ini variabel internal yang sudah divalidasi saat inisialisasi awal?" Jika sudah divalidasi di awal, turunkan status menjadi P4 atau hapus.
+11. **Double-Verification (Pass 2)** — Before writing the final report, run a second verification pass on all findings from Pass 1 using the "Attack & Defend" technique:
+     - **Verify context (not just the diff):** For every P1, P1-SEC, and P2 issue, read at least 20 lines before and after the changed code to ensure no compensating logic already exists elsewhere.
+     - **The "Grep" Mandate (anti-hallucination):** If you flag a function as "Deprecated" or "Wrong API", you MUST run `grep -n` or `git log --all -S 'FunctionName'` on the relevant file(s) to empirically verify the function's status before including it in the report.
+     - **False Positive Filter:** Re-evaluate every P1-SEC finding (buffer overflow / integer wrap). Ask yourself: "Can this input really be controlled by the user/ROM, or is it an internal variable already validated at init?" If validated at init, downgrade to P4 or remove.
 
-11. **Report findings** using this exact template:
+12. **Fix Re-verification Workflow** — When reviewing a submitted bug fix (not applied by this agent, but presented as a commit to review):
+     - **Step A: Understand the fix** — Read the commit message and diff. Identify the root cause and what changed.
+     - **Step B: Re-build** — `cmake --build build` — does the fix compile cleanly? Compare warning count with baseline from Step 0.
+     - **Step C: Re-run tests** — `./build/PPSSPPUnitTest ALL` — do existing tests still pass?
+     - **Step D: Regression check** — Does the fix change behavior that callers relied on? Trace all callers of the modified function.
+     - **Step E: Edge case verification** — Does the fix handle:
+       * Empty/null inputs?
+       * Maximum values (buffer bounds)?
+       * Concurrent access (if multi-threaded)?
+       * Platform differences (Android vs Linux vs Windows)?
+     - **Step F: PSP parity check** — Does the fixed code match upstream PPSSPP's equivalent code path? If no PSP equivalent exists, verify against established patterns.
+     - **Step G: Verify the fix doesn't introduce new issues:**
+       * New code paths: any uninitialized variables, missing null checks?
+       * New allocations: are they freed/owned properly?
+       * New includes: any missing `<algorithm>`, `<cstring>`, `<cstdint>` for MSVC portability?
+     - If ANY step fails → P1: Report to human reviewer, do not approve.
+     - If all steps pass → ✅ Fix verified.
+
+13. **Report findings** using this exact template:
 
 ```
 ## Review: <commit-hash-or-working-tree>
