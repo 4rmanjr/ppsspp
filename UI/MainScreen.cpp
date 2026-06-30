@@ -16,6 +16,7 @@
 // https://github.com/hrydgard/ppsspp and http://www.ppsspp.org/.
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <sstream>
 
@@ -119,8 +120,18 @@ static bool HasGBAROM(const Path &filePath) {
 		const char *name = st.name;
 		if (!name) continue;
 		size_t len = strlen(name);
-		if (len < 4) continue;
-		if (tolower((unsigned char)name[len - 4]) == '.' &&
+		if (len < 3) continue;
+		// Check .gb (3 chars)
+		if (tolower((unsigned char)name[len - 3]) == '.' &&
+		    tolower((unsigned char)name[len - 2]) == 'g' &&
+		    tolower((unsigned char)name[len - 1]) == 'b')
+		{
+			found = true;
+			break;
+		}
+		// Check .gba or .gbc (4 chars)
+		if (len >= 4 &&
+		    tolower((unsigned char)name[len - 4]) == '.' &&
 		    tolower((unsigned char)name[len - 3]) == 'g' &&
 		    tolower((unsigned char)name[len - 2]) == 'b' &&
 		    (tolower((unsigned char)name[len - 1]) == 'a' ||

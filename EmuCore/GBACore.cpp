@@ -32,7 +32,7 @@
 #include <mgba-util/audio-buffer.h>
 #include <mgba-util/audio-resampler.h>
 
-// [PPSSPP-FORK] MultiCore: libzip for loading .gba ROMs from .zip archives
+// [PPSSPP-FORK] MultiCore: libzip for loading GBA/GB ROMs from .zip archives
 #include "ext/libzip/zip.h"
 
 #if defined(__ANDROID__) && defined(ANDROID)
@@ -196,8 +196,9 @@ GBACore::~GBACore() {
 	}
 }
 
-// [PPSSPP-FORK] MultiCore: Load .gba ROM from inside a .zip archive using libzip.
-// Supports both standard file paths and Android SAF content URIs.
+// [PPSSPP-FORK] MultiCore: Load GBA/GB ROM from inside a .zip archive using libzip.
+// Supports .gb, .gba, and .gbc files inside .zip archives.
+// Also supports Android SAF content URIs.
 // Returns a VFile* that must be closed by the caller, or nullptr on failure.
 static struct VFile *LoadROMFromZip(const Path &path) {
 	std::string pathStr = path.ToString();
@@ -277,21 +278,28 @@ static struct VFile *LoadROMFromZip(const Path &path) {
 		if (zip_stat_index(z, i, 0, &st) < 0)
 			continue;
 
-		// [PPSSPP-FORK] Check if entry name ends with .gba or .gbc (case insensitive)
+		// [PPSSPP-FORK] Check if entry name ends with .gb, .gba, or .gbc (case insensitive)
 		const char *name = st.name;
 		if (!name)
 			continue;
 		size_t nameLen = strlen(name);
-		if (nameLen < 4)
+		if (nameLen < 3)
 			continue;
-		if (tolower((unsigned char)name[nameLen - 4]) != '.' ||
-			tolower((unsigned char)name[nameLen - 3]) != 'g' ||
-			tolower((unsigned char)name[nameLen - 2]) != 'b' ||
-			(tolower((unsigned char)name[nameLen - 1]) != 'a' &&
-			 tolower((unsigned char)name[nameLen - 1]) != 'c'))
+		// Check .gb (3 chars)
+		bool isGB = tolower((unsigned char)name[nameLen - 3]) == '.' &&
+			tolower((unsigned char)name[nameLen - 2]) == 'g' &&
+			tolower((unsigned char)name[nameLen - 1]) == 'b';
+		// Check .gba or .gbc (4 chars)
+		bool isGBAOrGBC = nameLen >= 4 &&
+			tolower((unsigned char)name[nameLen - 4]) == '.' &&
+			tolower((unsigned char)name[nameLen - 3]) == 'g' &&
+			tolower((unsigned char)name[nameLen - 2]) == 'b' &&
+			(tolower((unsigned char)name[nameLen - 1]) == 'a' ||
+			 tolower((unsigned char)name[nameLen - 1]) == 'c');
+		if (!isGB && !isGBAOrGBC)
 			continue;
 
-		INFO_LOG(Log::System, "[GBA] Found .gba entry in zip: %s (size=%llu)", name, (unsigned long long)st.size);
+		INFO_LOG(Log::System, "[GBA] Found .gb/.gba entry in zip: %s (size=%llu)", name, (unsigned long long)st.size);
 
 		struct zip_file *zf = zip_fopen_index(z, i, 0);
 		if (!zf) {
@@ -341,7 +349,7 @@ static struct VFile *LoadROMFromZip(const Path &path) {
 		return vf;
 	}
 
-	ERROR_LOG(Log::System, "[GBA] No .gba file found in zip: %s", path.c_str());
+	ERROR_LOG(Log::System, "[GBA] No GBA/GB file found in zip: %s", path.c_str());
 	zip_close(z);
 	return nullptr;
 }

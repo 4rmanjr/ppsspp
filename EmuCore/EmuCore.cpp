@@ -7,6 +7,8 @@
 
 #include "EmuCore/GBACore.h"
 
+#include <cctype>
+
 #ifdef PPSSPP_MULTICORE
 // [PPSSPP-FORK] MultiCore: libzip for detecting GBA ROMs inside .zip archives
 #include "ext/libzip/zip.h"
@@ -85,14 +87,23 @@ Type DetectType(const Path &romPath) {
 				if (!name)
 					continue;
 				size_t nameLen = strlen(name);
-				if (nameLen < 4)
+				if (nameLen < 3)
 					continue;
-				// Check if entry ends with .gba, .gb, or .gbc (case insensitive)
-				if ((tolower((unsigned char)name[nameLen - 4]) == '.' &&
-				     tolower((unsigned char)name[nameLen - 3]) == 'g' &&
-				     tolower((unsigned char)name[nameLen - 2]) == 'b' &&
-				     (tolower((unsigned char)name[nameLen - 1]) == 'a' ||
-				      tolower((unsigned char)name[nameLen - 1]) == 'c')))
+				// Check if entry ends with .gb (case insensitive, 3 chars)
+				if (tolower((unsigned char)name[nameLen - 3]) == '.' &&
+				    tolower((unsigned char)name[nameLen - 2]) == 'g' &&
+				    tolower((unsigned char)name[nameLen - 1]) == 'b')
+				{
+					zip_close(z);
+					return Type::GBA;
+				}
+				// Check if entry ends with .gba or .gbc (case insensitive, 4 chars)
+				if (nameLen >= 4 &&
+				    tolower((unsigned char)name[nameLen - 4]) == '.' &&
+				    tolower((unsigned char)name[nameLen - 3]) == 'g' &&
+				    tolower((unsigned char)name[nameLen - 2]) == 'b' &&
+				    (tolower((unsigned char)name[nameLen - 1]) == 'a' ||
+				     tolower((unsigned char)name[nameLen - 1]) == 'c'))
 				{
 					zip_close(z);
 					return Type::GBA;
