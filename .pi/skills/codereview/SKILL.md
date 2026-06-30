@@ -3,7 +3,7 @@ name: codereview
 description: Review the latest changes for bugs, regressions, and PSP parity violations across ALL cores (GBA, N64, PS1, NDS, etc.). Runs Quality Gate #2 from AGENTS.md.
 ---
 
-// [PPSSPP-FORK] Codereview: code review skill (mirror of .agents/skills/codereview/SKILL.md)
+// [PPSSPP-FORK] Codereview: code review skill
 
 # Code Review — Quality Gate Check (All Cores)
 
@@ -237,7 +237,9 @@ When the user types `/codereview`, perform a complete code review of the latest 
 - **Verdict:** ✅ Clean (or ❌ Needs fix — P1 issues remain)
 ```
 
-> **After reporting**: If any fixes were applied during this review, ask the user: *"Fixes applied — commit?"* Do NOT commit without explicit confirmation (AGENTS.md rule).
+> **Apply fixes**: After reporting, apply fixes for all P4 and P5 issues found (unless the fix would alter upstream code — AGENTS.md 🔴 FORBIDDEN). P1/P2 fixes are applied immediately per the Important rules below.
+>
+> **After fixing**: Ask the user: *"Fixes applied — commit?"* Do NOT commit without explicit confirmation (AGENTS.md rule).
 
 ## Important rules
 
@@ -252,4 +254,5 @@ When the user types `/codereview`, perform a complete code review of the latest 
 - **"Core-agnostic" means run the generic checks first, then the core-specific checklist.** Never skip the core-specific table — timing bugs and DMA alignment bugs only manifest on the specific core they target.
 - The user should not need to ask follow-up questions — the review should be complete and actionable.
 - If you find a P1 bug, fix it immediately and report the fix.
+- Fix P4/P5 issues after reporting, before asking to commit. Do not ask to commit with unaddressed P4/P5 items.
 - Reference AGENTS.md rules by name when flagging violations.
