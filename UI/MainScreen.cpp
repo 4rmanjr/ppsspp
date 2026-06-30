@@ -63,8 +63,87 @@
 
 bool MainScreen::showHomebrewTab = false;
 
+#ifdef PPSSPP_MULTICORE
+// [PPSSPP-FORK] MultiCore: shared helper to detect GBA ROM inside .zip archives
+#include "ext/libzip/zip.h"
+#if defined(__ANDROID__) && defined(ANDROID)
+#include "Common/File/AndroidStorage.h"
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <unistd.h>
+#endif
+
+// [PPSSPP-FORK] Open a ZIP from either a native path or Android content URI.
+// Returns nullptr on failure; caller must zip_close().
+// For content:// URIs, the zip data is heap-allocated and owned by libzip (freep=1).
+static zip_t *OpenZipForRead(const Path &filePath) {
+	std::string pathStr = filePath.ToString();
+#if defined(__ANDROID__) && defined(ANDROID)
+	if (pathStr.find("content://") == 0) {
+		int fd = Android_OpenContentUriFd(pathStr, Android_OpenContentUriMode::READ);
+		if (fd < 0) return nullptr;
+		struct stat st;
+		if (fstat(fd, &st) != 0 || st.st_size == 0) { close(fd); return nullptr; }
+		if (st.st_size > 64 * 1024 * 1024) { close(fd); return nullptr; }
+		uint8_t *buf = (uint8_t *)malloc(st.st_size);
+		if (!buf) { close(fd); return nullptr; }
+		ssize_t total = 0;
+		while (total < st.st_size) {
+			ssize_t r = read(fd, buf + total, st.st_size - total);
+			if (r <= 0) { if (r < 0 && errno == EINTR) continue; break; }
+			total += r;
+		}
+		close(fd);
+		zip_error_t err{};
+		zip_source_t *src = zip_source_buffer_create(buf, total, 1, &err);
+		if (!src) { free(buf); return nullptr; }
+		zip_error_t err2{};
+		zip_t *z = zip_open_from_source(src, ZIP_RDONLY, &err2);
+		if (!z) { zip_source_free(src); return nullptr; }
+		return z;
+	}
+#endif
+	int errcode = 0;
+	return zip_open(filePath.c_str(), ZIP_RDONLY, &errcode);
+}
+
+static bool HasGBAROM(const Path &filePath) {
+	zip_t *z = OpenZipForRead(filePath);
+	if (!z) return false;
+	bool found = false;
+	zip_int64_t numEntries = zip_get_num_entries(z, 0);
+	for (zip_int64_t i = 0; i < numEntries; i++) {
+		struct zip_stat st;
+		if (zip_stat_index(z, i, 0, &st) < 0)
+			continue;
+		const char *name = st.name;
+		if (!name) continue;
+		size_t len = strlen(name);
+		if (len < 4) continue;
+		if (tolower((unsigned char)name[len - 4]) == '.' &&
+		    tolower((unsigned char)name[len - 3]) == 'g' &&
+		    tolower((unsigned char)name[len - 2]) == 'b' &&
+		    (tolower((unsigned char)name[len - 1]) == 'a' ||
+		     tolower((unsigned char)name[len - 1]) == 'c'))
+		{
+			found = true;
+			break;
+		}
+	}
+	zip_close(z);
+	return found;
+}
+#endif
+
 static void LaunchFile(ScreenManager *screenManager, Screen *currentScreen, const Path &path) {
 	std::string extension = path.GetFileExtension();
+#ifdef PPSSPP_MULTICORE
+	// [PPSSPP-FORK] MultiCore: .zip with GBA ROM → launch directly
+	if (extension == ".zip" && HasGBAROM(path)) {
+		screenManager->switchScreen(new EmuScreen(path, EmuCore::Type::GBA));
+		return;
+	}
+#endif
 	if (extension == ".zip" || extension == ".7z") {
 		// If is a zip file, we have a screen for that.
 		screenManager->push(new InstallZipScreen(path));

@@ -276,7 +276,7 @@ static struct VFile *LoadROMFromZip(const Path &path) {
 		if (zip_stat_index(z, i, 0, &st) < 0)
 			continue;
 
-		// Check if entry name ends with .gba (case insensitive)
+		// [PPSSPP-FORK] Check if entry name ends with .gba or .gbc (case insensitive)
 		const char *name = st.name;
 		if (!name)
 			continue;
@@ -286,7 +286,8 @@ static struct VFile *LoadROMFromZip(const Path &path) {
 		if (tolower((unsigned char)name[nameLen - 4]) != '.' ||
 			tolower((unsigned char)name[nameLen - 3]) != 'g' ||
 			tolower((unsigned char)name[nameLen - 2]) != 'b' ||
-			tolower((unsigned char)name[nameLen - 1]) != 'a')
+			(tolower((unsigned char)name[nameLen - 1]) != 'a' &&
+			 tolower((unsigned char)name[nameLen - 1]) != 'c'))
 			continue;
 
 		INFO_LOG(Log::System, "[GBA] Found .gba entry in zip: %s (size=%llu)", name, (unsigned long long)st.size);
@@ -356,8 +357,12 @@ bool GBACore::LoadROMInternal(const Path &path) {
 
 	struct VFile *vf = nullptr;
 
-	// [PPSSPP-FORK] MultiCore: detect .zip archives and extract .gba ROM using libzip
+	// [PPSSPP-FORK] MultiCore: detect .zip archives and extract .gba ROM using libzip.
+	// Use VFileMemChunk (proven on all platforms). NEVER fall through to opening the
+	// raw .zip file as a ROM — that produces white screen (ZIP header loaded as game code).
 	std::string pathStr = path.ToString();
+
+	// Check if path is a .zip archive
 	size_t extPos = pathStr.rfind('.');
 	if (extPos != std::string::npos) {
 		std::string ext = pathStr.substr(extPos);
@@ -365,10 +370,20 @@ bool GBACore::LoadROMInternal(const Path &path) {
 			ext[i] = tolower((unsigned char)ext[i]);
 		if (ext == ".zip") {
 			vf = LoadROMFromZip(path);
+			if (vf) {
+				INFO_LOG(Log::System, "[GBA] Loaded ROM from zip via VFileMemChunk");
+			} else {
+				ERROR_LOG(Log::System, "[GBA] Failed to extract ROM from zip");
+				// CRITICAL: never fall through to raw file open for zip files.
+				// Opening a compressed .zip as raw ROM loads ZIP header bytes as
+				// ARM code, producing all-white frames on ALL platforms.
+				return false;
+			}
 		}
 	}
 
-	// [PPSSPP-FORK] MultiCore: not a zip (or zip with no .gba entry) — fall back to direct file open
+	// Not a zip — open the file directly
+	// (zip files are handled exclusively by LoadROMFromZip above)
 	if (!vf) {
 #if defined(__ANDROID__) && defined(ANDROID)
 		if (pathStr.find("content://") == 0) {
