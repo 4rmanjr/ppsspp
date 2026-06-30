@@ -20,6 +20,11 @@ set(HAVE_CRC32 ON CACHE INTERNAL "" FORCE)
 
 add_subdirectory(${CMAKE_SOURCE_DIR}/ext/libmgba ${CMAKE_BINARY_DIR}/ext/libmgba)
 
+# [PPSSPP-FORK] MultiCore: suppress mGBA -Wformat-truncation warnings (newer GCC)
+if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+  target_compile_options(mgba PRIVATE -Wno-format-truncation)
+endif()
+
 # EmuCore static library
 add_library(EmuCore STATIC
     EmuCore.cpp
