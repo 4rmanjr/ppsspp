@@ -10,14 +10,9 @@
 #include <cctype>
 
 #ifdef PPSSPP_MULTICORE
-// [PPSSPP-FORK] MultiCore: libzip for detecting GBA ROMs inside .zip archives
+// [PPSSPP-FORK] MultiCore: libzip + shared ZIP helper
 #include "ext/libzip/zip.h"
-#if defined(__ANDROID__) && defined(ANDROID)
-#include "Common/File/AndroidStorage.h"
-#include <sys/stat.h>
-#include <fcntl.h>
-#include <unistd.h>
-#endif
+#include "EmuCore/ZipHelper.h"
 #endif
 
 namespace EmuCore {
@@ -32,51 +27,11 @@ Type DetectType(const Path &romPath) {
 
 	if (ext == ".gba" || ext == ".gb" || ext == ".gbc") {
 		return Type::GBA;
-	}
-
-#ifdef PPSSPP_MULTICORE
+	}	#ifdef PPSSPP_MULTICORE
 	// [PPSSPP-FORK] MultiCore: peek inside .zip archives for GBA ROMs
 	if (ext == ".zip") {
-		std::string pathStr = romPath.ToString();
-		zip_t *z = nullptr;
-#if defined(__ANDROID__) && defined(ANDROID)
-		if (pathStr.find("content://") == 0) {
-			int fd = Android_OpenContentUriFd(pathStr, Android_OpenContentUriMode::READ);
-			if (fd >= 0) {
-				struct stat st;
-				if (fstat(fd, &st) == 0 && st.st_size > 0 && st.st_size <= 64 * 1024 * 1024) {
-					uint8_t *buf = (uint8_t *)malloc(st.st_size);
-					if (buf) {
-						ssize_t total = 0;
-						while (total < st.st_size) {
-							ssize_t r = read(fd, buf + total, st.st_size - total);
-							if (r <= 0) { if (r < 0 && errno == EINTR) continue; break; }
-							total += r;
-						}
-						close(fd);
-						zip_error_t err{};
-						zip_source_t *src = zip_source_buffer_create(buf, total, 1, &err);
-						if (!src) { free(buf); }
-						if (src) {
-							zip_error_t ec{};
-							z = zip_open_from_source(src, ZIP_RDONLY, &ec);
-							if (!z) zip_source_free(src);
-						}
-					} else {
-						close(fd);
-					}
-				} else {
-					close(fd);
-				}
-			}
-		} else {
-			int errcode = 0;
-			z = zip_open(romPath.c_str(), ZIP_RDONLY, &errcode);
-		}
-#else
 		int errcode = 0;
-		z = zip_open(romPath.c_str(), ZIP_RDONLY, &errcode);
-#endif
+		zip_t *z = ZipHelper::OpenZip(romPath, &errcode);
 		if (z) {
 			zip_int64_t numEntries = zip_get_num_entries(z, 0);
 			for (zip_int64_t i = 0; i < numEntries; i++) {

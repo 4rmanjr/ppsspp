@@ -33,6 +33,7 @@ add_library(EmuCore STATIC
     GBAPostProcessor.cpp
     Config.cpp
     RecentFilesRegistry.cpp
+    ZipHelper.cpp
 )
 
 target_include_directories(EmuCore PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})

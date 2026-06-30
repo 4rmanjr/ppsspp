@@ -174,7 +174,7 @@ Bug: R↔B terbalik (little-endian byte order). Fix: `(B<<16)|(G<<8)|R`.
 | Code Review — P4 hoist getUIContext | ✅ **FIXED (be87503)** | `screenManager()->getUIContext()` dipanggil sekali di luar loop, bukan per iterasi. |
 | Code Review — P5 nitpicks | ✅ **FIXED (9b461df)** | Value copy untuk screenBounds_ + granular [PPSSPP-FORK] markers di semua class definitions. |
 | Code Review — GBA ZIP fallthrough bug | ✅ **FIXED** | Saat `LoadROMFromZip` gagal untuk `.zip`, kode fallthrough ke raw file open — ZIP header sebagai ARM code → white screen. Juga `LoadROMFromZip` hanya cocok `.gba`, bukan `.gbc` (inkonsisten dengan `DetectType` & `HasGBAROM`). Fix: `return false` + tambah `.gbc` match. Diverifikasi dual-build ON/OFF. |
-| Code Review — P4#1 Duplicate content URI code | 🟡 **PENDING** | `OpenZipForRead()` logic (~20 baris) diduplikasi di 3 file (`EmuCore.cpp`:DetectType, `UI/MainScreen.cpp`:HasGBAROM, `EmuCore/GBACore.cpp`:LoadROMFromZip). Bukan bug (masing-masing punya requirements beda), tapi maintenance burden. Fix future: extract ke utility header. |
+| Code Review — P4#1 Duplicate content URI code | ✅ **FIXED** | `OpenZipForRead()` logic (~20 baris) diduplikasi di 3 file (`EmuCore.cpp`:DetectType, `UI/MainScreen.cpp`:HasGBAROM, `EmuCore/GBACore.cpp`:LoadROMFromZip). Fix: extract ke `EmuCore/ZipHelper.h/.cpp` — `ZipHelper::OpenZip()` menangani content:// dan normal path. Semua 3 caller sekarang 1 baris. EINTR-safe read loop + 64MB OOM limit + cleanup semua path. |
 | Code Review — P4#2 DetectType partial-read | ✅ **BUKAN BUG (false alarm)** | Tanda: `while(total < st.st_size)` bisa baca kurang dari `st.st_size`. Tapi kode pakai `total` (bytes aktual) sebagai size`zip_source_buffer_create`, bukan `st.st_size`. Partial read sudah benar. |
 
 ---

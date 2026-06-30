@@ -202,75 +202,13 @@ GBACore::~GBACore() {
 // Returns a VFile* that must be closed by the caller, or nullptr on failure.
 static struct VFile *LoadROMFromZip(const Path &path) {
 	std::string pathStr = path.ToString();
-	std::vector<uint8_t> zipBuffer;
-	zip_t *z = nullptr;
-	zip_source_t *zipSource = nullptr;
 
-#if defined(__ANDROID__) && defined(ANDROID)
-	if (pathStr.find("content://") == 0) {
-		int fd = Android_OpenContentUriFd(pathStr, Android_OpenContentUriMode::READ);
-		if (fd < 0) {
-			ERROR_LOG(Log::System, "[GBA] Failed to open content URI for zip: %s", path.c_str());
-			return nullptr;
-		}
-		// Read entire zip into memory
-		struct stat st;
-		if (fstat(fd, &st) == 0 && st.st_size > 0) {
-			// Limit to 64MB GBA zip ROM to prevent OOM DOS
-			if (st.st_size > 64 * 1024 * 1024) {
-				ERROR_LOG(Log::System, "[GBA] Content URI zip file exceeds size limit (64MB): %llu bytes", (unsigned long long)st.st_size);
-				close(fd);
-				return nullptr;
-			}
-			zipBuffer.resize(st.st_size);
-			ssize_t bytesRead = 0;
-			while ((size_t)bytesRead < st.st_size) {
-				ssize_t r = read(fd, zipBuffer.data() + bytesRead, st.st_size - bytesRead);
-				if (r <= 0) {
-					if (r < 0 && errno == EINTR) continue;
-					break;
-				}
-				bytesRead += r;
-			}
-			if ((size_t)bytesRead < st.st_size) {
-				zipBuffer.resize(bytesRead);
-			}
-		}
-		close(fd);
-
-		if (zipBuffer.empty()) {
-			ERROR_LOG(Log::System, "[GBA] Content URI zip file is empty: %s", path.c_str());
-			return nullptr;
-		}
-
-		zip_error_t error{};
-		zipSource = zip_source_buffer_create(zipBuffer.data(), zipBuffer.size(), 0, &error);
-		if (!zipSource) {
-			ERROR_LOG(Log::System, "[GBA] Failed to create zip source from memory: %s", zip_error_strerror(&error));
-			return nullptr;
-		}
-		z = zip_open_from_source(zipSource, ZIP_RDONLY, &error);
-		if (!z) {
-			ERROR_LOG(Log::System, "[GBA] Failed to open zip from source: %s", zip_error_strerror(&error));
-			zip_source_free(zipSource);
-			return nullptr;
-		}
-	} else {
-		int errcode = 0;
-		z = zip_open(path.c_str(), ZIP_RDONLY, &errcode);
-		if (!z) {
-			ERROR_LOG(Log::System, "[GBA] Failed to open zip archive: %s (errcode=%d)", path.c_str(), errcode);
-			return nullptr;
-		}
-	}
-#else
 	int errcode = 0;
-	z = zip_open(path.c_str(), ZIP_RDONLY, &errcode);
+	zip_t *z = ZipHelper::OpenZip(path, &errcode);
 	if (!z) {
 		ERROR_LOG(Log::System, "[GBA] Failed to open zip archive: %s (errcode=%d)", path.c_str(), errcode);
 		return nullptr;
 	}
-#endif
 
 	zip_int64_t numEntries = zip_get_num_entries(z, 0);
 	for (zip_int64_t i = 0; i < numEntries; i++) {

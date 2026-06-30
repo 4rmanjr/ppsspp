@@ -67,49 +67,11 @@ bool MainScreen::showHomebrewTab = false;
 #ifdef PPSSPP_MULTICORE
 // [PPSSPP-FORK] MultiCore: shared helper to detect GBA ROM inside .zip archives
 #include "ext/libzip/zip.h"
-#if defined(__ANDROID__) && defined(ANDROID)
-#include "Common/File/AndroidStorage.h"
-#include <sys/stat.h>
-#include <fcntl.h>
-#include <unistd.h>
-#endif
-
-// [PPSSPP-FORK] Open a ZIP from either a native path or Android content URI.
-// Returns nullptr on failure; caller must zip_close().
-// For content:// URIs, the zip data is heap-allocated and owned by libzip (freep=1).
-static zip_t *OpenZipForRead(const Path &filePath) {
-	std::string pathStr = filePath.ToString();
-#if defined(__ANDROID__) && defined(ANDROID)
-	if (pathStr.find("content://") == 0) {
-		int fd = Android_OpenContentUriFd(pathStr, Android_OpenContentUriMode::READ);
-		if (fd < 0) return nullptr;
-		struct stat st;
-		if (fstat(fd, &st) != 0 || st.st_size == 0) { close(fd); return nullptr; }
-		if (st.st_size > 64 * 1024 * 1024) { close(fd); return nullptr; }
-		uint8_t *buf = (uint8_t *)malloc(st.st_size);
-		if (!buf) { close(fd); return nullptr; }
-		ssize_t total = 0;
-		while (total < st.st_size) {
-			ssize_t r = read(fd, buf + total, st.st_size - total);
-			if (r <= 0) { if (r < 0 && errno == EINTR) continue; break; }
-			total += r;
-		}
-		close(fd);
-		zip_error_t err{};
-		zip_source_t *src = zip_source_buffer_create(buf, total, 1, &err);
-		if (!src) { free(buf); return nullptr; }
-		zip_error_t err2{};
-		zip_t *z = zip_open_from_source(src, ZIP_RDONLY, &err2);
-		if (!z) { zip_source_free(src); return nullptr; }
-		return z;
-	}
-#endif
-	int errcode = 0;
-	return zip_open(filePath.c_str(), ZIP_RDONLY, &errcode);
-}
+#include "EmuCore/ZipHelper.h"
 
 static bool HasGBAROM(const Path &filePath) {
-	zip_t *z = OpenZipForRead(filePath);
+	int errcode = 0;
+	zip_t *z = ZipHelper::OpenZip(filePath, &errcode);
 	if (!z) return false;
 	bool found = false;
 	zip_int64_t numEntries = zip_get_num_entries(z, 0);
