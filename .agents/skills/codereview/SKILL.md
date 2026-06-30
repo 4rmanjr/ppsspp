@@ -235,6 +235,8 @@ When the user types `/codereview`, perform a complete code review of the latest 
 - **Verdict:** ✅ Clean (or ❌ Needs fix — P1 issues remain)
 ```
 
+> **After reporting**: If any fixes were applied during this review, ask the user: *"Fixes applied — commit?"* Do NOT commit without explicit confirmation (AGENTS.md rule).
+
 ## Important rules
 
 - Be thorough. Check every changed line, not just the diff overview.
