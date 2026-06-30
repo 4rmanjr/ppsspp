@@ -13,7 +13,7 @@
 struct mCore;
 
 // Audio buffer size used by GBACore internals and external callers
-static constexpr size_t GBA_AUDIO_BUF_SIZE = 4096;
+static constexpr size_t GBA_AUDIO_BUF_SIZE = 8192;
 
 namespace EmuCore {
 
@@ -116,16 +116,15 @@ private:
 	size_t audioStereoPairs_ = 0;
 
 	// DC blocking filter state (SkyEmu-inspired high-pass for SOUNDBIAS DC offset)
-	float dcCapL_ = 0.0f;     // Used by GetMixedAudio (EMA tracker)
+	float dcCapL_ = 0.0f;
 	float dcCapR_ = 0.0f;
-	float dcCapRawL_ = 0.0f;  // Used by GetRawAudio (self-decay capacitor)
-	float dcCapRawR_ = 0.0f;
 
 	// [PPSSPP-FORK] GBA Audio Improvement: Low-pass filter states (EMA) to roll off harsh 8-bit quantization noise
 	float lowPassL_ = 0.0f;
 	float lowPassR_ = 0.0f;
-	float lowPassRawL_ = 0.0f;
-	float lowPassRawR_ = 0.0f;
+
+	// [PPSSPP-FORK] MultiCore: unified GBA audio post-processing (DC filter + low-pass + volume)
+	void ProcessAudioSamples(float *outBuf, size_t pairs);
 
 	// Audio rate from mGBA core (changes with SOUNDBIAS, but always derived from 32768 Hz base)
 	unsigned coreSampleRate_ = 32768;

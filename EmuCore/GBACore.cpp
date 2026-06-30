@@ -847,17 +847,12 @@ void GBACore::ClearAudio() {
 	// [PPSSPP-FORK] GBA Audio Improvement: Reset filter states
 	dcCapL_ = 0.0f;
 	dcCapR_ = 0.0f;
-	dcCapRawL_ = 0.0f;
-	dcCapRawR_ = 0.0f;
 	lowPassL_ = 0.0f;
 	lowPassR_ = 0.0f;
-	lowPassRawL_ = 0.0f;
-	lowPassRawR_ = 0.0f;
 }
 
 const int16_t *GBACore::GetRawAudio(size_t *stereoPairs) {
-	// Get the raw resampled int16 audio buffer with DC filter applied.
-	// Caller should use this for direct SDL output (int16 format).
+	// [PPSSPP-FORK] MultiCore: get resampled int16 audio with unified post-processing
 	if (audioStereoPairs_ == 0) {
 		*stereoPairs = 0;
 		return nullptr;
@@ -865,39 +860,39 @@ const int16_t *GBACore::GetRawAudio(size_t *stereoPairs) {
 
 	size_t pairs = audioStereoPairs_ > AUDIO_BUF_SIZE ? AUDIO_BUF_SIZE : audioStereoPairs_;
 
-	// [PPSSPP-FORK] MultiCore: temp buffer for DC-filtered output before SIMD conversion
 	float tempBuf[AUDIO_BUF_SIZE * 2];
+	ProcessAudioSamples(tempBuf, pairs);
 
-	// DC blocking filter (scalar, stateful — cannot vectorize due to dcCapRawL_/R_ dependencies)
-	for (size_t i = 0; i < pairs; i++) {
-		float left = (float)audioBuffer_[i * 2];
-		float right = (float)audioBuffer_[i * 2 + 1];
-
-		// DC blocking filter (SkyEmu-inspired) — uses dedicated dcCapRaw to avoid
-		// state corruption with GetMixedAudio's EMA tracker (dcCapL_/dcCapR_).
-		float outL = left - dcCapRawL_;
-		float outR = right - dcCapRawR_;
-		dcCapRawL_ = (left - outL) * 0.996f;
-		dcCapRawR_ = (right - outR) * 0.996f;
-
-		// [PPSSPP-FORK] MultiCore: GBA volume setting
-		outL *= g_Config.fGBAVolume;
-		outR *= g_Config.fGBAVolume;
-
-		// [PPSSPP-FORK] GBA Audio Improvement: Low-pass filter (cutoff ~4.8 kHz) to remove tinny quantization noise
-		lowPassRawL_ += (outL - lowPassRawL_) * 0.40f;
-		lowPassRawR_ += (outR - lowPassRawR_) * 0.40f;
-
-		tempBuf[i * 2] = lowPassRawL_;
-		tempBuf[i * 2 + 1] = lowPassRawR_;
-	}
-
-	// [PPSSPP-FORK] MultiCore: SIMD clamp + convert (4-8x faster than scalar)
 	ClampFloatToS16_SIMD(audioBuffer_, tempBuf, pairs * 2);
 
 	*stereoPairs = pairs;
 	audioStereoPairs_ = 0;
 	return audioBuffer_;
+}
+
+// [PPSSPP-FORK] MultiCore: unified GBA audio post-processing (DC filter + low-pass + volume)
+void GBACore::ProcessAudioSamples(float *outBuf, size_t pairs) {
+	for (size_t i = 0; i < pairs * 2; i += 2) {
+		float left = (float)audioBuffer_[i];
+		float right = (float)audioBuffer_[i + 1];
+
+		dcCapL_ += (left - dcCapL_) * 0.004f;
+		dcCapR_ += (right - dcCapR_) * 0.004f;
+		if (!(dcCapL_ < 2.0f && dcCapL_ > -2.0f)) dcCapL_ = 0.0f;
+		if (!(dcCapR_ < 2.0f && dcCapR_ > -2.0f)) dcCapR_ = 0.0f;
+
+		float outL = left - dcCapL_;
+		float outR = right - dcCapR_;
+
+		outL *= g_Config.fGBAVolume;
+		outR *= g_Config.fGBAVolume;
+
+		lowPassL_ += (outL - lowPassL_) * 0.25f;
+		lowPassR_ += (outR - lowPassR_) * 0.25f;
+
+		outBuf[i] = lowPassL_;
+		outBuf[i + 1] = lowPassR_;
+	}
 }
 
 void GBACore::GetMixedAudio(int32_t *buffer, size_t *stereoPairs) {
@@ -913,62 +908,23 @@ void GBACore::GetMixedAudio(int32_t *buffer, size_t *stereoPairs) {
 		return;
 	}
 
-	// Audio already sinc-resampled to 44100 Hz by mGBA resampler
-	// Just apply DC blocking filter + convert int16 -> int32
 	size_t toCopy = (pairs < (size_t)TARGET_PAIRS) ? pairs : (size_t)TARGET_PAIRS;
 
-	// [PPSSPP-FORK] MultiCore: temp buffers for SIMD conversion pipeline
 	float tempFloat[AUDIO_BUF_SIZE * 2];
+	ProcessAudioSamples(tempFloat, toCopy);
+
 	int16_t tempInt16[AUDIO_BUF_SIZE * 2];
-
-	// DC blocking filter (scalar, stateful — cannot vectorize due to dcCapL_/R_ dependencies)
-	size_t i;
-	for (i = 0; i < toCopy; i++) {
-		float left = (float)audioBuffer_[i * 2];
-		float right = (float)audioBuffer_[i * 2 + 1];
-
-		// DC blocking filter — EMA tracker for SOUNDBIAS residual DC
-		// Tracks actual DC offset instead of self-decaying capacitor
-		dcCapL_ += (left - dcCapL_) * 0.004f;
-		dcCapR_ += (right - dcCapR_) * 0.004f;
-
-		// Safety clamp (reset if capacitor drifted beyond ±2.0)
-		if (!(dcCapL_ < 2.0f && dcCapL_ > -2.0f)) dcCapL_ = 0.0f;
-		if (!(dcCapR_ < 2.0f && dcCapR_ > -2.0f)) dcCapR_ = 0.0f;
-
-		float outL = left - dcCapL_;
-		float outR = right - dcCapR_;
-
-		// [PPSSPP-FORK] MultiCore: GBA volume setting
-		outL *= g_Config.fGBAVolume;
-		outR *= g_Config.fGBAVolume;
-
-		// [PPSSPP-FORK] GBA Audio Improvement: Low-pass filter (cutoff ~4.8 kHz) to remove tinny quantization noise
-		lowPassL_ += (outL - lowPassL_) * 0.40f;
-		lowPassR_ += (outR - lowPassR_) * 0.40f;
-
-		tempFloat[i * 2] = lowPassL_;
-		tempFloat[i * 2 + 1] = lowPassR_;
-	}
-
-	// [PPSSPP-FORK] MultiCore: SIMD clamp + convert float→int16 (4-8x faster than scalar)
 	ClampFloatToS16_SIMD(tempInt16, tempFloat, toCopy * 2);
 
-	// Convert int16 → int32 for output buffer
-	for (i = 0; i < toCopy; i++) {
-		buffer[i * 2] = (int32_t)tempInt16[i * 2];
-		buffer[i * 2 + 1] = (int32_t)tempInt16[i * 2 + 1];
+	for (size_t i = 0; i < toCopy * 2; i++) {
+		buffer[i] = (int32_t)tempInt16[i];
 	}
 
-	// Pad remaining slots with zero (no DC step — avoids harsh/tinny artifacts)
-	if (toCopy < (size_t)TARGET_PAIRS) {
-		for (i = toCopy; i < (size_t)TARGET_PAIRS; i++) {
-			buffer[i * 2] = 0;
-			buffer[i * 2 + 1] = 0;
-		}
+	for (size_t i = toCopy; i < (size_t)TARGET_PAIRS; i++) {
+		buffer[i * 2] = 0;
+		buffer[i * 2 + 1] = 0;
 	}
 
-	// Debug: log resampler output stats
 	static int audioMixFrame = 0;
 	if (++audioMixFrame <= 3 || audioMixFrame % 300 == 0) {
 		NOTICE_LOG(Log::System, "[GBA] Audio mix frame %d: pairs=%zu firstOut=[%d,%d] lastOut=[%d,%d]",
@@ -977,13 +933,11 @@ void GBACore::GetMixedAudio(int32_t *buffer, size_t *stereoPairs) {
 			buffer[(TARGET_PAIRS - 1) * 2] >> 16, buffer[(TARGET_PAIRS - 1) * 2 + 1] >> 16);
 	}
 
-	// Mark as consumed
 	audioStereoPairs_ = 0;
 }
 
 void GBACore::SetKeys(uint32_t keys) {
 	if (core_) {
-		// Convert PSP key bitmask to GBA key bitmask transparently
 		uint32_t gbaKeys = PSPSKeysToGBA(keys);
 		core_->setKeys(core_, gbaKeys);
 	}
