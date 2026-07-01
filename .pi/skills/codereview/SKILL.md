@@ -12,15 +12,16 @@ When the user types `/codereview`, perform a complete code review of the latest 
 ## What to do
 
 0. **Build Gate — compile first**
-   - **Auto-detect build directory:** Find the most appropriate build directory:
+   - **Check build capability:** Run `which cmake 2>/dev/null`. If `cmake` is not found → skip the build gate entirely (e.g., Termux or other constrained environments). Note in the report: "⚠️ Build gate skipped — cmake not available."
+   - **Auto-detect build directory:** If `cmake` is available, find the most appropriate build directory:
      * Priority 1: `build-final` (primary dev build, `PPSSPP_MULTICORE=ON`).
      * Priority 2: `build-*` with most recent `CMakeCache.txt` (fallback).
-     * Verify the detected dir has `CMakeCache.txt`. If none found, ask the user.
+     * Verify the detected dir has `CMakeCache.txt`. If none found, skip the build gate with a note.
    - Run `cmake --build <detected_dir> -j$(nproc) 2>&1 | tail -30`. Check for compile errors.
    - If compile errors → **STOP**. Report as P1. Do NOT proceed with further review until fixed.
    - Check total warning count as a baseline (compare with prior review if available). If warnings increased, flag P4.
 
-   - **Test Gate — run relevant tests:** After the build succeeds, identify tests related to changed files (`grep -rn 'TestFunc\|<test_name>' unittest/`). Run `python test.py` for headless PSP/core logic tests (uses `<detected_dir>/PPSSPPSDL`; if the binary is missing, skip with a note). For unit tests: check if `<detected_dir>/PPSSPPUnitTest` exists before attempting to run. If tests fail → **STOP**. Report with the full test output.
+   - **Test Gate — run relevant tests:** After the build succeeds (or if build was skipped), identify tests related to changed files (`grep -rn 'TestFunc\|<test_name>' unittest/`). Run `python test.py` for headless PSP/core logic tests (uses `<detected_dir>/PPSSPPSDL`; if the binary is missing, skip with a note). For unit tests: check if `<detected_dir>/PPSSPPUnitTest` exists before attempting to run. If tests fail → **STOP**. Report with the full test output.
 
 1. **Determine what to review**
    - If there are uncommitted changes (`git status --short` shows modified files), review the working tree diff.
