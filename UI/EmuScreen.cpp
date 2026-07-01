@@ -1596,9 +1596,10 @@ void EmuScreen::UpdateGBA() {
 					NOTICE_LOG(Log::System, "[GBA] Audio frame %d: pairs=%zu frames=%d", audioDebug, stereoPairs, framesToRun);
 				}
 				if (stereoPairs > 0) {
-					float volume = 1.0f;
-					if (PSP_CoreParameter().fastForward) {
-						volume = Volume100ToMultiplier(g_Config.iAltSpeedVolume);
+					// [PPSSPP-FORK] GBA Audio Parity: apply iGameVolume like PSP does
+					float volume = Volume100ToMultiplier(std::clamp(g_Config.iGameVolume, 0, VOLUMEHI_FULL));
+					if (PSP_CoreParameter().fpsLimit != FPSLimit::NORMAL && g_Config.iAltSpeedVolume != -1) {
+						volume *= Volume100ToMultiplier(g_Config.iAltSpeedVolume);
 					}
 					System_AudioPushSamples(mixBuffer, (int)stereoPairs, volume);
 				}
