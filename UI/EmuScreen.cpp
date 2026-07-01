@@ -1586,22 +1586,22 @@ void EmuScreen::UpdateGBA() {
 			for (int f = 0; f < framesToRun; f++) {
 				activeCore_->RunFrame();
 
-				// [PPSSPP-FORK] MultiCore: unified GBA audio path (desktop + mobile) via PPSSPP mixer
-				size_t stereoPairs = 0;
-				int32_t mixBuffer[GBA_AUDIO_BUF_SIZE * 2];
-				gba->GetMixedAudio(mixBuffer, &stereoPairs);
-
-				static int audioDebug = 0;
-				if (++audioDebug <= 5 || audioDebug % 180 == 0) {
-					NOTICE_LOG(Log::System, "[GBA] Audio frame %d: pairs=%zu frames=%d", audioDebug, stereoPairs, framesToRun);
+				// [PPSSPP-FORK] GBA Audio Parity: incremental push matching PSP block size (64 pairs)
+				float volume = Volume100ToMultiplier(std::clamp(g_Config.iGameVolume, 0, VOLUMEHI_FULL));
+				if (PSP_CoreParameter().fpsLimit != FPSLimit::NORMAL && g_Config.iAltSpeedVolume != -1) {
+					volume *= Volume100ToMultiplier(g_Config.iAltSpeedVolume);
 				}
-				if (stereoPairs > 0) {
-					// [PPSSPP-FORK] GBA Audio Parity: apply iGameVolume like PSP does
-					float volume = Volume100ToMultiplier(std::clamp(g_Config.iGameVolume, 0, VOLUMEHI_FULL));
-					if (PSP_CoreParameter().fpsLimit != FPSLimit::NORMAL && g_Config.iAltSpeedVolume != -1) {
-						volume *= Volume100ToMultiplier(g_Config.iAltSpeedVolume);
+
+				int32_t chunkBuf[64 * 2];
+				size_t chunkPairs = 0;
+				static int audioDebug = 0;
+				int debugLimit = audioDebug <= 5 ? 5 : 0;
+
+				while ((chunkPairs = gba->GetAudioIncremental(chunkBuf, 64)) > 0) {
+					System_AudioPushSamples(chunkBuf, (int)chunkPairs, volume);
+					if (++audioDebug <= 5 && debugLimit == 5) {
+						NOTICE_LOG(Log::System, "[GBA] Audio chunk: pairs=%zu volume=%.2f", chunkPairs, volume);
 					}
-					System_AudioPushSamples(mixBuffer, (int)stereoPairs, volume);
 				}
 			}
 

@@ -824,6 +824,43 @@ void GBACore::ProcessAudioSamples(float *outBuf, size_t pairs) {
 	}
 }
 
+// [PPSSPP-FORK] GBA Audio Parity: return audio in PSP-sized chunks (64 stereo pairs)
+// instead of full-frame bursts (735 pairs). Returns number of stereo pairs written to buffer
+// (up to maxPairs). Returns 0 when all audio has been consumed.
+size_t GBACore::GetAudioIncremental(int32_t *buffer, size_t maxPairs) {
+	if (!buffer || maxPairs == 0) return 0;
+
+	// If we have leftover from last call, serve that first
+	if (stagingFill_ > 0) {
+		size_t toCopy = std::min(stagingFill_, maxPairs);
+		memcpy(buffer, stagingBuffer_, toCopy * 2 * sizeof(int32_t));
+		if (toCopy < stagingFill_) {
+			// Move remaining to front of staging buffer
+			memmove(stagingBuffer_, stagingBuffer_ + toCopy * 2, (stagingFill_ - toCopy) * 2 * sizeof(int32_t));
+			stagingFill_ -= toCopy;
+		} else {
+			stagingFill_ = 0;
+		}
+		return toCopy;
+	}
+
+	// No leftover \u2014 run the full audio pipeline
+	size_t pairs = 0;
+	GetMixedAudio(stagingBuffer_, &pairs);
+	if (pairs == 0) return 0;
+
+	stagingFill_ = pairs;
+	size_t toCopy = std::min(stagingFill_, maxPairs);
+	memcpy(buffer, stagingBuffer_, toCopy * 2 * sizeof(int32_t));
+	if (toCopy < stagingFill_) {
+		memmove(stagingBuffer_, stagingBuffer_ + toCopy * 2, (stagingFill_ - toCopy) * 2 * sizeof(int32_t));
+		stagingFill_ -= toCopy;
+	} else {
+		stagingFill_ = 0;
+	}
+	return toCopy;
+}
+
 void GBACore::GetMixedAudio(int32_t *buffer, size_t *stereoPairs) {
 	if (!buffer || !stereoPairs) return;
 

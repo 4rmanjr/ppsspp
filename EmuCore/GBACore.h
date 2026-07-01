@@ -74,6 +74,10 @@ public:
 	// Returns stereo pairs at 44100 Hz (735 per frame at 60fps).
 	void GetMixedAudio(int32_t *buffer, size_t *stereoPairs);
 
+	// [PPSSPP-FORK] GBA Audio Parity: incremental audio for PSP-sized chunks (64 stereo pairs)
+	// Returns number of stereo pairs written to buffer (up to maxPairs). Returns 0 when all audio consumed.
+	size_t GetAudioIncremental(int32_t *buffer, size_t maxPairs);
+
 	// [PPSSPP-FORK] MultiCore: clear all pending audio (for fast forward frame skipping)
 	void ClearAudio();
 
@@ -117,6 +121,10 @@ private:
 	// [PPSSPP-FORK] GBA Audio Improvement: Low-pass filter states (EMA) to roll off harsh 8-bit quantization noise
 	float lowPassL_ = 0.0f;
 	float lowPassR_ = 0.0f;
+
+	// [PPSSPP-FORK] GBA Audio Parity: staging buffer to break 735-sample push into 64-sample blocks
+	int32_t stagingBuffer_[64 * 2]{};
+	size_t stagingFill_ = 0;
 
 	// [PPSSPP-FORK] MultiCore: unified GBA audio post-processing (DC filter + low-pass + volume)
 	void ProcessAudioSamples(float *outBuf, size_t pairs);
