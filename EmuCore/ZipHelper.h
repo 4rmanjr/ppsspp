@@ -6,8 +6,7 @@
 #pragma once
 
 #include "Common/File/Path.h"
-
-struct zip_t;
+#include "ext/libzip/zip.h"
 
 namespace ZipHelper {
 

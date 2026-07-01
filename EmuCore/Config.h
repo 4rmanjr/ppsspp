@@ -35,9 +35,9 @@ struct CoreTouchButton {
 struct CoreTouchConfig {
 	CoreTouchButton buttons[MAX_TOUCH_BUTTONS]{};
 	int count = 0;
-	float dpadSpacing = 0.085f;  // [PPSSPP-FORK] Normalized D-pad spacing (fraction of screen width from center to each arm)
+	float dpadSpacing = 0.8f;  // [PPSSPP-FORK] D-pad spacing multiplier (matches PSPDpad units)
 
-	void Clear() { count = 0; dpadSpacing = 0.085f; }
+	void Clear() { count = 0; dpadSpacing = 0.8f; }
 	void Add(int keyCode, float x, float y, float w, float h, const char *label, bool visible = true) {
 		if (count >= MAX_TOUCH_BUTTONS) return;
 		buttons[count].keyCode = keyCode;

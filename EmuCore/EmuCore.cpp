@@ -27,7 +27,8 @@ Type DetectType(const Path &romPath) {
 
 	if (ext == ".gba" || ext == ".gb" || ext == ".gbc") {
 		return Type::GBA;
-	}	#ifdef PPSSPP_MULTICORE
+	}
+#ifdef PPSSPP_MULTICORE
 	// [PPSSPP-FORK] MultiCore: peek inside .zip archives for GBA ROMs
 	if (ext == ".zip") {
 		int errcode = 0;

@@ -34,6 +34,7 @@
 
 // [PPSSPP-FORK] MultiCore: libzip for loading GBA/GB ROMs from .zip archives
 #include "ext/libzip/zip.h"
+#include "EmuCore/ZipHelper.h"
 
 #if defined(__ANDROID__) && defined(ANDROID)
 #include <sys/types.h>

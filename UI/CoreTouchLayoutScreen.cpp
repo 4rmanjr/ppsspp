@@ -222,7 +222,7 @@ public:
 private:
 	EmuCore::CoreTouchButton &up_, &down_, &left_, &right_;
 	EmuCore::CoreTouchConfig &cfg_;  // [PPSSPP-FORK] Config reference for persisting dpadSpacing
-	float spacing_ = 0.085f;  // [PPSSPP-FORK] Normalized arm distance from center (fraction of screen width)
+	float spacing_ = 0.8f;  // [PPSSPP-FORK] Normalized arm distance from center (fraction of screen width)
 	Bounds screenBounds_;
 };
 

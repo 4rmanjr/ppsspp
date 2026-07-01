@@ -17,6 +17,7 @@
 
 #include "ppsspp_config.h"
 
+#include <atomic>
 #include <functional>
 
 using namespace std::placeholders;
@@ -1389,10 +1390,7 @@ void EmuScreen::AddCoreTouchButtons(const Bounds &bounds, DeviceOrientation orie
 				bgScale = (dpUp->w * bounds.w) / (float)atlasImg->w;
 			}
 		}
-		float spacing = 1.0f;
-		if (bgScale > 0.0f) {
-			spacing = ((dpRight->x - dpLeft->x) * 0.5f * bounds.w) / (D_pad_Radius * bgScale);
-		}
+		float spacing = cfg.dpadSpacing;
 		auto *dpad = new PSPDpad(
 			dirImage,
 			"D-pad",
@@ -2065,7 +2063,10 @@ bool EmuScreen::ShouldRunEmulation(ScreenRenderMode mode) const {
 ScreenRenderFlags EmuScreen::PreRender(ScreenRenderMode mode) {
 	// [PPSSPP-FORK] MultiCore: skip PSP boot for non-PSP cores
 	if (IsGBA()) {
-		DEBUG_LOG(Log::System, "[MULTICORE] PreRender: non-PSP core, skipping ProcessGameBoot");
+		static std::atomic<int> preRenderCount{0};
+		if (++preRenderCount <= 5) {
+			DEBUG_LOG(Log::System, "[MULTICORE] PreRender: non-PSP core, skipping ProcessGameBoot");
+		}
 	} else {
 		// If a boot is in progress, update it.
 		ProcessGameBoot(gamePath_);
@@ -2469,8 +2470,11 @@ void EmuScreen::renderUI() {
 	// [PPSSPP-FORK] MultiCore: GBA UI rendering path
 	if (IsGBA()) {
 		if (root_) {
-			NOTICE_LOG(Log::System, "[GBA] renderUI: root_ exists, children=%d, opacity=%f",
-				root_->GetNumSubviews(), GamepadGetOpacity());
+			static std::atomic<int> renderUICount{0};
+			if (renderUICount++ < 5) {
+				NOTICE_LOG(Log::System, "[GBA] renderUI: root_ exists, children=%d, opacity=%f",
+					root_->GetNumSubviews(), GamepadGetOpacity());
+			}
 			UI::LayoutViewHierarchy(*ctx, RootMargins(), root_, LayoutMode(), UseImmersiveMode());
 			root_->Draw(*ctx);
 		} else {
