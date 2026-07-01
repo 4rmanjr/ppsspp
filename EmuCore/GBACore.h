@@ -78,6 +78,9 @@ public:
 	// Returns number of stereo pairs written to buffer (up to maxPairs). Returns 0 when all audio consumed.
 	size_t GetAudioIncremental(int32_t *buffer, size_t maxPairs);
 
+	// [PPSSPP-FORK] GBA Audio Parity: debug stats for GBA audio pipeline
+	void GetAudioDebugStats(char *buf, size_t bufSize) const;
+
 	// [PPSSPP-FORK] MultiCore: clear all pending audio (for fast forward frame skipping)
 	void ClearAudio();
 

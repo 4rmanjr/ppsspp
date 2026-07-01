@@ -1145,6 +1145,31 @@ bool GBACore::RestoreAudioState(const uint8_t *data, size_t dataSize) {
 	return true;
 }
 
+// [PPSSPP-FORK] GBA Audio Parity
+void GBACore::GetAudioDebugStats(char *buf, size_t bufSize) const {
+	if (!buf || bufSize == 0) return;
+
+	auto *r = static_cast<struct mAudioResampler*>(resampler_);
+	double resamplerPos = r ? r->timestamp : 0.0;
+
+	snprintf(buf, bufSize,
+		"GBA Audio:\n"
+		"  Sample rate: %u Hz (native)\n"
+		"  Target rate: %d Hz (output)\n"
+		"  Staging fill: %zu / %d pairs\n"
+		"  Resampler pos: %.1f\n"
+		"  DC filter: L=%.2f R=%.2f\n"
+		"  Low-pass filter: L=%.2f R=%.2f\n"
+		"  Pending mixed: %zu pairs\n",
+		coreSampleRate_,
+		TARGET_RATE,
+		stagingFill_, 64,
+		resamplerPos,
+		dcCapL_, dcCapR_,
+		lowPassL_, lowPassR_,
+		audioStereoPairs_);
+}
+
 void GBACore::GetGameInfo(std::string &title, std::string &id) const {
 	if (!core_) {
 		title = "Unknown";
