@@ -1008,7 +1008,10 @@ bool GBACore::SaveStateToFile(int slot) {
 		return false;
 	}
 
-	bool ok = File::WriteDataToFile(false, buffer.data(), size, path);
+	// [PPSSPP-FORK] GBA Audio Parity: append audio state after core state
+	AppendAudioState(buffer);
+
+	bool ok = File::WriteDataToFile(false, buffer.data(), buffer.size(), path);
 	if (ok) {
 		INFO_LOG(Log::SaveState, "[GBA] State saved: %s (slot %d, %zu bytes)", path.c_str(), slot + 1, size);
 
@@ -1051,10 +1054,95 @@ bool GBACore::LoadStateFromFile(int slot) {
 	bool ok = LoadState(data.data());
 	if (ok) {
 		INFO_LOG(Log::SaveState, "[GBA] State loaded: %s (slot %d, %zu bytes)", path.c_str(), slot + 1, data.size());
+
+		// [PPSSPP-FORK] GBA Audio Parity: restore audio state from appended data
+		size_t coreSize = GetStateSize();
+		if (data.size() > coreSize + sizeof(GBAAudioStateHeader)) {
+			const uint8_t *audioData = reinterpret_cast<const uint8_t*>(data.data()) + coreSize;
+			size_t audioSize = data.size() - coreSize;
+			RestoreAudioState(audioData, audioSize);
+		} else {
+			NOTICE_LOG(Log::SaveState, "[GBA] No audio state in save file (upgrade from older version)");
+		}
 	} else {
 		WARN_LOG(Log::SaveState, "[GBA] LoadState() returned false");
 	}
 	return ok;
+}
+
+// [PPSSPP-FORK] GBA Audio Parity
+bool GBACore::AppendAudioState(std::vector<uint8_t> &buffer) const {
+	auto *r = static_cast<struct mAudioResampler*>(resampler_);
+	double ts = r ? r->timestamp : 0.0;
+
+	GBAAudioStateHeader h;
+	memset(&h, 0, sizeof(h));
+	h.magic = 0x49445541;  // 'AUDI' in little-endian
+	h.version = 1;
+	h.dcCapL = dcCapL_;
+	h.dcCapR = dcCapR_;
+	h.lowPassL = lowPassL_;
+	h.lowPassR = lowPassR_;
+	h.resamplerTimestamp = ts;
+	h.stagingFill = (uint32_t)stagingFill_;
+	h.totalSize = (uint32_t)(sizeof(h) + (stagingFill_ * 2 * sizeof(int32_t)));
+
+	// Append header
+	const uint8_t *hdr = reinterpret_cast<const uint8_t*>(&h);
+	buffer.insert(buffer.end(), hdr, hdr + sizeof(h));
+
+	// Append staging buffer data if any
+	if (stagingFill_ > 0) {
+		const uint8_t *stg = reinterpret_cast<const uint8_t*>(stagingBuffer_);
+		buffer.insert(buffer.end(), stg, stg + stagingFill_ * 2 * sizeof(int32_t));
+	}
+
+	return true;
+}
+
+// [PPSSPP-FORK] GBA Audio Parity
+bool GBACore::RestoreAudioState(const uint8_t *data, size_t dataSize) {
+	if (!data || dataSize < sizeof(GBAAudioStateHeader)) return false;
+
+	GBAAudioStateHeader h;
+	memcpy(&h, data, sizeof(h));
+	if (h.magic != 0x49445541 || h.version != 1) return false;
+	if (h.totalSize > dataSize) return false;
+
+	dcCapL_ = h.dcCapL;
+	dcCapR_ = h.dcCapR;
+	lowPassL_ = h.lowPassL;
+	lowPassR_ = h.lowPassR;
+	stagingFill_ = h.stagingFill;
+
+	if (stagingFill_ > 0) {
+		size_t stgBytes = stagingFill_ * 2 * sizeof(int32_t);
+		if (sizeof(h) + stgBytes <= dataSize) {
+			memcpy(stagingBuffer_, data + sizeof(h), stgBytes);
+		} else {
+			stagingFill_ = 0;  // corrupt, discard
+		}
+	}
+
+	// Restore resampler timestamp
+	if (resampler_) {
+		auto *r = static_cast<struct mAudioResampler*>(resampler_);
+		r->timestamp = h.resamplerTimestamp;
+	}
+
+	// Clear pending mixed audio — it will be regenerated
+	if (resampleDest_) {
+		mAudioBufferClear(static_cast<struct mAudioBuffer*>(resampleDest_));
+	}
+	audioStereoPairs_ = 0;
+
+	// Reset filter accumulators if timestamp indicates fresh start
+	if (h.resamplerTimestamp < 1.0) {
+		dcCapL_ = 0.0f; dcCapR_ = 0.0f;
+		lowPassL_ = 0.0f; lowPassR_ = 0.0f;
+	}
+
+	return true;
 }
 
 void GBACore::GetGameInfo(std::string &title, std::string &id) const {

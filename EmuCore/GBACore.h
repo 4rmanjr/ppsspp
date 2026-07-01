@@ -126,6 +126,23 @@ private:
 	int32_t stagingBuffer_[64 * 2]{};
 	size_t stagingFill_ = 0;
 
+	// [PPSSPP-FORK] GBA Audio Parity: appended after mGBA core state in .ppst file
+	#pragma pack(push, 1)
+	struct GBAAudioStateHeader {
+		uint32_t magic;		// 'AUDI'
+		uint32_t version;		// 1
+		uint32_t totalSize;		// sizeof header + payload
+		float dcCapL, dcCapR;
+		float lowPassL, lowPassR;
+		double resamplerTimestamp;
+		uint32_t stagingFill;	// pairs in staging buffer
+		// followed by stagingBuffer_[stagingFill * 2] if stagingFill > 0
+	};
+	#pragma pack(pop)
+
+	bool AppendAudioState(std::vector<uint8_t> &buffer) const;
+	bool RestoreAudioState(const uint8_t *data, size_t dataSize);
+
 	// [PPSSPP-FORK] MultiCore: unified GBA audio post-processing (DC filter + low-pass + volume)
 	void ProcessAudioSamples(float *outBuf, size_t pairs);
 
