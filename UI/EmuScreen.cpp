@@ -78,13 +78,6 @@ using namespace std::placeholders;
 #include "UI/ImDebugger/ImDebugger.h"
 #if !defined(MOBILE_DEVICE)
 #include "SDL/SDLLANSync.h"
-
-// [PPSSPP-FORK] MultiCore: direct SDL audio for GBA (bypasses StereoResampler)
-// Only available on SDL3 builds
-#include <SDL3/SDL.h>
-
-// Exposed from SDLMain.cpp for direct SDL stream access
-extern SDL_AudioStream *GetSDLAudioStream();
 #endif
 #include "Core/HLE/__sceAudio.h"
 #include "Core/HW/Display.h"
@@ -1605,23 +1598,27 @@ void EmuScreen::UpdateGBA() {
 					NOTICE_LOG(Log::System, "[GBA] Audio frame %d: pairs=%zu frames=%d", audioDebug, stereoPairs, framesToRun);
 				}
 				if (stereoPairs > 0) {
-					System_AudioPushSamples(mixBuffer, (int)stereoPairs, 1.0f);
+					float volume = 1.0f;
+					if (PSP_CoreParameter().fastForward) {
+						volume = Volume100ToMultiplier(g_Config.iAltSpeedVolume);
+					}
+					System_AudioPushSamples(mixBuffer, (int)stereoPairs, volume);
 				}
 			}
 
 			// Forward input (apply same keys to all frames)
-		uint32_t pspButtons = __CtrlPeekButtons();
-		static int inputDebug = 0;
-		if (++inputDebug <= 5 || inputDebug % 180 == 0) {
-			NOTICE_LOG(Log::System, "[GBA] Input frame %d: pspButtons=0x%04X, gbaVirtKeys=0x%04X", inputDebug, pspButtons, gbaVirtKeys_);
+			uint32_t pspButtons = __CtrlPeekButtons();
+			static int inputDebug = 0;
+			if (++inputDebug <= 5 || inputDebug % 180 == 0) {
+				NOTICE_LOG(Log::System, "[GBA] Input frame %d: pspButtons=0x%04X, gbaVirtKeys=0x%04X", inputDebug, pspButtons, gbaVirtKeys_);
+			}
+			// [PPSSPP-FORK] MultiCore: merge PSP buttons with GBA VIRTKEY bits
+			if (gbaVirtKeys_) {
+				EmuCore::GBACore *gba = static_cast<EmuCore::GBACore *>(activeCore_.get());
+				gba->SetKeys(pspButtons, gbaVirtKeys_);
+			} else
+				activeCore_->SetKeys(pspButtons);
 		}
-		// [PPSSPP-FORK] MultiCore: merge PSP buttons with GBA VIRTKEY bits
-		if (gbaVirtKeys_) {
-			EmuCore::GBACore *gba = static_cast<EmuCore::GBACore *>(activeCore_.get());
-			gba->SetKeys(pspButtons, gbaVirtKeys_);
-		} else
-			activeCore_->SetKeys(pspButtons);
-	}
 
 
 	// Process queued virtual keys (save/load state, speed toggle, etc.)

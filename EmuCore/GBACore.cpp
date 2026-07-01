@@ -8,6 +8,7 @@
 #include <cstring>
 #include <cstdlib>
 #include <cctype>
+#include <string>
 #include <fcntl.h>
 
 #include "Common/Log.h"
@@ -849,25 +850,6 @@ void GBACore::ClearAudio() {
 	dcCapR_ = 0.0f;
 	lowPassL_ = 0.0f;
 	lowPassR_ = 0.0f;
-}
-
-const int16_t *GBACore::GetRawAudio(size_t *stereoPairs) {
-	// [PPSSPP-FORK] MultiCore: get resampled int16 audio with unified post-processing
-	if (audioStereoPairs_ == 0) {
-		*stereoPairs = 0;
-		return nullptr;
-	}
-
-	size_t pairs = audioStereoPairs_ > AUDIO_BUF_SIZE ? AUDIO_BUF_SIZE : audioStereoPairs_;
-
-	float tempBuf[AUDIO_BUF_SIZE * 2];
-	ProcessAudioSamples(tempBuf, pairs);
-
-	ClampFloatToS16_SIMD(audioBuffer_, tempBuf, pairs * 2);
-
-	*stereoPairs = pairs;
-	audioStereoPairs_ = 0;
-	return audioBuffer_;
 }
 
 // [PPSSPP-FORK] MultiCore: unified GBA audio post-processing (DC filter + low-pass + volume)

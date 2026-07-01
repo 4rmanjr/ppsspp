@@ -77,11 +77,6 @@ public:
 	// [PPSSPP-FORK] MultiCore: clear all pending audio (for fast forward frame skipping)
 	void ClearAudio();
 
-	// [PPSSPP-FORK] MultiCore: get raw resampled int16 audio (44100 Hz) with DC filter
-	// Returns pointer to internal buffer and stereo pair count.
-	// Buffer is valid until next RunFrame() call.
-	const int16_t *GetRawAudio(size_t *stereoPairs);
-
 	// [PPSSPP-FORK] MultiCore: save state to file (slot-based, .gbast extension)
 	bool SaveStateToFile(int slot);
 	bool LoadStateFromFile(int slot);
