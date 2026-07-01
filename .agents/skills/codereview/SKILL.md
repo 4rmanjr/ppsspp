@@ -12,11 +12,15 @@ When the user types `/codereview`, perform a complete code review of the latest 
 ## What to do
 
 0. **Build Gate — compile first**
-   - Run `cmake --build build -j$(nproc) 2>&1 | tail -30`. Check for compile errors.
+   - **Auto-detect build directory:** Find the most appropriate build directory:
+     * Priority 1: `build-final` (primary dev build, `PPSSPP_MULTICORE=ON`).
+     * Priority 2: `build-*` with most recent `CMakeCache.txt` (fallback).
+     * Verify the detected dir has `CMakeCache.txt`. If none found, ask the user.
+   - Run `cmake --build <detected_dir> -j$(nproc) 2>&1 | tail -30`. Check for compile errors.
    - If compile errors → **STOP**. Report as P1. Do NOT proceed with further review until fixed.
-   - Note the warning count as a baseline for fix verification.
+   - Check total warning count as a baseline (compare with prior review if available). If warnings increased, flag P4.
 
-   - **Test Gate — run relevant tests:** After the build succeeds, identify tests related to changed files (`grep -rn 'TestFunc\|<test_name>' unittest/`). Run `./build/PPSSPPUnitTest ALL` or the specific test (requires `-DUNITTEST=ON` at cmake configure time; if the binary is missing, skip this step). For core logic changes: `python test.py` (headless PSP tests). If tests fail → STOP. Report with the test output.
+   - **Test Gate — run relevant tests:** After the build succeeds, identify tests related to changed files (`grep -rn 'TestFunc\|<test_name>' unittest/`). Run `python test.py` for headless PSP/core logic tests (uses `<detected_dir>/PPSSPPSDL`; if the binary is missing, skip with a note). For unit tests: check if `<detected_dir>/PPSSPPUnitTest` exists before attempting to run. If tests fail → **STOP**. Report with the full test output.
 
 1. **Determine what to review**
    - If there are uncommitted changes (`git status --short` shows modified files), review the working tree diff.
@@ -26,6 +30,7 @@ When the user types `/codereview`, perform a complete code review of the latest 
      * `git diff --check` — whitespace errors? Flag P5.
      * `grep '<<<<<<< \|=======\|>>>>>>> '` — unresolved merge markers? Flag P1.
      * Files changed > 20? Suggest splitting the commit.
+     * **Code churn:** If any single file has >200 lines added+removed, flag for careful review. Large diffs have higher probability of hidden bugs.
 
 2. **Trace every code path** in the modified files:
    - Follow function calls from entry point to return
@@ -49,6 +54,11 @@ When the user types `/codereview`, perform a complete code review of the latest 
     - **Noexcept on callbacks:** Audio callbacks, IRQ handlers, signal handlers must be `noexcept`. Flag P4.
     - **Lock ordering / deadlock:** When adding new mutex locks, verify lock order is consistent with existing locks in the same call chain. Inconsistent ordering → deadlock risk. Flag P2.
     - **Static init order:** Global `static X` that depends on `static Y` in another translation unit is undefined (static init order fiasco). Use function-local statics instead. Flag P2.
+    - **Semantic field verification:** When modifying a formula that reads a config/struct/bounds field, verify the field's semantics by reading its declaration (`.h` file) AND how the PSP equivalent uses it. Common pitfalls in this codebase:
+      * `btn_.w` / `btn_.h` is **normalized width** (0-1 = 0%-100% of screen width), NOT a scale factor or pixel value.
+      * `bounds` fields may be **parent-relative** vs **screen-absolute** — verify the coordinate space before math.
+      * Config values often have implicit units (pixels, normalized, milliseconds, frames) — always check against the PSP reference.
+      * Flag P2 if a formula clearly misinterprets a field's semantics (e.g., multiplying where division is needed, or treating normalized range as pixel).
 
 3. **Memory safety & security checks** — Run these on every modified file:
    - **Buffer bounds:** For every `memcpy`, `memset`, `strcpy`, `sprintf`, verify the destination has enough space. ROM parsing code is especially risky — input is untrusted. Flag any copy where the size comes from ROM data without a `min(size, MAX)` clamp.
@@ -95,12 +105,17 @@ When the user types `/codereview`, perform a complete code review of the latest 
      * ✅ No upstream code duplication — if the file parallels an upstream file, use a thin wrapper not a copy
 
 7. **Check PSP parity** (Quality Gate #1):
-   - For every core feature changed, find the PSP equivalent and compare behavior
+   - **Auto-lookup PSP reference FIRST:** For every core feature changed, find the PSP equivalent by running:
+     ```bash
+     grep -n "<function/class/variable>" UI/<psp_file>.cpp | head -20
+     ```
+     Read the PSP implementation fully BEFORE analyzing the fork's change.
+   - **Create comparison table EARLY** — before writing code analysis, draft the parity table with actual PSP source lines, not assumptions.
    - **Compare EVERY parameter** in Draw() calls — colors, opacity, scale, rotation — not just structure
    - **Never assume** global state (e.g., `GamepadUpdateOpacity`) affects a rendering API — verify by reading the API implementation or comparing PSP's explicit parameter usage
    - Compare: init values, edge case handling, save/exit paths, z-order, opacity
    - If no PSP equivalent exists (e.g., a core-specific feature like low-level audio), verify against established patterns instead
-   - Document any gaps found
+   - Document any gaps found in `docs/agents/psp-knowledge-base.md`
 
 8. **Run anti-hallucination check:**
    - `ImageID("...")` — verify the atlas ID exists
@@ -115,6 +130,8 @@ When the user types `/codereview`, perform a complete code review of the latest 
    - **Multi-Compiler Portability:** PPSSPP builds using Clang (Android/Apple), GCC (Linux), and MSVC (Windows). Verify that code uses standard header inclusions explicitly (e.g. `<algorithm>` for `std::clamp` or `std::min` to support MSVC) and avoids compiler-specific syntax extensions. Flag P1/P4 if found.
 
 9. **Fix verification** (ONLY if a P1/P2 fix was applied):
+   - **Re-build first:** Run `cmake --build <detected_dir> -j$(nproc) 2>&1 | tail -30`. If compile errors → fix immediately (P1).
+   - **Re-run tests:** `python test.py` (or `<detected_dir>/PPSSPPUnitTest ALL` if the unit test binary exists). If tests fail → stop, report regression.
    - Re-read the fixed code block with its surrounding context.
    - Check: does the fix introduce ANY new code path not present before? (Expected for functional fixes; unexpected for surface-level fixes like `.size()` → `4`).
    - Check: are the old callers that relied on the buggy behavior now broken? (Trace callers of the fixed function).
@@ -139,8 +156,8 @@ When the user types `/codereview`, perform a complete code review of the latest 
 
 12. **Fix Re-verification Workflow** — When reviewing a submitted bug fix (not applied by this agent, but presented as a commit to review):
      - **Step A: Understand the fix** — Read the commit message and diff. Identify the root cause and what changed.
-     - **Step B: Re-build** — `cmake --build build` — does the fix compile cleanly? Compare warning count with baseline from Step 0.
-     - **Step C: Re-run tests** — `./build/PPSSPPUnitTest ALL` — do existing tests still pass?
+     - **Step B: Re-build** — `cmake --build <detected_dir>` (use the same auto-detection from Step 0) — does the fix compile cleanly? Compare warning count with baseline from Step 0.
+     - **Step C: Re-run tests** — `python test.py` (headless PSP/core tests) or `<detected_dir>/PPSSPPUnitTest ALL` if the unit test binary exists — do existing tests still pass?
      - **Step D: Regression check** — Does the fix change behavior that callers relied on? Trace all callers of the modified function.
      - **Step E: Edge case verification** — Does the fix handle:
        * Empty/null inputs?
@@ -238,6 +255,13 @@ When the user types `/codereview`, perform a complete code review of the latest 
 ```
 
 > **Apply fixes**: After reporting, apply fixes for all P4 and P5 issues found (unless the fix would alter upstream code — AGENTS.md 🔴 FORBIDDEN). P1/P2 fixes are applied immediately per the Important rules below.
+>
+> **Verify fixes**: After ALL fixes (P1–P5) are applied, run the verification gate:
+> 1. **Re-build:** `cmake --build <detected_dir> -j$(nproc) 2>&1 | tail -30` — must succeed with no new warnings.
+> 2. If compile errors → P1 — fix immediately before proceeding.
+> 3. **Re-run tests:** `python test.py` (or `<detected_dir>/PPSSPPUnitTest ALL` if the unit test binary exists) — must pass.
+> 4. If tests fail → stop. Report the regression. Do NOT proceed to commit.
+> 5. **Re-check PSP parity:** If any fix changes behavior, verify against PSP equivalent again.
 >
 > **After fixing**: Ask the user: *"Fixes applied — commit?"* Do NOT commit without explicit confirmation (AGENTS.md rule).
 
