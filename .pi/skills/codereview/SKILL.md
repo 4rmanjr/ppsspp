@@ -280,7 +280,7 @@ When the user types `/codereview`, perform a complete code review of the latest 
 
 14. **Learning Loop — Auto-improve review patterns**
    - After the report is finalized (and fixes applied if any), extract bug patterns for continuous improvement.
-   - **Pattern Extraction:** For each P1/P2/P3 bug found in the report, classify its pattern type: (Also log P4/P5 if the pattern is NEW — not yet in skill)
+   - **Pattern Extraction:** For each P1/P2/P3 bug found in the report, classify its pattern type: (Also log P4/P5 if the pattern has no detection rule in this skill file yet)
      * **Memory Safety:** buffer overflow, integer wrap, use-after-free, dangling pointer, signed/unsigned mismatch
      * **Logic Error:** wrong formula, incorrect condition, missing guard, off-by-one
      * **PSP Parity Gap:** init value mismatch, missing feature, behavioral difference
