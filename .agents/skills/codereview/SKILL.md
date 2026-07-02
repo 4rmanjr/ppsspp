@@ -12,6 +12,18 @@ When the user types `/codereview`, perform a complete code review of the latest 
 ## What to do
 
 0. **Build Gate — compile first**
+   - **Smart Build Decision — Analyze changes first:**
+     * Run `git diff --name-only HEAD` (or `git status --short` if uncommitted) to identify changed files
+     * Classify file types:
+       - **Docs-only:** `.md`, `.txt`, files in `docs/`, `README`
+       - **Safe:** Comment-only changes, whitespace, formatting (non-semantic only — must not change code behavior)
+       - **Structural:** `CMakeLists.txt`, `.h` headers, new source files, `#ifdef PPSSPP_*` blocks
+       - **Implementation:** `.cpp` files only (no headers)
+     * **Decision logic:**
+       - **SKIP build** if changes are ONLY docs/comments → Report: "⚠️ Build skipped — documentation-only changes (saved 15-20 min)"
+       - **REQUIRE build** if ANY structural changes (CMakeLists, headers, new files, #ifdef blocks)
+       - **CONDITIONAL** if only .cpp implementation (no headers) → Default SKIP (low risk), but flag for user awareness
+     * **Override:** User can force build with explicit request, or skip with confirmation
    - **Check build capability:** Run `which cmake 2>/dev/null`. If `cmake` is not found → skip the build gate entirely (e.g., Termux or other constrained environments). Note in the report: "⚠️ Build gate skipped — cmake not available."
    - **Auto-detect build directory:** If `cmake` is available, find the most appropriate build directory:
      * Priority 1: `build-final` (primary dev build, `PPSSPP_MULTICORE=ON`).
@@ -26,7 +38,7 @@ When the user types `/codereview`, perform a complete code review of the latest 
 1. **Determine what to review**
    - If there are uncommitted changes (`git status --short` shows modified files), review the working tree diff.
    - Otherwise, review the latest commit (`git diff HEAD~1`).
-   - **Commit message check:** Format must follow `[feature/<name>] <desc>` or `fix(<scope>): <desc>`. If not → P5.
+   - **Commit message check:** Format must follow one of: `[feature/<name>] <desc>`, `fix(<scope>): <desc>`, `docs: <desc>`, or `feat(<scope>): <desc>`. If not → P5.
    - **Diff health check:**
      * `git diff --check` — whitespace errors? Flag P5.
      * `grep '<<<<<<< \|=======\|>>>>>>> '` — unresolved merge markers? Flag P1.
@@ -83,7 +95,7 @@ When the user types `/codereview`, perform a complete code review of the latest 
 5. **Runtime, threading & lifecycle checks:**
    - **Race conditions:** If the modified code accesses shared state (audio ring buffer, save state, video output), verify it holds the appropriate mutex or uses an atomic operation. Emulator cores are often multi-threaded (audio on a separate thread). Flag any shared write without a lock as P1.
    - **C++ Memory Management & Ownership:** Verify that raw pointers instantiated with `new` (especially UI views/components) are properly owned by smart pointers or registered with a parent container (e.g. `root_->Add(...)`, `parent->Add(...)`) which manages their deletion. Unmanaged raw pointers cause leaks. Flag P4 if found.
-   - **Orientation Re-creation Safety:** Screen rotation destroys and re-calls `CreateViews()`. Verify that any screen-level raw view pointers (e.g. `resumeButton_` or custom buttons) are either re-bound or reset to `nullptr` to avoid holding dangling references to destroyed views. Flag P2/P3 if found.
+   - **Orientation Re-creation Safety:** Screen rotation destroys and re-calls `CreateViews()`. Verify that any screen-level raw view pointers (e.g. `resumeButton_` or custom buttons) are either re-bound or reset to `nullptr` to avoid holding dangling references to destroyed views. Flag P2 if crash/UB risk, P3 if only visual parity gap.
    - **Core Shutdown & Resource Cleanup:** Verify that custom emulator cores clean up all raw buffers, release active configuration pointers, and stop pushing audio samples when shutting down (e.g. `ShutdownGBA()`) to prevent memory leaks and background processes running after exit. Flag P2 if found.
    - **Thread Safety (UI Thread vs Emu Thread):** Emulator cores run on a separate CPU thread, while UI logic runs on the main/graphics thread. Verify that any state/variables queried or shared between the UI thread and CPU thread are thread-safe (e.g. `std::atomic` or mutex-protected). Flag P2/P4 if found.
    - **No Heap Allocation in Hot Loops:** Hot execution paths (e.g. `UpdateGBA()`, `Draw()`, or per-frame update loops) must NOT perform dynamic memory allocations (`new`, `malloc`, `std::vector::push_back` triggering reallocation, or runtime `std::string` concatenation). Use stack allocation, static buffers, or pre-allocated pools. Flag P4 if found.
@@ -110,7 +122,7 @@ When the user types `/codereview`, perform a complete code review of the latest 
      ```bash
      grep -n "<function/class/variable>" UI/<psp_file>.cpp | head -20
      ```
-     Read the PSP implementation fully BEFORE analyzing the fork's change.
+     Read the PSP implementation fully BEFORE analyzing the fork's change. If no PSP equivalent exists (new core-specific feature), skip PSP parity check and mark as N/A in report.
    - **Create comparison table EARLY** — before writing code analysis, draft the parity table with actual PSP source lines, not assumptions.
    - **Compare EVERY parameter** in Draw() calls — colors, opacity, scale, rotation — not just structure
    - **Never assume** global state (e.g., `GamepadUpdateOpacity`) affects a rendering API — verify by reading the API implementation or comparing PSP's explicit parameter usage
@@ -144,18 +156,18 @@ When the user types `/codereview`, perform a complete code review of the latest 
 
 10. **Categorize issues:**
     - P1: Compile error / crash / memory corruption (must fix NOW)
-    - P1-SEC: Security/safety issue in ROM parsing or untrusted input path (flagged separately, never downgraded)
+    - P1-SEC: Security/safety issue from untrusted input (ROM, save state, network) — input controlled by user/attacker. If bug is from internal variable already validated at init, use P1 instead.
     - P2: Logic error (wrong behavior, incorrect coordinate math, silent UB, endianness mismatch)
     - P3: PSP parity gap (behavior differs from upstream)
     - P4: Code quality (missing guard, fragile pattern, missing bounds clamp)
     - P5: Nitpick (missing marker, naming, minor)
 
-11. **Double-Verification (Pass 2)** — Before writing the final report, run a second verification pass on all findings from Pass 1 using the "Attack & Defend" technique:
+11. **Double-Verification (Pass 2)** — Before writing the final report, run a second verification pass on all findings from Pass 1 using the "Attack & Defend" technique (Attack: "Is this bug REAL?" → Defend: "Is there compensating logic elsewhere?"):
      - **Verify context (not just the diff):** For every P1, P1-SEC, and P2 issue, read at least 20 lines before and after the changed code to ensure no compensating logic already exists elsewhere.
      - **The "Grep" Mandate (anti-hallucination):** If you flag a function as "Deprecated" or "Wrong API", you MUST run `grep -n` or `git log --all -S 'FunctionName'` on the relevant file(s) to empirically verify the function's status before including it in the report.
      - **False Positive Filter:** Re-evaluate every P1-SEC finding (buffer overflow / integer wrap). Ask yourself: "Can this input really be controlled by the user/ROM, or is it an internal variable already validated at init?" If validated at init, downgrade to P4 or remove.
 
-12. **Fix Re-verification Workflow** — When reviewing a submitted bug fix (not applied by this agent, but presented as a commit to review):
+12. **Fix Re-verification Workflow** — When reviewing ANY bug fix (applied by this agent or submitted as a commit):
      - **Step A: Understand the fix** — Read the commit message and diff. Identify the root cause and what changed.
      - **Step B: Re-build** — `cmake --build <detected_dir>` (use the same auto-detection from Step 0) — does the fix compile cleanly? Compare warning count with baseline from Step 0.
      - **Step C: Re-run tests** — `python test.py` (headless PSP/core tests) or `<detected_dir>/PPSSPPUnitTest ALL` if the unit test binary exists — do existing tests still pass?
@@ -266,7 +278,63 @@ When the user types `/codereview`, perform a complete code review of the latest 
 >
 > **After fixing**: Ask the user: *"Fixes applied — commit?"* Do NOT commit without explicit confirmation (AGENTS.md rule).
 
-## Important rules
+14. **Learning Loop — Auto-improve review patterns**
+   - After the report is finalized (and fixes applied if any), extract bug patterns for continuous improvement.
+   - **Pattern Extraction:** For each P1/P2/P3 bug found in the report, classify its pattern type (1 pattern = 1 bug category, not per-location). (Also log P4/P5 if the pattern has no detection rule in this skill file yet)
+     * **Memory Safety:** buffer overflow, integer wrap, use-after-free, dangling pointer, signed/unsigned mismatch
+     * **Logic Error:** wrong formula, incorrect condition, missing guard, off-by-one
+     * **PSP Parity Gap:** init value mismatch, missing feature, behavioral difference
+     * **Threading:** race condition, missing lock, deadlock risk
+     * **Android/JNI:** lifecycle issue, JNI leak, ANR risk
+     * **Config/State:** migration missing, save/load mismatch, default inconsistency
+     * **Platform:** endianness, compiler portability, narrowing conversion
+   - **Pattern Check:** For each extracted pattern, check if the codereview skill already has a detection rule for it:
+     * Search the skill file for keywords related to the pattern (e.g., "buffer overflow", "integer wrap", "parity gap")
+     * If a detection rule exists → skip (already covered)
+     * If NO detection rule exists → this is a NEW pattern that slipped through
+   - **Skill Update (if new pattern found):**
+     * Add the new detection rule to the appropriate section of this skill file
+     * Applies to ALL severity levels (P1-P5) — if pattern is NEW, add it regardless of severity
+     * Use surgical edit (NOT full rewrite) — add to the relevant check section (e.g., Step 3 for memory, Step 4 for core-specific, Step 5 for threading)
+     * Tag with: `// [PPSSPP-FORK] Learning Loop: <pattern description>`
+     * Verify file size stays under 600 lines after addition
+   - **Log to progress-gba-support.md:**
+     * Append to the "Code Review Learning Log" section
+     * Format: `| <date> | <bug summary> | <pattern type> | <P-level> | <file:line> | <skill updated: yes/no> |`
+     * If skill was updated, also note the section and line number where the rule was added
+   - **Rolling Window (max 50 entries):**
+     * After logging, count entries: `grep -c '^| 20[0-9][0-9]-' docs/progress-gba-support.md`
+     * If entries > 50 → archive oldest entries:
+       1. Determine archive file: `docs/agents/codereview-archive/YYYY-HN.md` (H1=Jan-Jun, H2=Jul-Dec)
+       2. Extract entries older than newest 20: keep newest 20 in file, move rest to archive
+       3. Append to archive with header: `## Entries <start_date> to <end_date>`
+       4. Update Statistics Summary in progress-gba-support.md
+     * If archive file doesn't exist → create it with header: `# Code Review Archive — YYYY`
+     * Archive command example:
+       ```bash
+       # Count entries
+       entries=$(grep -c '^| 20[0-9][0-9]-' docs/progress-gba-support.md)
+       if [ "$entries" -gt 50 ]; then
+         # Get archive filename (H1 or H2 based on current month)
+         month=$(date +%m)
+         if [ "$month" -le 6 ]; then period="H1"; else period="H2"; fi
+         archive="docs/agents/codereview-archive/$(date +%Y)-${period}.md"
+         # Create archive if needed
+         if [ ! -f "$archive" ]; then
+           echo "# Code Review Archive — $(date +%Y)" > "$archive"
+         fi
+         # Extract oldest entries (skip newest 20)
+         grep '^| 20[0-9][0-9]-' docs/progress-gba-support.md | head -n -20 >> "$archive"
+         # Keep newest 20 in main file (rebuild section)
+       fi
+       ```
+   - **Statistics Summary (update after each log):**
+     * Total bugs found (all time)
+     * Bugs per pattern type (count)
+     * Top 5 files with most bugs — calculate with: `grep '^| 20' docs/progress-gba-support.md | awk -F'|' '{print $6}' | sort | uniq -c | sort -rn | head -5`
+     * Skill update count
+     * Last archive period
+   - **Purpose:** Every bug found makes future reviews stronger. Patterns that slipped through once get caught automatically next time. Rolling window keeps file manageable while archive preserves history.
 
 - Be thorough. Check every changed line, not just the diff overview.
 - Trace full code paths, not just isolated changes.
@@ -276,7 +344,7 @@ When the user types `/codereview`, perform a complete code review of the latest 
   3. Do NOT assume `GamepadUpdateOpacity()` or similar global state automatically applies to all draw calls
 - **Parameter-level comparison:** When comparing PSP vs forked Draw() overrides, compare every single argument passed to every API call. "Similar structure" is NOT sufficient — check colors, opacity, scale, rotation individually.
 - **ROM/untrusted input is always hostile.** Any value read from ROM, save state, or network that becomes a size, index, or pointer is untrusted. Treat it as attacker-controlled. A missing bounds check in ROM parsing is always P1-SEC, not P4.
-- **"Core-agnostic" means run the generic checks first, then the core-specific checklist.** Never skip the core-specific table — timing bugs and DMA alignment bugs only manifest on the specific core they target.
+- **"Core-agnostic" means run the generic checks first, then the core-specific checklist.** Skip core-specific checks ONLY if the change is purely generic (no core-specific code paths touched). Timing bugs and DMA alignment bugs only manifest on the specific core they target.
 - The user should not need to ask follow-up questions — the review should be complete and actionable.
 - If you find a P1 bug, fix it immediately and report the fix.
 - Fix P4/P5 issues after reporting, before asking to commit. Do not ask to commit with unaddressed P4/P5 items.
