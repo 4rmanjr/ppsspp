@@ -285,6 +285,25 @@ Log ini terhubung dengan skill codereview — jika pattern baru ditemukan, skill
 | Date | Bug Summary | Pattern Type | P-Level | File:Line | Skill Updated | Note |
 |------|-------------|--------------|---------|-----------|---------------|------|
 
+### Statistics Summary
+
+<!-- Updated automatically after each log entry -->
+| Metric | Value |
+|--------|-------|
+| Total bugs found | 0 |
+| Memory Safety | 0 |
+| Logic Error | 0 |
+| PSP Parity Gap | 0 |
+| Threading | 0 |
+| Android/JNI | 0 |
+| Config/State | 0 |
+| Platform | 0 |
+| Skill updates | 0 |
+| Last archive | None |
+| Archive location | `docs/agents/codereview-archive/` |
+
+**Rolling Window:** Max 50 entries di file ini. Entry lebih lama di-archive ke `docs/agents/codereview-archive/YYYY-HN.md` (H1=Jan-Jun, H2=Jul-Dec).
+
 ---
 
 ## Adding Future Cores (Recent Files Grouping)

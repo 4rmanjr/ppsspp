@@ -301,7 +301,21 @@ When the user types `/codereview`, perform a complete code review of the latest 
      * Append to the "Code Review Learning Log" section
      * Format: `| <date> | <bug summary> | <pattern type> | <P-level> | <file:line> | <skill updated: yes/no> |`
      * If skill was updated, also note the section and line number where the rule was added
-   - **Purpose:** Every bug found makes future reviews stronger. Patterns that slipped through once get caught automatically next time.
+   - **Rolling Window (max 50 entries):**
+     * After logging, count entries: `grep -c '^| 20[0-9][0-9]-' docs/progress-gba-support.md`
+     * If entries > 50 → archive oldest entries:
+       1. Determine archive file: `docs/agents/codereview-archive/YYYY-HN.md` (H1=Jan-Jun, H2=Jul-Dec)
+       2. Extract entries older than newest 20: keep newest 20 in file, move rest to archive
+       3. Append to archive with header: `## Entries <start_date> to <end_date>`
+       4. Update Statistics Summary in progress-gba-support.md
+     * If archive file doesn't exist → create it with header: `# Code Review Archive — YYYY`
+   - **Statistics Summary (update after each log):**
+     * Total bugs found (all time)
+     * Bugs per pattern type (count)
+     * Top 5 files with most bugs
+     * Skill update count
+     * Last archive period
+   - **Purpose:** Every bug found makes future reviews stronger. Patterns that slipped through once get caught automatically next time. Rolling window keeps file manageable while archive preserves history.
 
 - Be thorough. Check every changed line, not just the diff overview.
 - Trace full code paths, not just isolated changes.
