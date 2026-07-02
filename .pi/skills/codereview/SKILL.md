@@ -280,7 +280,7 @@ When the user types `/codereview`, perform a complete code review of the latest 
 
 14. **Learning Loop — Auto-improve review patterns**
    - After the report is finalized (and fixes applied if any), extract bug patterns for continuous improvement.
-   - **Pattern Extraction:** For each P1/P2/P3 bug found in the report, classify its pattern type:
+   - **Pattern Extraction:** For each P1/P2/P3 bug found in the report, classify its pattern type: (Also log P4/P5 if the pattern is NEW — not yet in skill)
      * **Memory Safety:** buffer overflow, integer wrap, use-after-free, dangling pointer, signed/unsigned mismatch
      * **Logic Error:** wrong formula, incorrect condition, missing guard, off-by-one
      * **PSP Parity Gap:** init value mismatch, missing feature, behavioral difference
@@ -294,6 +294,7 @@ When the user types `/codereview`, perform a complete code review of the latest 
      * If NO detection rule exists → this is a NEW pattern that slipped through
    - **Skill Update (if new pattern found):**
      * Add the new detection rule to the appropriate section of this skill file
+     * Applies to ALL severity levels (P1-P5) — if pattern is NEW, add it regardless of severity
      * Use surgical edit (NOT full rewrite) — add to the relevant check section (e.g., Step 3 for memory, Step 4 for core-specific, Step 5 for threading)
      * Tag with: `// [PPSSPP-FORK] Learning Loop: <pattern description>`
      * Verify file size stays under 600 lines after addition
