@@ -15,6 +15,7 @@ This is a PPSSPP fork with custom features that **must remain compatible** with 
 |------|---------|
 | **`AGENTS.md`** (this) | Priorities + FORBIDDEN/REQUIRED rules + navigation to detail rules |
 | [`docs/agents/quality-gates.md`](docs/agents/quality-gates.md) | **3 Quality Gates**: PSP Feature Parity, Code Review, PSP Parity for new cores |
+| [`docs/agents/codereview-procedure.md`](docs/agents/codereview-procedure.md) | **Code Review Procedure**: Automated compliance verification, smart build decision, PSP parity checks |
 | [`docs/agents/extensibility.md`](docs/agents/extensibility.md) | **Extensibility Architecture**: CoreButtonRegistry, generic classes, step-by-step new core guide |
 | [`docs/agents/psp-knowledge-base.md`](docs/agents/psp-knowledge-base.md) | **Catalog** of PSP-GBA mismatches that have been fixed |
 | [`docs/agents/code-standards.md`](docs/agents/code-standards.md) | C++ coding standards, naming, platform handling |
