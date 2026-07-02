@@ -12,6 +12,18 @@ When the user types `/codereview`, perform a complete code review of the latest 
 ## What to do
 
 0. **Build Gate — compile first**
+   - **Smart Build Decision — Analyze changes first:**
+     * Run `git diff --name-only HEAD` (or `git status --short` if uncommitted) to identify changed files
+     * Classify file types:
+       - **Docs-only:** `.md`, `.txt`, files in `docs/`, `README`
+       - **Safe:** Comment-only changes, whitespace, formatting
+       - **Structural:** `CMakeLists.txt`, `.h` headers, new source files, `#ifdef PPSSPP_*` blocks
+       - **Implementation:** `.cpp` files only (no headers)
+     * **Decision logic:**
+       - **SKIP build** if changes are ONLY docs/comments → Report: "⚠️ Build skipped — documentation-only changes (saved 15-20 min)"
+       - **REQUIRE build** if ANY structural changes (CMakeLists, headers, new files, #ifdef blocks)
+       - **CONDITIONAL** if only .cpp implementation (no headers) → Default SKIP (low risk), but flag for user awareness
+     * **Override:** User can force build with explicit request, or skip with confirmation
    - **Check build capability:** Run `which cmake 2>/dev/null`. If `cmake` is not found → skip the build gate entirely (e.g., Termux or other constrained environments). Note in the report: "⚠️ Build gate skipped — cmake not available."
    - **Auto-detect build directory:** If `cmake` is available, find the most appropriate build directory:
      * Priority 1: `build-final` (primary dev build, `PPSSPP_MULTICORE=ON`).
