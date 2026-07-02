@@ -427,6 +427,53 @@ void GamePauseScreen::OnVKey(VirtKey virtualKeyCode, bool down) {
 **Not a fork bug** — this is upstream PPSSPP behavior (`GamePauseScreen::OnVKey`).
 Fork's ESC handler in `key()` for GBA does not cause this.
 
+## Known Issue: GBA Freeze/Hang on Device 🚨
+
+**Affects:** Android (SM-A057F, Android 15, arm64-v8a)
+**Severity:** Blocker — GBA mode unusable on device
+**Date discovered:** 2026-07-02
+
+### Symptom
+
+Setelah GBA ROM (Pokemon Emerald) dipilih dari game list:
+1. Config berhasil load: `[CONFIG] LoadConfig(GBA)` ✅
+2. Views berhasil dibuat: `[GBA] CreateViews: GBA mode` ✅
+3. mGBA core berhasil initsialisi: `coreRate=65536` (mGBA native rate) ✅
+4. **Frame 1 dirender tapi putih**: `raw[0]=0x00FFFFFF`, audio `first=[0,0] last=[0,0]`
+5. **Hanya 1 frame yang di-render**, lalu log berhenti total
+6. App hang/freeze — layar putih dengan PPSSPP menu masih visible
+7. Touch events tercatat tapi tidak ada response
+8. Audio chunks terus di-push (pairs=64) tapi isinya nol
+
+### Analisis Awal
+
+**Root cause kemungkinan:**
+- `ComputeGBAFramesToRun()` return 0 setelah frame 1 (timing issue?)
+- mGBA core `RunFrame()` tidak produce output yang benar (video putih, audio silent)
+- `GBACore::Render()` mungkin stuck di `InitRendering()` atau `draw->UpdateTextureLevels()`
+- `UpdateGBA()` hanya execute sekali lalu tidak dipanggil lagi (screen pop/stack issue?)
+
+**Yang sudah di-fix sebelumnya:**
+- `stagingBuffer_[64*2]` → `stagingBuffer_[TARGET_PAIRS*2]` (buffer overflow fix)
+- Crash SIGSEGV sudah hilang, tapi hang masih ada
+
+**Log terakhir sebelum freeze:**
+```
+[GBA] Render frame 1: raw[0]=0x00FFFFFF  ← putih
+[GBA] Audio frame 1: coreAvail=136 coreRate=65536 outPairs=76/735 first=[0,0] last=[0,0]  ← silent
+[GBA] Audio chunk: pairs=64 volume=1.00  ← terus push tapi nol
+```
+
+### Next Steps untuk Debug
+
+1. **Add log di `UpdateGBA()`** — log `framesToRun` value setiap call
+2. **Add log di `ComputeGBAFramesToRun()`** — log `now`, `lastFrameTime`, `targetInterval`
+3. **Check `EmuScreen::update()` flow** — apakah `IsGBA() && activeCore_` masih true setelah frame 1
+4. **Check screen stack** — apakah ada screen lain yang pop EmuScreen
+5. **Test di desktop (Linux/SDL)** — apakah GBA jalan di PC?
+
+---
+
 ## Build & Run
 
 ```bash
