@@ -128,3 +128,4 @@ Output APK: `android/build/outputs/apk/gold/release/android-gold-release-unsigne
 | Unsure about constructor/class/ImageID | [`quality-gates.md`](docs/agents/quality-gates.md) — Anti-Hallucination Rule |
 | Viewing fixed PSP mismatches | [`psp-knowledge-base.md`](docs/agents/psp-knowledge-base.md) |
 | Merging upstream | [`fork-maintenance.md`](docs/agents/fork-maintenance.md) |
+| Code review found a bug | [`progress-gba-support.md`](docs/progress-gba-support.md) — Code Review Learning Log (auto-update skill) |

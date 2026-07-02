@@ -278,7 +278,30 @@ When the user types `/codereview`, perform a complete code review of the latest 
 >
 > **After fixing**: Ask the user: *"Fixes applied — commit?"* Do NOT commit without explicit confirmation (AGENTS.md rule).
 
-## Important rules
+14. **Learning Loop — Auto-improve review patterns**
+   - After the report is finalized (and fixes applied if any), extract bug patterns for continuous improvement.
+   - **Pattern Extraction:** For each P1/P2/P3 bug found in the report, classify its pattern type:
+     * **Memory Safety:** buffer overflow, integer wrap, use-after-free, dangling pointer, signed/unsigned mismatch
+     * **Logic Error:** wrong formula, incorrect condition, missing guard, off-by-one
+     * **PSP Parity Gap:** init value mismatch, missing feature, behavioral difference
+     * **Threading:** race condition, missing lock, deadlock risk
+     * **Android/JNI:** lifecycle issue, JNI leak, ANR risk
+     * **Config/State:** migration missing, save/load mismatch, default inconsistency
+     * **Platform:** endianness, compiler portability, narrowing conversion
+   - **Pattern Check:** For each extracted pattern, check if the codereview skill already has a detection rule for it:
+     * Search the skill file for keywords related to the pattern (e.g., "buffer overflow", "integer wrap", "parity gap")
+     * If a detection rule exists → skip (already covered)
+     * If NO detection rule exists → this is a NEW pattern that slipped through
+   - **Skill Update (if new pattern found):**
+     * Add the new detection rule to the appropriate section of this skill file
+     * Use surgical edit (NOT full rewrite) — add to the relevant check section (e.g., Step 3 for memory, Step 4 for core-specific, Step 5 for threading)
+     * Tag with: `// [PPSSPP-FORK] Learning Loop: <pattern description>`
+     * Verify file size stays under 600 lines after addition
+   - **Log to progress-gba-support.md:**
+     * Append to the "Code Review Learning Log" section
+     * Format: `| <date> | <bug summary> | <pattern type> | <P-level> | <file:line> | <skill updated: yes/no> |`
+     * If skill was updated, also note the section and line number where the rule was added
+   - **Purpose:** Every bug found makes future reviews stronger. Patterns that slipped through once get caught automatically next time.
 
 - Be thorough. Check every changed line, not just the diff overview.
 - Trace full code paths, not just isolated changes.

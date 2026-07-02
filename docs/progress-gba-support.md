@@ -262,6 +262,31 @@ Refactor yang dibutuhkan:
 
 ---
 
+## Code Review Learning Log
+
+Setiap bug yang ditemukan selama `/codereview` akan dicatat di sini untuk continuous improvement.
+Log ini terhubung dengan skill codereview — jika pattern baru ditemukan, skill akan di-update otomatis.
+
+### Pattern Types
+
+| Pattern | Description | Skill Section |
+|---------|-------------|---------------|
+| Memory Safety | Buffer overflow, integer wrap, use-after-free, dangling pointer | Step 3 |
+| Logic Error | Wrong formula, incorrect condition, missing guard | Step 2 |
+| PSP Parity Gap | Init value mismatch, missing feature, behavioral difference | Step 7 |
+| Threading | Race condition, missing lock, deadlock risk | Step 5 |
+| Android/JNI | Lifecycle issue, JNI leak, ANR risk | Step 5 |
+| Config/State | Migration missing, save/load mismatch, default inconsistency | Step 2 |
+| Platform | Endianness, compiler portability, narrowing conversion | Step 3 |
+
+### Log Entries
+
+<!-- Entries added automatically by /codereview Learning Loop (Step 14) -->
+| Date | Bug Summary | Pattern Type | P-Level | File:Line | Skill Updated | Note |
+|------|-------------|--------------|---------|-----------|---------------|------|
+
+---
+
 ## Adding Future Cores (Recent Files Grouping)
 
 `RecentFilesRegistry` (`EmuCore/RecentFilesRegistry.h/.cpp`) adalah registry terpusat
