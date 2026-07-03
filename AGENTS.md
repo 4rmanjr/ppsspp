@@ -120,4 +120,4 @@ Output APK: `android/build/outputs/apk/gold/release/android-gold-release-unsigne
 | Adding a new emulator (N64, PS1, etc.) | [`extensibility.md`](docs/agents/extensibility.md) + [`quality-gates.md`](docs/agents/quality-gates.md) — Gate #3 |
 | Unsure about constructor/class/ImageID | [`quality-gates.md`](docs/agents/quality-gates.md) — Anti-Hallucination Rule |
 | Merging upstream | [`fork-maintenance.md`](docs/agents/fork-maintenance.md) |
-| Code review found a bug | [`progress-gba-support.md`](docs/progress-gba-support.md) — Code Review Learning Log (auto-update skill) |
+| Code review found a bug | [`codereview-log.md`](docs/agents/codereview-log.md) — Code Review Learning Log (auto-update skill) |

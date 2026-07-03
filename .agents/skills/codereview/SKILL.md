@@ -1,13 +1,13 @@
 ---
 name: codereview
-description: Review the latest changes for bugs, regressions, and PSP parity violations across ALL cores (GBA, N64, PS1, NDS, etc.). Runs Quality Gate #2 from AGENTS.md.
+description: Review the latest changes for bugs, regressions, and PSP parity violations across ALL cores (N64, PS1, NDS, etc.). Runs Quality Gate #2 from AGENTS.md.
 ---
 
 // [PPSSPP-FORK] Codereview: code review skill
 
 # Code Review — Quality Gate Check (All Cores)
 
-When the user types `/codereview`, perform a complete code review of the latest changes. This skill is **core-agnostic** — it applies to any non-PSP emulator (GBA, N64, PS1, NDS, SNES, etc.).
+When the user types `/codereview`, perform a complete code review of the latest changes. This skill is **core-agnostic** — it applies to any non-PSP emulator (N64, PS1, NDS, SNES, etc.).
 
 ## What to do
 
@@ -53,7 +53,7 @@ When the user types `/codereview`, perform a complete code review of the latest 
    - **`.size()` type check:** Before reading code that calls `.size()` on a value, verify the type supports it. Plain C arrays (`Type arr[N]`) have NO `.size()` member — this is a P1 compile error. When in doubt, `grep -n 'arr\['` on the declaration to confirm it's a vector, not a C array.
    - **`std::string_view` lifetime check:** When instantiating `ImageID` (which wraps `std::string_view`), verify the target string's lifetime. Creating `ImageID` from a temporary string concatenation (e.g. `std::string(def->bgID) + "_LINE"`) creates a dangling pointer when the temporary string is destroyed. Use static string literals or persistent mappings instead. Flag P1/P2 if found.
    - **Division-by-zero in GLSL:** Scan `.fsh` files for `1.0 /` or `1.0f /` expressions. Verify the divisor is guarded (e.g., `if (gamma > 0.01)` or slider range > 0). If unguarded, flag P4.
-    - **Cross-file string consistency:** When code matches on string literals (e.g., `info.section == "GBALCD"`), verify the actual value by reading the source that produces it — INI section name, enum stringification, const/define. A mismatch is P2 (silent logic error).
+    - **Cross-file string consistency:** When code matches on string literals (e.g., `info.section == "SAVEDATA"`), verify the actual value by reading the source that produces it — INI section name, enum stringification, const/define. A mismatch is P2 (silent logic error).
     - **Config field completeness:** For every new field added to `Config.h`, verify:
       * ✅ Saved in `Config.cpp` (Set call)
       * ✅ Loaded in `Config.cpp` (Get call)
@@ -86,7 +86,6 @@ When the user types `/codereview`, perform a complete code review of the latest 
    | Core | Key checks |
    |------|-----------|
    | **LAN Sync** | Thread safety (network thread vs UI thread). TLS cert lifecycle. mDNS/UDP discovery edge cases. HLC clock skew. HTTP handler error paths. Android JNI local ref cleanup. Save state file atomicity during sync. |
-   | **GBA** | *(N/A on feature/lan-sync)* Prefetch buffer timing. BIOS call stubs. Cartridge save type detection. |
    | **N64** | *(N/A on feature/lan-sync)* TLB miss handling. RDP/RSP command buffer bounds. DMA alignment. |
    | **NDS** | *(N/A on feature/lan-sync)* ARM9/ARM7 dual-CPU sync. FIFO overflow. GPU command FIFO bounds. |
    | **PS1** | *(N/A on feature/lan-sync)* CD-ROM sector buffer. GTE fixed-point overflow. MDEC DMA alignment. |
@@ -136,7 +135,7 @@ When the user types `/codereview`, perform a complete code review of the latest 
    - **Never assume** global state (e.g., `GamepadUpdateOpacity`) affects a rendering API — verify by reading the API implementation or comparing PSP's explicit parameter usage
    - Compare: init values, edge case handling, save/exit paths, z-order, opacity
    - If no PSP equivalent exists (e.g., a core-specific feature like low-level audio), verify against established patterns instead
-   - Document any gaps found in `docs/agents/psp-knowledge-base.md`
+    - Document any gaps found in `docs/agents/codereview-log.md`
 
 8. **Run anti-hallucination check:**
    - `ImageID("...")` — verify the atlas ID exists

@@ -57,7 +57,7 @@ Not everything in PSP applies to other cores. Filter:
 
 ### 4. Log Mismatches to PSP Knowledge Base
 
-Every time you find an unintentional behavioral difference (bug), log it in [`psp-knowledge-base.md`](psp-knowledge-base.md):
+Every time you find an unintentional behavioral difference (bug), log it in [`codereview-log.md`](codereview-log.md):
 
 ```
 # File: UI/CoreTouchLayoutScreen.cpp

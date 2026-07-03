@@ -201,14 +201,14 @@ Compare one-by-one with PSP:
 
 **3d. Check Knowledge Base**
 ```bash
-grep -i "<feature_name>" docs/agents/psp-knowledge-base.md
+grep -i "<feature_name>" docs/agents/codereview-log.md
 ```
 Look for known patterns and common pitfalls.
 
 **3e. Flag Mismatches**
 Any behavioral difference = **P1 (Major)** issue.
 
-Log new mismatches to `docs/agents/psp-knowledge-base.md`:
+Log new mismatches to `docs/agents/codereview-log.md`:
 ```markdown
 ## <Feature> <aspect> mismatch — ❌ Found / ✅ Fixed
 
@@ -519,6 +519,6 @@ jobs:
 
 - [AGENTS.md](../AGENTS.md) — Overview and navigation
 - [quality-gates.md](quality-gates.md) — Quality Gate #2 (this procedure implements it)
-- [psp-knowledge-base.md](psp-knowledge-base.md) — Known PSP parity issues
+- [codereview-log.md](codereview-log.md) — Known PSP parity issues and learning log
 - [fork-maintenance.md](fork-maintenance.md) — Upstream merge strategy
 - [extensibility.md](extensibility.md) — Architecture patterns to verify
