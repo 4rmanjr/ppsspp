@@ -21,3 +21,5 @@ Track bug patterns found during code reviews for continuous improvement.
 | 2026-07-03 | Custom files in Core/ directory | AGENTS.md | P5 | Core/SaveStateLANSync.* | no (existing rule) |
 | 2026-07-03 | PPSSPP_LANSYNC feature flag not implemented | AGENTS.md | P5 | N/A | no (existing rule) |
 | 2026-07-03 | [FIXED] Files moved from Core/ to LANSync/ + feature flag + [PPSSPP-FORK] markers added | Refactor | P0 | Core/* → LANSync/* | yes |
+| 2026-07-03 | [SKILL UPDATE] Added atoi()/strtol() validation rule | Learning Loop | P1-SEC | SKILL.md:80 | yes (Step 3) |
+| 2026-07-03 | [SKILL UPDATE] Added fprintf vs INFO_LOG rule | Learning Loop | P5 | SKILL.md:143 | yes (Step 5) |

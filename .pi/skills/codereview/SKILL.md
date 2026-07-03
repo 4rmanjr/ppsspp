@@ -80,6 +80,8 @@ When the user types `/codereview`, perform a complete code review of the latest 
    - **Signed/unsigned mismatch in comparisons:** `if (idx < arr.size())` where `idx` is `int` silently wraps for negative values. Verify loop indices are unsigned or guarded with `>= 0`.
    - **Undefined behavior (C++ UB):** Flag signed integer overflow, left-shift into sign bit, and `reinterpret_cast` patterns that violate strict aliasing. These are P2 — they compile and run until optimizations break them.
    - **Endianness:** When touching memory read/write helpers (e.g., `Memory::Read32`, `MMU::Write16`), verify the byte-swap macro matches the target CPU's endianness. A missing `bswap` on a big-endian core (N64, GC) silently corrupts data.
+   - **`atoi()`/`strtol()`/`strtoull()` from untrusted input without validation:** When parsing numeric data from HTTP, network, or save state metadata with `atoi()` / `strtol()` / `strtoull()`, verify the result is validated (range check, `errno` check, or use `std::from_chars` which reports errors natively). `atoi()` returns 0 on failure silently — indistinguishable from a valid 0. From network/untrusted input, flag P1-SEC. From internal validated data, flag P4.
+   - // [PPSSPP-FORK] Learning Loop: atoi()/strtol() from untrusted input without validation
 
 4. **Core-specific checks** — After identifying which core the change targets, run the corresponding checklist:
 
@@ -110,6 +112,8 @@ When the user types `/codereview`, perform a complete code review of the latest 
     - **Platform parity violation:** When custom code uses `#if PPSSPP_PLATFORM(ANDROID)` or `#if PPSSPP_PLATFORM(LINUX)`, verify there's an `#else` branch that handles the other platform. Feature logic that only runs on one platform without justification violates AGENTS.md Platform Parity rule. Flag P2 if found.
     - **Missing platform fallback:** When custom code calls platform-specific APIs (mDNS, key storage, firewall), verify there's a fallback for other platforms. E.g., mDNS on Android (NsdManager) needs mDNS on Linux (Avahi) or UDP broadcast fallback. Flag P3 if missing.
     - **UI dialog gap:** When a UI dialog exists on one platform (Linux/SDL ImGui) but not on Android, flag P4. Core logic must be identical; only UI layer may differ. Check: settings, pairing, progress, conflict dialogs.
+    - **Logging framework consistency:** `fprintf(stderr)` or `printf()` should NOT be used for diagnostics in LAN sync or emulator code. Use `INFO_LOG()`, `WARN_LOG()`, `ERROR_LOG()` from `Common/Log.h` instead. `fprintf` bypasses the logging system (no filtering, no log levels, no rotation). Flag P5.
+   - // [PPSSPP-FORK] Learning Loop: fprintf(stderr) vs INFO_LOG
 
 6. **Check against AGENTS.md rules:**
    - 🔴 FORBIDDEN: No upstream code deleted/modified/restructured
