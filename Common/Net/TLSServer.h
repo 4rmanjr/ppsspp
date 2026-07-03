@@ -60,9 +60,9 @@ public:
 	void CloseTLS(int fd);
 
 private:
-	void *sslCtx_;  // SSL_CTX* (opaque, avoid OpenSSL header in .h)
-	void *cert_;    // X509*
-	void *pkey_;    // EVP_PKEY*
+	[[maybe_unused]] void *sslCtx_;  // SSL_CTX* (opaque, avoid OpenSSL header in .h) — used via casts in .cpp
+	[[maybe_unused]] void *cert_;    // X509*
+	[[maybe_unused]] void *pkey_;    // EVP_PKEY*
 	std::string fingerprint_;
 	std::map<int, void *> sslMap_;  // fd -> SSL* for lifecycle management
 };
