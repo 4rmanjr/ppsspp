@@ -26,7 +26,7 @@ When the user types `/codereview`, perform a complete code review of the latest 
      * **Override:** User can force build with explicit request, or skip with confirmation
    - **Check build capability:** Run `which cmake 2>/dev/null`. If `cmake` is not found → skip the build gate entirely (e.g., Termux or other constrained environments). Note in the report: "⚠️ Build gate skipped — cmake not available."
    - **Auto-detect build directory:** If `cmake` is available, find the most appropriate build directory:
-     * Priority 1: `build-final` (primary dev build, `PPSSPP_MULTICORE=ON`).
+     * Priority 1: `build` (primary dev build).
      * Priority 2: `build-*` with most recent `CMakeCache.txt` (fallback).
      * Verify the detected dir has `CMakeCache.txt`. If none found, skip the build gate with a note.
    - Run `cmake --build <detected_dir> -j$(nproc) 2>&1 | tail -30`. Check for compile errors.
@@ -85,20 +85,21 @@ When the user types `/codereview`, perform a complete code review of the latest 
 
    | Core | Key checks |
    |------|-----------|
-   | **GBA** | Prefetch buffer timing (code in ROM vs IWRAM has different cycle counts). BIOS call stubs. Cartridge save type detection from ROM header — verify bounds on header field reads. |
-   | **N64** | TLB miss handling in virtual→physical address translation. RDP/RSP command buffer bounds. DMA transfer size must be a multiple of 8 bytes — flag any `dmaLen` set from game data without alignment check. |
-   | **NDS** | ARM9/ARM7 dual-CPU sync — shared WRAM access must be atomic or protected. FIFO queue overflow guard. GPU command FIFO — verify no write past end of 256-entry buffer. |
-   | **PS1** | CD-ROM sector buffer (2048 bytes) — verify all sector reads clamp to this size. GTE fixed-point overflow on coordinate transforms. MDEC DMA transfer alignment. |
-   | **SNES** | SA-1/SuperFX co-processor clock ratio must stay in sync with main CPU. DMA general purpose register shadowing — a write to `$420B` triggers DMA, verify the HDMA table pointer is valid. |
+   | **LAN Sync** | Thread safety (network thread vs UI thread). TLS cert lifecycle. mDNS/UDP discovery edge cases. HLC clock skew. HTTP handler error paths. Android JNI local ref cleanup. Save state file atomicity during sync. |
+   | **GBA** | *(N/A on feature/lan-sync)* Prefetch buffer timing. BIOS call stubs. Cartridge save type detection. |
+   | **N64** | *(N/A on feature/lan-sync)* TLB miss handling. RDP/RSP command buffer bounds. DMA alignment. |
+   | **NDS** | *(N/A on feature/lan-sync)* ARM9/ARM7 dual-CPU sync. FIFO overflow. GPU command FIFO bounds. |
+   | **PS1** | *(N/A on feature/lan-sync)* CD-ROM sector buffer. GTE fixed-point overflow. MDEC DMA alignment. |
+   | **SNES** | *(N/A on feature/lan-sync)* SA-1/SuperFX clock ratio. DMA register shadowing. HDMA table pointer. |
    | **Generic** | If the core is not listed above, apply: buffer bounds, integer wrap, null pointer, and endianness checks as above. |
 
 5. **Runtime, threading & lifecycle checks:**
    - **Race conditions:** If the modified code accesses shared state (audio ring buffer, save state, video output), verify it holds the appropriate mutex or uses an atomic operation. Emulator cores are often multi-threaded (audio on a separate thread). Flag any shared write without a lock as P1.
    - **C++ Memory Management & Ownership:** Verify that raw pointers instantiated with `new` (especially UI views/components) are properly owned by smart pointers or registered with a parent container (e.g. `root_->Add(...)`, `parent->Add(...)`) which manages their deletion. Unmanaged raw pointers cause leaks. Flag P4 if found.
    - **Orientation Re-creation Safety:** Screen rotation destroys and re-calls `CreateViews()`. Verify that any screen-level raw view pointers (e.g. `resumeButton_` or custom buttons) are either re-bound or reset to `nullptr` to avoid holding dangling references to destroyed views. Flag P2 if crash/UB risk, P3 if only visual parity gap.
-   - **Core Shutdown & Resource Cleanup:** Verify that custom emulator cores clean up all raw buffers, release active configuration pointers, and stop pushing audio samples when shutting down (e.g. `ShutdownGBA()`) to prevent memory leaks and background processes running after exit. Flag P2 if found.
-   - **Thread Safety (UI Thread vs Emu Thread):** Emulator cores run on a separate CPU thread, while UI logic runs on the main/graphics thread. Verify that any state/variables queried or shared between the UI thread and CPU thread are thread-safe (e.g. `std::atomic` or mutex-protected). Flag P2/P4 if found.
-   - **No Heap Allocation in Hot Loops:** Hot execution paths (e.g. `UpdateGBA()`, `Draw()`, or per-frame update loops) must NOT perform dynamic memory allocations (`new`, `malloc`, `std::vector::push_back` triggering reallocation, or runtime `std::string` concatenation). Use stack allocation, static buffers, or pre-allocated pools. Flag P4 if found.
+   - **Core Shutdown & Resource Cleanup:** Verify that custom emulator cores clean up all raw buffers, release active configuration pointers, and stop pushing audio samples when shutting down to prevent memory leaks and background processes running after exit. For LAN sync: verify server sockets, mDNS announcements, and background threads are properly stopped. Flag P2 if found.
+   - **Thread Safety (UI Thread vs Emu Thread):** Emulator cores run on a separate CPU thread, while UI logic runs on the main/graphics thread. Verify that any state/variables queried or shared between the UI thread and CPU thread are thread-safe (e.g. `std::atomic` or mutex-protected). For LAN sync: network discovery, HTTP handlers, and file transfer run on background threads — verify shared state with UI is protected. Flag P2/P4 if found.
+   - **No Heap Allocation in Hot Loops:** Hot execution paths (e.g. `update()`, `Draw()`, or per-frame update loops) must NOT perform dynamic memory allocations (`new`, `malloc`, `std::vector::push_back` triggering reallocation, or runtime `std::string` concatenation). Use stack allocation, static buffers, or pre-allocated pools. Flag P4 if found.
    - **Config I/O Write Throttling:** Writing config to disk via `SaveConfig()` or `g_Config.Save()` blocks threads on mobile storage. Verify that config saving is only triggered on explicit UI actions (like screen exit, settings change) and never inside update loops or drag events. Flag P3/P4 if found.
    - **Android JNI & Lifecycle Safety:** Android JNI calls must clean up local references. Verify that JNI actions and background audio push events suspend completely when the emulator screen is paused or minimized, avoiding memory leaks or `DeadObjectException` crashes. Flag P2 if found.
    - **Dangling callback / lambda capture:** If a lambda captures `this` or a raw pointer and is stored for later execution (e.g., a scheduled event), verify the owner outlives the callback. Flag P2 if found.
@@ -111,10 +112,10 @@ When the user types `/codereview`, perform a complete code review of the latest 
    - 🟢 REQUIRED: Feature flags wrap custom code (zero upstream leakage)
    - 🟢 REQUIRED: Config isolated in separate sections
    - **New file checklist** — for every new `.cpp`/`.h` file introduced:
-     * ✅ Directory: non-core (`UI/`, `EmuCore/`, `Common/`, `ext/`, `SDL/`) — NOT `Core/`/`GPU/`/`HLE/`/`MIPS/`
+     * ✅ Directory: non-core (`UI/`, `Common/`, `ext/`, `SDL/`, `Windows/`, `macOS/`) — NOT `Core/`/`GPU/`/`HLE/`/`MIPS/`
      * ✅ File header: `// [PPSSPP-FORK] <FeatureName>: <description>`
      * ✅ Include guard: `#pragma once` (project convention)
-     * ✅ Namespace: `EmuCore::` for multi-emu, none for UI files
+     * ✅ Namespace: use project-appropriate namespaces, none for UI files
      * ✅ No upstream code duplication — if the file parallels an upstream file, use a thin wrapper not a copy
 
 7. **Check PSP parity** (Quality Gate #1):
@@ -236,7 +237,8 @@ When the user types `/codereview`, perform a complete code review of the latest 
 
 | Core | Check | Result |
 |------|-------|--------|
-| GBA / N64 / NDS / PS1 / SNES | <checklist item description> | ✅ / ❌ / N/A |
+| LAN Sync | Thread safety, TLS lifecycle, mDNS/UDP, HLC, HTTP handlers, JNI cleanup | ✅ / ❌ / N/A |
+| GBA / N64 / NDS / PS1 / SNES | *(N/A on feature/lan-sync)* | N/A |
 
 ### ✅ AGENTS.md compliance
 
@@ -298,40 +300,40 @@ When the user types `/codereview`, perform a complete code review of the latest 
      * Use surgical edit (NOT full rewrite) — add to the relevant check section (e.g., Step 3 for memory, Step 4 for core-specific, Step 5 for threading)
      * Tag with: `// [PPSSPP-FORK] Learning Loop: <pattern description>`
      * Verify file size stays under 600 lines after addition
-   - **Log to progress-gba-support.md:**
+   - **Log to docs/agents/codereview-log.md:**
      * Append to the "Code Review Learning Log" section
      * Format: `| <date> | <bug summary> | <pattern type> | <P-level> | <file:line> | <skill updated: yes/no> |`
      * If skill was updated, also note the section and line number where the rule was added
    - **Rolling Window (max 50 entries):**
-     * After logging, count entries: `grep -c '^| 20[0-9][0-9]-' docs/progress-gba-support.md`
+     * After logging, count entries: `grep -c '^| 20[0-9][0-9]-' docs/agents/codereview-log.md`
      * If entries > 50 → archive oldest entries:
        1. Determine archive file: `docs/agents/codereview-archive/YYYY-HN.md` (H1=Jan-Jun, H2=Jul-Dec)
        2. Extract entries older than newest 20: keep newest 20 in file, move rest to archive
        3. Append to archive with header: `## Entries <start_date> to <end_date>`
-       4. Update Statistics Summary in progress-gba-support.md
-     * If archive file doesn't exist → create it with header: `# Code Review Archive — YYYY`
-     * Archive command example:
-       ```bash
-       # Count entries
-       entries=$(grep -c '^| 20[0-9][0-9]-' docs/progress-gba-support.md)
-       if [ "$entries" -gt 50 ]; then
-         # Get archive filename (H1 or H2 based on current month)
-         month=$(date +%m)
-         if [ "$month" -le 6 ]; then period="H1"; else period="H2"; fi
-         archive="docs/agents/codereview-archive/$(date +%Y)-${period}.md"
-         # Create archive if needed
-         if [ ! -f "$archive" ]; then
-           echo "# Code Review Archive — $(date +%Y)" > "$archive"
-         fi
-         # Extract oldest entries (skip newest 20)
-         grep '^| 20[0-9][0-9]-' docs/progress-gba-support.md | head -n -20 >> "$archive"
-         # Keep newest 20 in main file (rebuild section)
-       fi
-       ```
+        4. Update Statistics Summary in codereview-log.md
+      * If archive file doesn't exist → create it with header: `# Code Review Archive — YYYY`
+      * Archive command example:
+        ```bash
+        # Count entries
+        entries=$(grep -c '^| 20[0-9][0-9]-' docs/agents/codereview-log.md)
+        if [ "$entries" -gt 50 ]; then
+          # Get archive filename (H1 or H2 based on current month)
+          month=$(date +%m)
+          if [ "$month" -le 6 ]; then period="H1"; else period="H2"; fi
+          archive="docs/agents/codereview-archive/$(date +%Y)-${period}.md"
+          # Create archive if needed
+          if [ ! -f "$archive" ]; then
+            echo "# Code Review Archive — $(date +%Y)" > "$archive"
+          fi
+          # Extract oldest entries (skip newest 20)
+          grep '^| 20[0-9][0-9]-' docs/agents/codereview-log.md | head -n -20 >> "$archive"
+          # Keep newest 20 in main file (rebuild section)
+        fi
+        ```
    - **Statistics Summary (update after each log):**
      * Total bugs found (all time)
      * Bugs per pattern type (count)
-     * Top 5 files with most bugs — calculate with: `grep '^| 20' docs/progress-gba-support.md | awk -F'|' '{print $6}' | sort | uniq -c | sort -rn | head -5`
+     * Top 5 files with most bugs — calculate with: `grep '^| 20' docs/agents/codereview-log.md | awk -F'|' '{print $6}' | sort | uniq -c | sort -rn | head -5`
      * Skill update count
      * Last archive period
    - **Purpose:** Every bug found makes future reviews stronger. Patterns that slipped through once get caught automatically next time. Rolling window keeps file manageable while archive preserves history.
