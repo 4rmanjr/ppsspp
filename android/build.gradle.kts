@@ -207,8 +207,7 @@ android {
 						"-DANDROID_PLATFORM=android-21",
 						"-DANDROID_TOOLCHAIN=clang",
 						"-DANDROID_CPP_FEATURES=",
-						"-DANDROID_STL=c++_shared",
-						"-DPPSSPP_MULTICORE=ON"
+						"-DANDROID_STL=c++_shared"
 					))
 				}
 			}
@@ -228,8 +227,7 @@ android {
 						"-DANDROID_TOOLCHAIN=clang",
 						"-DANDROID_CPP_FEATURES=",
 						"-DANDROID_STL=c++_shared",
-						"-DGOLD=TRUE",
-						"-DPPSSPP_MULTICORE=ON"
+						"-DGOLD=TRUE"
 					))
 				}
 			}

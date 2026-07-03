@@ -31,11 +31,6 @@
 #include "UI/DevScreens.h"
 #include "UI/DebugOverlay.h"
 
-#ifdef PPSSPP_MULTICORE
-#include "UI/EmuScreen.h"
-#include "EmuCore/GBACore.h"
-#endif
-
 // For std::max
 #include <algorithm>
 
@@ -88,17 +83,6 @@ static void DrawAudioDebugStats(UIContext *ctx, const Bounds &bounds) {
 	__SasGetDebugStats(statbuf, sizeof(statbuf));
 	ctx->Draw()->DrawTextRect(ubuntu24, statbuf, bounds.x + left + 21, bounds.y + 31, bounds.w - left, bounds.h - 30, 0xc0000000, FLAG_DYNAMIC_ASCII);
 	ctx->Draw()->DrawTextRect(ubuntu24, statbuf, bounds.x + left + 20, bounds.y + 30, bounds.w - left, bounds.h - 30, 0xFFFFFFFF, FLAG_DYNAMIC_ASCII);
-
-#ifdef PPSSPP_MULTICORE
-	// [PPSSPP-FORK] GBA Audio Parity: GBA-specific audio debug stats
-	if (g_gbaModeActive && g_activeCore) {
-		EmuCore::GBACore *gba = static_cast<EmuCore::GBACore *>(g_activeCore);
-		char gbaAudioBuf[1024];
-		gba->GetAudioDebugStats(gbaAudioBuf, sizeof(gbaAudioBuf));
-		ctx->Draw()->DrawTextRect(ubuntu24, gbaAudioBuf, bounds.x + 11, bounds.y + 151, bounds.w - 20, bounds.h - 150, 0xc0000000, FLAG_DYNAMIC_ASCII);
-		ctx->Draw()->DrawTextRect(ubuntu24, gbaAudioBuf, bounds.x + 10, bounds.y + 150, bounds.w - 20, bounds.h - 150, 0xFFFFFFFF, FLAG_DYNAMIC_ASCII);
-	}
-#endif
 
 	ctx->Draw()->SetFontScale(1.0f, 1.0f);
 

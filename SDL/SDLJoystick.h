@@ -7,9 +7,6 @@
 #include "Common/Input/KeyCodes.h"
 #include "Common/Net/Resolve.h"
 
-// [PPSSPP-FORK] MultiCore: push GBA audio directly to SDL, bypassing StereoResampler
-void PushSDLAudio(const int16_t *data, size_t frames);
-
 class SDLJoystick{
 public:
 	SDLJoystick(bool init_SDL = false);

@@ -46,9 +46,6 @@
 #include "UI/Background.h"
 #include "Core/Config.h"
 #include "Common/Data/Text/I18n.h"
-
-// [PPSSPP-FORK] MultiCore: recent files registry for extensible grouping
-#include "EmuCore/RecentFilesRegistry.h"
 #include "Core/Util/DarwinFileSystemServices.h" // For the browser
 
 static void DrawIconWithText(UIContext &dc, ImageID image, std::string_view text, const Bounds &bounds, bool gridStyle, const UI::Style &style) {
@@ -642,30 +639,16 @@ void GameBrowser::PinToggleClick(UI::EventParams &e) {
 }
 
 bool GameBrowser::DisplayTopBar() {
-	std::string pathStr = path_.GetPath().ToString();
-
-	// [PPSSPP-FORK] MultiCore: check registry for special paths
-	if (EmuCore::RecentFilesRegistry::Get().FindBySpecialPath(pathStr))
-		return false;
-	return true;
+	return path_.GetPath().ToString() != "!RECENT";
 }
 
 bool GameBrowser::HasSpecialFiles(std::vector<Path> &filenames) {
-	// [PPSSPP-FORK] MultiCore: registry-based lookup — adding a new core = register once.
-	// Fallback to hardcoded PSP check for non-MULTICORE build and backward compat.
-	std::string pathStr = path_.GetPath().ToString();
-
-	{
-		const auto *entry = EmuCore::RecentFilesRegistry::Get().FindBySpecialPath(pathStr);
-		if (entry && entry->manager) {
-			filenames.clear();
-			for (auto &str : entry->manager->GetRecentFiles()) {
-				if (entry->filter && !entry->filter(str))
-					continue;
-				filenames.emplace_back(str);
-			}
-			return true;
+	if (path_.GetPath().ToString() == "!RECENT") {
+		filenames.clear();
+		for (auto &str : g_recentFiles.GetRecentFiles()) {
+			filenames.emplace_back(str);
 		}
+		return true;
 	}
 	return false;
 }
@@ -875,8 +858,7 @@ void GameBrowser::Refresh() {
 		}
 	} else if (!listingPending_) {
 		std::vector<File::FileInfo> fileInfo;
-			// [PPSSPP-FORK] MultiCore: added GBA/GB extensions
-		path_.GetListing(fileInfo, "iso:cso:chd:pbp:elf:prx:ppdmp:gba:gb:gbc:");
+		path_.GetListing(fileInfo, "iso:cso:chd:pbp:elf:prx:ppdmp:");
 		for (size_t i = 0; i < fileInfo.size(); i++) {
 			bool isGame = !fileInfo[i].isDirectory;
 			bool isSaveData = false;

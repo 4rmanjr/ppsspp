@@ -17,13 +17,10 @@ This is a PPSSPP fork with custom features that **must remain compatible** with 
 | [`docs/agents/quality-gates.md`](docs/agents/quality-gates.md) | **3 Quality Gates**: PSP Feature Parity, Code Review, PSP Parity for new cores |
 | [`docs/agents/codereview-procedure.md`](docs/agents/codereview-procedure.md) | **Code Review Procedure**: Automated compliance verification, smart build decision, PSP parity checks |
 | [`docs/agents/extensibility.md`](docs/agents/extensibility.md) | **Extensibility Architecture**: CoreButtonRegistry, generic classes, step-by-step new core guide |
-| [`docs/agents/psp-knowledge-base.md`](docs/agents/psp-knowledge-base.md) | **Catalog** of PSP-GBA mismatches that have been fixed |
 | [`docs/agents/code-standards.md`](docs/agents/code-standards.md) | C++ coding standards, naming, platform handling |
-| [`docs/agents/multi-core-development.md`](docs/agents/multi-core-development.md) | Multi-emulator rules (GBA, future cores) |
 | [`docs/agents/feature-template.md`](docs/agents/feature-template.md) | Guide for adding new features |
 | [`docs/agents/fork-maintenance.md`](docs/agents/fork-maintenance.md) | Upstream merge strategy, conflict handling |
 | [`docs/agents/lansync-development.md`](docs/agents/lansync-development.md) | LAN sync specific rules |
-| [`docs/progress-gba-support.md`](docs/progress-gba-support.md) | GBA feature progress & status |
 
 **REQUIRED** — Read `quality-gates.md` before committing and `extensibility.md` before adding a new core.
 
@@ -47,16 +44,6 @@ This is a PPSSPP fork with custom features that **must remain compatible** with 
 - ✅ Every new feature has its own feature flag (`PPSSPP_<NAME>`).
 - ✅ On upstream merge conflict: **upstream code wins** — custom code is moved/adjusted, not the other way around.
 - ✅ Per-feature settings isolated in separate config sections (don't mix with PSP).
-
-### 🟢 Build Flag Convention
-
-| Flag | Scope | Note |
-|------|-------|------|
-| `PPSSPP_MULTICORE` | Top-level — enables all multi-core | Required ON for GBA |
-| `PPSSPP_GBA` | (future) | Currently still uses `PPSSPP_MULTICORE` |
-
-- All custom files in `UI/` using `#ifdef PPSSPP_MULTICORE`: MUST have `// [PPSSPP-FORK]` marker + zero deletion + verify `#ifndef` (PSP path) still builds.
-- If a feature needs separation from the multi-core umbrella, create a new flag.
 
 ## Patterns
 
@@ -123,9 +110,7 @@ Output APK: `android/build/outputs/apk/gold/release/android-gold-release-unsigne
 | Situation | Read |
 |-----------|------|
 | About to commit | [`quality-gates.md`](docs/agents/quality-gates.md) — Gate #2 Code Review |
-| Implementing a new feature (GBA) | [`quality-gates.md`](docs/agents/quality-gates.md) — Gate #1 Feature Parity |
 | Adding a new emulator (N64, PS1, etc.) | [`extensibility.md`](docs/agents/extensibility.md) + [`quality-gates.md`](docs/agents/quality-gates.md) — Gate #3 |
 | Unsure about constructor/class/ImageID | [`quality-gates.md`](docs/agents/quality-gates.md) — Anti-Hallucination Rule |
-| Viewing fixed PSP mismatches | [`psp-knowledge-base.md`](docs/agents/psp-knowledge-base.md) |
 | Merging upstream | [`fork-maintenance.md`](docs/agents/fork-maintenance.md) |
 | Code review found a bug | [`progress-gba-support.md`](docs/progress-gba-support.md) — Code Review Learning Log (auto-update skill) |

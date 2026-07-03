@@ -536,20 +536,6 @@ const KeyMap_IntStrPair psp_button_names[] = {
 	{VIRTKEY_AXIS_RIGHT_X_MIN, "RightAn.Left"},
 	{VIRTKEY_AXIS_RIGHT_X_MAX, "RightAn.Right"},
 
-	// [PPSSPP-FORK] MultiCore: GBA-specific VIRTKEYs for independent key mapping
-#ifdef PPSSPP_MULTICORE
-	{VIRTKEY_GBA_A, "GBA A"},
-	{VIRTKEY_GBA_B, "GBA B"},
-	{VIRTKEY_GBA_START, "GBA Start"},
-	{VIRTKEY_GBA_SELECT, "GBA Select"},
-	{VIRTKEY_GBA_L, "GBA L"},
-	{VIRTKEY_GBA_R, "GBA R"},
-	{VIRTKEY_GBA_UP, "GBA Up"},
-	{VIRTKEY_GBA_DOWN, "GBA Down"},
-	{VIRTKEY_GBA_LEFT, "GBA Left"},
-	{VIRTKEY_GBA_RIGHT, "GBA Right"},
-#endif
-
 	{CTRL_HOME, "Home"},
 	{CTRL_HOLD, "Hold"},
 	{CTRL_WLAN, "Wlan"},
@@ -1012,22 +998,6 @@ void AutoConfForPad(std::string_view name) {
 #if !defined(MOBILE_DEVICE)
 	g_controllerMap[VIRTKEY_PAUSE].push_back(MultiInputMapping(InputMapping(DEVICE_ID_KEYBOARD, NKCODE_ESCAPE)));
 	g_controllerMap[VIRTKEY_FASTFORWARD].push_back(MultiInputMapping(InputMapping(DEVICE_ID_KEYBOARD, NKCODE_TAB)));
-	g_controllerMap[VIRTKEY_SAVE_STATE].push_back(MultiInputMapping(InputMapping(DEVICE_ID_KEYBOARD, NKCODE_F1)));
-	g_controllerMap[VIRTKEY_LOAD_STATE].push_back(MultiInputMapping(InputMapping(DEVICE_ID_KEYBOARD, NKCODE_F3)));
-
-	// [PPSSPP-FORK] MultiCore: GBA default keyboard mappings (independent of PSP)
-#ifdef PPSSPP_MULTICORE
-	g_controllerMap[VIRTKEY_GBA_A].push_back(MultiInputMapping(InputMapping(DEVICE_ID_KEYBOARD, NKCODE_Z)));
-	g_controllerMap[VIRTKEY_GBA_B].push_back(MultiInputMapping(InputMapping(DEVICE_ID_KEYBOARD, NKCODE_X)));
-	g_controllerMap[VIRTKEY_GBA_L].push_back(MultiInputMapping(InputMapping(DEVICE_ID_KEYBOARD, NKCODE_A)));
-	g_controllerMap[VIRTKEY_GBA_R].push_back(MultiInputMapping(InputMapping(DEVICE_ID_KEYBOARD, NKCODE_S)));
-	g_controllerMap[VIRTKEY_GBA_START].push_back(MultiInputMapping(InputMapping(DEVICE_ID_KEYBOARD, NKCODE_SPACE)));
-	g_controllerMap[VIRTKEY_GBA_SELECT].push_back(MultiInputMapping(InputMapping(DEVICE_ID_KEYBOARD, NKCODE_SHIFT_LEFT)));
-	g_controllerMap[VIRTKEY_GBA_UP].push_back(MultiInputMapping(InputMapping(DEVICE_ID_KEYBOARD, NKCODE_DPAD_UP)));
-	g_controllerMap[VIRTKEY_GBA_DOWN].push_back(MultiInputMapping(InputMapping(DEVICE_ID_KEYBOARD, NKCODE_DPAD_DOWN)));
-	g_controllerMap[VIRTKEY_GBA_LEFT].push_back(MultiInputMapping(InputMapping(DEVICE_ID_KEYBOARD, NKCODE_DPAD_LEFT)));
-	g_controllerMap[VIRTKEY_GBA_RIGHT].push_back(MultiInputMapping(InputMapping(DEVICE_ID_KEYBOARD, NKCODE_DPAD_RIGHT)));
-#endif
 #endif
 	g_controllerMapGeneration++;
 }

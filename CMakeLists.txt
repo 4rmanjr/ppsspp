@@ -1709,8 +1709,6 @@ list(APPEND NativeAppSource
 	UI/GameScreen.cpp
 	UI/GameSettingsScreen.h
 	UI/GameSettingsScreen.cpp
-	UI/GBASettingsScreen.h
-	UI/GBASettingsScreen.cpp
 	UI/LANPeerListScreen.h
 	UI/LANPeerListScreen.cpp
 	UI/DeveloperToolsScreen.h
@@ -1723,14 +1721,10 @@ list(APPEND NativeAppSource
 	UI/TiltAnalogSettingsScreen.cpp
 	UI/TouchControlLayoutScreen.h
 	UI/TouchControlLayoutScreen.cpp
-	UI/CoreTouchLayoutScreen.h
-	UI/CoreTouchLayoutScreen.cpp
 	UI/TouchControlVisibilityScreen.h
 	UI/TouchControlVisibilityScreen.cpp
 	UI/GamepadEmu.h
 	UI/GamepadEmu.cpp
-	UI/TouchLayoutGBA.h
-	UI/TouchLayoutGBA.cpp
 	UI/JoystickHistoryView.h
 	UI/JoystickHistoryView.cpp
 	UI/LoadStateConfirmScreen.h
@@ -2240,12 +2234,6 @@ if((MACOSX OR IOS) AND NOT LIBRETRO)
 		Core/Util/DarwinFileSystemServices.mm
 		Core/Util/DarwinFileSystemServices.h)
 endif()
-
-# [PPSSPP-FORK] MultiCore: emulator core abstraction layer
-# PPSSPP_MULTICORE is always ON — no dual-build path
-add_definitions(-DPPSSPP_MULTICORE)
-target_compile_definitions(native PRIVATE PPSSPP_MULTICORE)
-add_subdirectory(EmuCore)
 
 # 'ppsspp_jni' on ANDROID, 'Core' everywhere else
 # SHARED on ANDROID, STATIC everywhere else
@@ -2763,12 +2751,6 @@ if(NOT HTTPS_NOT_AVAILABLE)
 	target_link_libraries(${CoreLibName} naett)
 endif()
 
-# [PPSSPP-FORK] MultiCore: link EmuCore to Core
-if(TARGET EmuCore)
-	target_link_libraries(${CoreLibName} EmuCore)
-	target_compile_definitions(${CoreLibName} PRIVATE PPSSPP_MULTICORE)
-endif()
-
 target_compile_features(${CoreLibName} PUBLIC cxx_std_17)
 
 if(FFmpeg_FOUND)
@@ -3247,27 +3229,6 @@ if(TargetBin)
 		target_link_options(${TargetBin} PRIVATE "-Wl,-z,max-page-size=16384")
 	endif()
 	target_link_libraries(${TargetBin} ${LinkCommon} Common)
-
-# [PPSSPP-FORK] MultiCore: enable for main executable
-# PPSSPP_MULTICORE is always ON
-target_compile_definitions(${TargetBin} PRIVATE PPSSPP_MULTICORE)
-set_source_files_properties(
-	UI/EmuScreen.cpp UI/NativeApp.cpp UI/MainScreen.cpp
-	PROPERTIES COMPILE_DEFINITIONS "PPSSPP_MULTICORE"
-)
-
-# [PPSSPP-FORK] MultiCore: test target for GBA core
-# Test links all libs used by the main binary to resolve all symbols
-add_executable(test_gba_core EXCLUDE_FROM_ALL test_gba_core.cpp)
-target_link_libraries(test_gba_core PRIVATE EmuCore ${LinkCommon} Common)
-target_compile_definitions(test_gba_core PRIVATE PPSSPP_MULTICORE)
-target_include_directories(test_gba_core PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
-
-# [PPSSPP-FORK] GBASpeedControl: unit test for speed control logic (inline functions only, no EmuCore link needed)
-add_executable(test_gba_speed EXCLUDE_FROM_ALL unittest/TestGBASpeedControl.cpp)
-target_compile_definitions(test_gba_speed PRIVATE PPSSPP_MULTICORE)
-target_include_directories(test_gba_speed PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(test_gba_speed PRIVATE Common)
 endif()
 
 # installs

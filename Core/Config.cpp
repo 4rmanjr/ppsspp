@@ -1198,6 +1198,7 @@ static const ConfigSectionMeta g_sectionMeta[] = {
 	{ &g_Config, themeSettings, ARRAY_SIZE(themeSettings), "Theme" },
 	{ &g_Config, vrSettings, ARRAY_SIZE(vrSettings), "VR" },
 	{ &g_Config, achievementSettings, ARRAY_SIZE(achievementSettings), "Achievements" },
+	{ &g_Config.lanSync, lansyncSettings, ARRAY_SIZE(lansyncSettings), "LANSync"},
 	{ &g_Config, upgradeSettings, ARRAY_SIZE(upgradeSettings), "Upgrade" },
 	{ &g_Config.displayLayoutLandscape, displayLayoutSettings, ARRAY_SIZE(displayLayoutSettings), "DisplayLayout.Landscape", "Graphics" },  // We read the old settings from [Graphics], since most people played in landscape before.
 	{ &g_Config.displayLayoutPortrait, displayLayoutSettings, ARRAY_SIZE(displayLayoutSettings), "DisplayLayout.Portrait"},  // These we don't want to read from the old settings, since for most people, those settings will be bad.
@@ -1205,7 +1206,6 @@ static const ConfigSectionMeta g_sectionMeta[] = {
 	{ &g_Config.touchControlsPortrait, touchControlSettings, ARRAY_SIZE(touchControlSettings), "TouchControls.Portrait"},  // These we don't want to read from the old settings, since for most people, those settings will be bad.
 	{ &g_Config.gestureControls[0], gestureControlSettings, ARRAY_SIZE(gestureControlSettings), "GestureControls.Left", "General"},  // We read the old settings from [General], since most of them used to be there (except the analog stuff).
 	{ &g_Config.gestureControls[1], gestureControlSettings, ARRAY_SIZE(gestureControlSettings), "GestureControls.Right", "General"},  // We read the old settings from [General], since most of them used to be there (except the analog stuff).
-	{ &g_Config.lanSync, lansyncSettings, ARRAY_SIZE(lansyncSettings), "LANSync"},
 };
 
 ConfigBlock *GetConfigBlockForSection(std::string_view sectionName) {
@@ -1393,101 +1393,6 @@ void Config::Load(const char *iniFileName, const char *controllerIniFilename) {
 		g_recentFiles.Clean();
 	}
 
-	// [PPSSPP-FORK] MultiCore: load GBA recent files from separate section
-	Section *gbaRecent = iniFile.GetOrCreateSection("GBA Recent");
-	g_recentFilesGBA.Load(gbaRecent, iMaxRecent > 0 ? iMaxRecent : 50);
-	g_recentFilesGBA.Clean();
-
-#ifdef PPSSPP_MULTICORE
-	// [PPSSPP-FORK] MultiCore: load GBA display/audio settings
-	Section *gbaSettings = iniFile.GetOrCreateSection("GBA");
-	gbaSettings->Get("iGBAAspectRatio", &iGBAAspectRatio);
-	gbaSettings->Get("iGBATexFiltering", &iGBATexFiltering);
-	gbaSettings->Get("iGBAIntegerScale", &iGBAIntegerScale);
-	if (!gbaSettings->HasKey("iGBAIntegerScale")) iGBAIntegerScale = 0;
-	gbaSettings->Get("fGBAVolume", &fGBAVolume);
-#endif
-
-#ifdef PPSSPP_MULTICORE
-	// [PPSSPP-FORK] MultiCore: migrate leaked GBA files from PSP recent to GBA recent
-	// Read ini directly (GetRecentFiles() empty until bg thread starts in NativeApp.cpp)
-	if (iMaxRecent > 0) {
-		std::vector<std::string> pspOnly, gbaLeaked;
-		for (int i = 0; i < iMaxRecent; i++) {
-			char keyName[64];
-			std::string fileName;
-			snprintf(keyName, sizeof(keyName), "FileName%d", i);
-			if (recent->Get(keyName, &fileName) && !fileName.empty()) {
-				size_t dot = fileName.rfind('.');
-				if (dot != std::string::npos) {
-					std::string_view ext(fileName.data() + dot, fileName.size() - dot);
-					if (ext == ".gba" || ext == ".gb" || ext == ".gbc") {
-						gbaLeaked.push_back(fileName);
-						continue;
-					}
-				}
-				pspOnly.push_back(fileName);
-			}
-		}
-
-		if (!gbaLeaked.empty()) {
-			// Rebuild PSP ini section without GBA entries
-			recent->Clear();
-			for (size_t i = 0; i < pspOnly.size(); i++) {
-				char keyName[64];
-				snprintf(keyName, sizeof(keyName), "FileName%d", (int)i);
-				recent->Set(keyName, pspOnly[i]);
-			}
-			// Merge leaked GBA into GBA ini section (avoid duplicates)
-			for (auto &f : gbaLeaked) {
-				bool found = false;
-				for (int i = 0; i < (iMaxRecent > 0 ? iMaxRecent : 50); i++) {
-					char keyName[64];
-					std::string existing;
-					snprintf(keyName, sizeof(keyName), "FileName%d", i);
-					if (gbaRecent->Get(keyName, &existing) && existing == f) {
-						found = true;
-						break;
-					}
-				}
-				if (!found) {
-					for (int i = 0; i < (iMaxRecent > 0 ? iMaxRecent : 50); i++) {
-						char keyName[64];
-						std::string existing;
-						snprintf(keyName, sizeof(keyName), "FileName%d", i);
-						if (!gbaRecent->Get(keyName, &existing) || existing.empty()) {
-							gbaRecent->Set(keyName, f);
-							INFO_LOG(Log::System, "[MultiCore] Migrated leaked GBA entry from PSP recent to GBA: %s", f.c_str());
-							break;
-						}
-					}
-				}
-			}
-			// Re-queue Load with updated ini sections (wipes old queued commands)
-			g_recentFiles.Load(recent, iMaxRecent);
-			g_recentFilesGBA.Load(gbaRecent, iMaxRecent > 0 ? iMaxRecent : 50);
-		}
-	}
-
-	// [PPSSPP-FORK] MultiCore: fill GBA recent synchronously so UI can access immediately
-	// (background thread may not have processed async Load yet)
-	{
-		std::vector<std::string> gbaSync;
-		Section *gbaSection = iniFile.GetOrCreateSection("GBA Recent");
-		int maxGBA = iMaxRecent > 0 ? iMaxRecent : 50;
-		for (int i = 0; i < maxGBA; i++) {
-			char keyName[64];
-			std::string fileName;
-			snprintf(keyName, sizeof(keyName), "FileName%d", i);
-			if (gbaSection->Get(keyName, &fileName) && !fileName.empty()) {
-				gbaSync.push_back(fileName);
-			}
-		}
-		g_recentFilesGBA.FillSync(gbaSync);
-		NOTICE_LOG(Log::System, "[MultiCore] GBA recent sync-fill: %zu entries", gbaSync.size());
-	}
-#endif
-
 	// Time tracking
 	Section *playTime = iniFile.GetOrCreateSection("PlayTime");
 	playTimeTracker_.Load(playTime);
@@ -1610,19 +1515,6 @@ bool Config::Save(const char *saveReason) {
 		Section *recent = iniFile.GetOrCreateSection("Recent");
 		recent->Set("MaxRecent", iMaxRecent);
 		g_recentFiles.Save(recent, iMaxRecent);
-
-		// [PPSSPP-FORK] MultiCore: save GBA recent files
-		Section *gbaRecent = iniFile.GetOrCreateSection("GBA Recent");
-		g_recentFilesGBA.Save(gbaRecent, 50);
-
-#ifdef PPSSPP_MULTICORE
-		// [PPSSPP-FORK] MultiCore: save GBA display/audio settings
-		Section *gbaSettings = iniFile.GetOrCreateSection("GBA");
-		gbaSettings->Set("iGBAAspectRatio", iGBAAspectRatio);
-		gbaSettings->Set("iGBATexFiltering", iGBATexFiltering);
-		gbaSettings->Set("iGBAIntegerScale", iGBAIntegerScale);
-		gbaSettings->Set("fGBAVolume", fGBAVolume);
-#endif
 
 		Section *pinnedPaths = iniFile.GetOrCreateSection("PinnedPaths");
 		pinnedPaths->Clear();
@@ -1914,10 +1806,6 @@ void Config::RestoreDefaults(RestoreSettingsBits whatToRestore, bool log) {
 
 		if (whatToRestore & RestoreSettingsBits::RECENT) {
 			g_recentFiles.Clear();
-			// [PPSSPP-FORK] MultiCore: also clear GBA recent files
-#ifdef PPSSPP_MULTICORE
-			g_recentFilesGBA.Clear();
-#endif
 			currentDirectory = defaultCurrentDirectory;
 		}
 	}

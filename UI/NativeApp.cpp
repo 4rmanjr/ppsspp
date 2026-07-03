@@ -126,10 +126,6 @@
 #include "UI/DevScreens.h"
 #include "UI/DiscordIntegration.h"
 #include "UI/EmuScreen.h"
-
-#include "EmuCore/EmuCore.h"
-#include "EmuCore/RecentFilesRegistry.h"
-
 #include "UI/GameInfoCache.h"
 #include "UI/GameSettingsScreen.h"
 #include "UI/DeveloperToolsScreen.h"
@@ -416,42 +412,6 @@ void NativeInit(int argc, const char *argv[], const char *savegame_dir, const ch
 
 	g_recentFiles.EnsureThread();
 
-	// [PPSSPP-FORK] MultiCore: ensure GBA recent file processing thread
-	g_recentFilesGBA.EnsureThread();
-
-	// [PPSSPP-FORK] MultiCore: register recent files grouping for all emulator cores
-	// Adding a new core = just add one Register() call here + Add() in InitXXX.
-	auto pspFilter = +[](const std::string &path) -> bool {
-		// Exclude GBA/GB extensions from PSP section (safety net for migration edge cases)
-		size_t dot = path.rfind('.');
-		if (dot != std::string::npos) {
-			std::string_view ext(path.data() + dot, path.size() - dot);
-			return ext != ".gba" && ext != ".gb" && ext != ".gbc";
-		}
-		return true;
-	};
-	{
-		auto &reg = EmuCore::RecentFilesRegistry::Get();
-		reg.Register(EmuCore::RecentFilesEntry{
-			(int)EmuCore::Type::PSP,
-			"PSP",
-			"Recent",
-			"RECENT",
-			&g_recentFiles,
-			pspFilter,
-			"",
-		});
-		reg.Register(EmuCore::RecentFilesEntry{
-			(int)EmuCore::Type::GBA,
-			"GBA",
-			"GBA Recent",
-			"RECENT_GBA",
-			&g_recentFilesGBA,
-			nullptr,
-			".gba:.gb:.gbc",
-		});
-	}
-
 	// Make sure UI state is MENU.
 	ResetUIState();
 
@@ -626,21 +586,6 @@ void NativeInit(int argc, const char *argv[], const char *savegame_dir, const ch
 	// Note that if we don't have storage permission here, loading the config will
 	// fail and it will be set to the default. Later, we load again when we get permission.
 	g_Config.Load();
-
-	// Auto-enable LAN sync if config was saved with it enabled
-#if PPSSPP_PLATFORM(ANDROID)
-	if (g_Config.lanSync.bEnabled) {
-		std::string name = g_Config.lanSync.sDeviceName;
-		if (name.empty()) name = "PPSSPP";
-		AndroidLANSync::Instance().Enable(name);
-	}
-#elif (PPSSPP_PLATFORM(LINUX) || PPSSPP_PLATFORM(MAC)) && !PPSSPP_PLATFORM(ANDROID)
-	if (g_Config.lanSync.bEnabled) {
-		std::string name = g_Config.lanSync.sDeviceName;
-		if (name.empty()) name = "PPSSPP";
-		GetLinuxLANSync().Enable(name);
-	}
-#endif
 #endif
 
 	const char *fileToLog = nullptr;
@@ -842,10 +787,23 @@ void NativeInit(int argc, const char *argv[], const char *savegame_dir, const ch
 
 	ApplyAchievementsHostOverride();
 
-	NOTICE_LOG(Log::System, "[BOOT] Creating ScreenManager...");
+	// Auto-enable LAN sync if config was saved with it enabled
+#if PPSSPP_PLATFORM(ANDROID)
+	if (g_Config.lanSync.bEnabled) {
+		std::string name = g_Config.lanSync.sDeviceName;
+		if (name.empty()) name = "PPSSPP";
+		AndroidLANSync::Instance().Enable(name);
+	}
+#elif (PPSSPP_PLATFORM(LINUX) || PPSSPP_PLATFORM(MAC)) && !PPSSPP_PLATFORM(ANDROID)
+	if (g_Config.lanSync.bEnabled) {
+		std::string name = g_Config.lanSync.sDeviceName;
+		if (name.empty()) name = "PPSSPP";
+		GetLinuxLANSync().Enable(name);
+	}
+#endif
+
 	DEBUG_LOG(Log::System, "ScreenManager!");
 	g_screenManager = new ScreenManager();
-	NOTICE_LOG(Log::System, "[BOOT] ScreenManager created");
 	if (g_Config.memStickDirectory.empty()) {
 		INFO_LOG(Log::System, "No memstick directory! Asking for one to be configured.");
 		g_screenManager->switchScreen(new LogoScreen(AfterLogoScreen::MEMSTICK_SCREEN_INITIAL_SETUP));
@@ -858,20 +816,8 @@ void NativeInit(int argc, const char *argv[], const char *savegame_dir, const ch
 		g_screenManager->switchScreen(new MainScreen());
 		g_screenManager->push(new DeveloperToolsScreen(Path()));
 	} else if (skipLogo && !boot_filename.empty()) {
-		NOTICE_LOG(Log::System, "[BOOT] skipLogo=true, launching EmuScreen for: %s", boot_filename.c_str());
 		INFO_LOG(Log::System, "Launching EmuScreen with boot filename '%s'", boot_filename.c_str());
-		// [PPSSPP-FORK] MultiCore: detect file type for GBA auto-boot
-		EmuCore::Type bootCoreType = EmuCore::DetectType(boot_filename);
-		NOTICE_LOG(Log::System, "[BOOT] Detected core type: %s", bootCoreType == EmuCore::Type::GBA ? "GBA" : "PSP");
-		if (bootCoreType == EmuCore::Type::GBA) {
-			NOTICE_LOG(Log::System, "[BOOT] Creating EmuScreen for GBA...");
-			g_screenManager->switchScreen(new EmuScreen(boot_filename, EmuCore::Type::GBA));
-			NOTICE_LOG(Log::System, "[BOOT] EmuScreen (GBA) created OK");
-		} else {
-			NOTICE_LOG(Log::System, "[BOOT] Creating EmuScreen for PSP...");
-			g_screenManager->switchScreen(new EmuScreen(boot_filename));
-			NOTICE_LOG(Log::System, "[BOOT] EmuScreen (PSP) created OK");
-		}
+		g_screenManager->switchScreen(new EmuScreen(boot_filename));
 	} else {
 		g_screenManager->switchScreen(new LogoScreen(AfterLogoScreen::DEFAULT));
 	}
@@ -943,7 +889,6 @@ static void NativeMixWrapper(float *dest, int framesToWrite, int sampleRateHz, v
 }
 
 bool NativeInitGraphics(GraphicsContext *graphicsContext) {
-	NOTICE_LOG(Log::System, "[BOOT] NativeInitGraphics START");
 	INFO_LOG(Log::System, "NativeInitGraphics");
 
 	_assert_msg_(g_screenManager, "No screenmanager, bad init order. Backend = %d", g_Config.iGPUBackend);
@@ -972,7 +917,6 @@ bool NativeInitGraphics(GraphicsContext *graphicsContext) {
 	ui_draw2d.Init(g_draw, texColorPipeline);
 
 	uiContext->Init(g_draw, texColorPipeline, colorPipeline, &ui_draw2d);
-	NOTICE_LOG(Log::System, "[BOOT] UIContext initialized");
 	if (uiContext->Text()) {
 		// This seems unnecessary.
 		// uiContext->Text()->SetOrCreateFont(FontStyle(FontID::invalid(), FontFamily::SansSerif, 20, FontStyleFlags::Default));
@@ -1022,7 +966,6 @@ bool NativeInitGraphics(GraphicsContext *graphicsContext) {
 	}
 
 	INFO_LOG(Log::System, "NativeInitGraphics completed");
-	NOTICE_LOG(Log::System, "[BOOT] NativeInitGraphics END — success");
 
 	return true;
 }
@@ -1817,9 +1760,6 @@ void NativeShutdown() {
 #if !PPSSPP_PLATFORM(IOS)
 	System_ExitApp();
 #endif
-
-	// Previously we did exit() here on Android but that makes it hard to do things like restart on backend change.
-	// I think we handle most globals correctly or correct-enough now.
 
 #if PPSSPP_PLATFORM(ANDROID)
 	AndroidLANSync::Instance().Shutdown();

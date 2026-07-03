@@ -32,11 +32,6 @@ public:
 	void EnsureThread();
 
 	std::vector<std::string> GetRecentFiles() const;
-
-	// [PPSSPP-FORK] MultiCore: synchronously fill recent files (bypass thread for initial load)
-#ifdef PPSSPP_MULTICORE
-	void FillSync(const std::vector<std::string> &files);
-#endif
 private:
 
 	enum class RecentCmd {
@@ -70,6 +65,3 @@ private:
 
 // Singleton, don't make more.
 extern RecentFilesManager g_recentFiles;
-
-// [PPSSPP-FORK] MultiCore: separate recent list for GBA games
-extern RecentFilesManager g_recentFilesGBA;

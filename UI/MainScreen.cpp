@@ -16,7 +16,6 @@
 // https://github.com/hrydgard/ppsspp and http://www.ppsspp.org/.
 
 #include <algorithm>
-#include <cctype>
 #include <cmath>
 #include <sstream>
 
@@ -43,9 +42,6 @@
 #include "UI/EmuScreen.h"
 #include "UI/MainScreen.h"
 #include "UI/GameScreen.h"
-
-#include "EmuCore/EmuCore.h"
-#include "EmuCore/RecentFilesRegistry.h"
 #include "UI/GameInfoCache.h"
 #include "UI/GameSettingsScreen.h"
 #include "UI/IAPScreen.h"
@@ -64,59 +60,8 @@
 
 bool MainScreen::showHomebrewTab = false;
 
-#ifdef PPSSPP_MULTICORE
-// [PPSSPP-FORK] MultiCore: shared helper to detect GBA ROM inside .zip archives
-#include "ext/libzip/zip.h"
-#include "EmuCore/ZipHelper.h"
-
-static bool HasGBAROM(const Path &filePath) {
-	int errcode = 0;
-	zip_t *z = ZipHelper::OpenZip(filePath, &errcode);
-	if (!z) return false;
-	bool found = false;
-	zip_int64_t numEntries = zip_get_num_entries(z, 0);
-	for (zip_int64_t i = 0; i < numEntries; i++) {
-		struct zip_stat st;
-		if (zip_stat_index(z, i, 0, &st) < 0)
-			continue;
-		const char *name = st.name;
-		if (!name) continue;
-		size_t len = strlen(name);
-		if (len < 3) continue;
-		// Check .gb (3 chars)
-		if (tolower((unsigned char)name[len - 3]) == '.' &&
-		    tolower((unsigned char)name[len - 2]) == 'g' &&
-		    tolower((unsigned char)name[len - 1]) == 'b')
-		{
-			found = true;
-			break;
-		}
-		// Check .gba or .gbc (4 chars)
-		if (len >= 4 &&
-		    tolower((unsigned char)name[len - 4]) == '.' &&
-		    tolower((unsigned char)name[len - 3]) == 'g' &&
-		    tolower((unsigned char)name[len - 2]) == 'b' &&
-		    (tolower((unsigned char)name[len - 1]) == 'a' ||
-		     tolower((unsigned char)name[len - 1]) == 'c'))
-		{
-			found = true;
-			break;
-		}
-	}
-	zip_close(z);
-	return found;
-}
-#endif
-
 static void LaunchFile(ScreenManager *screenManager, Screen *currentScreen, const Path &path) {
 	std::string extension = path.GetFileExtension();
-#ifdef PPSSPP_MULTICORE
-	// [PPSSPP-FORK] MultiCore: .zip with GBA ROM → launch directly
-	if (extension == ".zip" && HasGBAROM(path)) {
-		screenManager->switchScreen(new EmuScreen(path, EmuCore::Type::GBA));
-		return;
-	}
-#endif
 	if (extension == ".zip" || extension == ".7z") {
 		// If is a zip file, we have a screen for that.
 		screenManager->push(new InstallZipScreen(path));
@@ -143,14 +88,6 @@ static void LaunchFile(ScreenManager *screenManager, Screen *currentScreen, cons
 			screenManager->cancelScreensAbove(currentScreen);
 		}
 		// Otherwise let the EmuScreen take care of it, including error handling.
-
-		// [PPSSPP-FORK] MultiCore: detect file type and switch to appropriate core
-		EmuCore::Type coreType = EmuCore::DetectType(path);
-		if (coreType == EmuCore::Type::GBA) {
-			screenManager->switchScreen(new EmuScreen(path, EmuCore::Type::GBA));
-			return;
-		}
-
 		screenManager->switchScreen(new EmuScreen(path));
 	}
 }
@@ -214,34 +151,20 @@ void MainScreen::CreateRecentTab() {
 	ScrollView *scrollView = tabContainer->Add(new ScrollView(ORIENT_VERTICAL, new LinearLayoutParams(FILL_PARENT, WRAP_CONTENT, 1.0f)));
 	scrollView->SetTag("MainScreenRecentGames");
 
-	// [PPSSPP-FORK] MultiCore: ScrollView hanya render child pertama.
-	// Gunakan LinearLayout wrapper untuk menampung multiple sections.
-	LinearLayout *wrapper = scrollView->Add(new LinearLayout(ORIENT_VERTICAL, new LinearLayoutParams(FILL_PARENT, WRAP_CONTENT)));
-
 	bool portrait = GetDeviceOrientation() == DeviceOrientation::Portrait;
 
-	// [PPSSPP-FORK] MultiCore: iterasi semua emulator core yang terdaftar di registry.
-	// Menambah core baru = register di NativeApp.cpp + selesai.
-	for (const auto &entry : EmuCore::RecentFilesRegistry::Get().GetAll()) {
-		RecentFilesManager *mgr = entry.manager;
-		if (!mgr || !mgr->HasAny())
-			continue;
+	GameBrowser *tabRecentGames = new GameBrowser(GetRequesterToken(),
+		Path("!RECENT"), BrowseFlags::NONE, portrait, &g_Config.bGridView1, screenManager(), "", "",
+		new LinearLayoutParams(FILL_PARENT, WRAP_CONTENT));
+	tabRecentGames->SetSearchBar(search);
 
-		int count = (int)mgr->GetRecentFiles().size();
-		std::string sectionTitle = StringFromFormat("%s GAMES (%d)", entry.displayName.c_str(), count);
-
-		CollapsibleSection *section = wrapper->Add(new CollapsibleSection(sectionTitle, new LinearLayoutParams(FILL_PARENT, WRAP_CONTENT)));
-		GameBrowser *browser = section->Add(new GameBrowser(GetRequesterToken(),
-			Path("!" + entry.specialPath), BrowseFlags::NONE, portrait, &g_Config.bGridView1, screenManager(), "", "",
-			new LinearLayoutParams(FILL_PARENT, WRAP_CONTENT)));
-		browser->SetSearchBar(search);
-		gameBrowsers_.push_back(browser);
-		browser->OnChoice.Handle(this, &MainScreen::OnGameSelectedInstant);
-		browser->OnHoldChoice.Handle(this, &MainScreen::OnGameSelected);
-		browser->OnHighlight.Handle(this, &MainScreen::OnGameHighlight);
-	}
+	scrollView->Add(tabRecentGames);
+	gameBrowsers_.push_back(tabRecentGames);
 
 	tabHolder_->AddTab(mm->T("Recent"), ImageID::invalid(), tabContainer);
+	tabRecentGames->OnChoice.Handle(this, &MainScreen::OnGameSelectedInstant);
+	tabRecentGames->OnHoldChoice.Handle(this, &MainScreen::OnGameSelected);
+	tabRecentGames->OnHighlight.Handle(this, &MainScreen::OnGameHighlight);
 }
 
 GameBrowser *MainScreen::CreateBrowserTab(const Path &path, std::string_view title, std::string_view howToTitle, std::string_view howToUri, BrowseFlags browseFlags, bool *bGridView, float *scrollPos) {
@@ -422,15 +345,7 @@ void MainScreen::CreateViews() {
 
 	tabHolder_->SetClip(true);
 
-	// [PPSSPP-FORK] MultiCore: check registry for any core with recent files
-	bool anyCoreHasRecent = false;
-	for (const auto &e : EmuCore::RecentFilesRegistry::Get().GetAll()) {
-		if (e.manager && e.manager->HasAny()) {
-			anyCoreHasRecent = true;
-			break;
-		}
-	}
-	bool showRecent = g_Config.iMaxRecent > 0 || anyCoreHasRecent;
+	bool showRecent = g_Config.iMaxRecent > 0;
 	bool hasStorageAccess = !System_GetPropertyBool(SYSPROP_SUPPORTS_PERMISSIONS) ||
 		System_GetPermissionStatus(SYSTEM_PERMISSION_STORAGE) == PERMISSION_STATUS_GRANTED;
 	bool storageIsTemporary = IsTempPath(GetSysDirectory(DIRECTORY_SAVEDATA)) && !confirmedTemporary_;
@@ -453,9 +368,7 @@ void MainScreen::CreateViews() {
 			remoteBrowser->SetHomePath(remotePath);
 		}
 
-		// [PPSSPP-FORK] MultiCore: check registry for any cores with recent files
-		bool setRecent = anyCoreHasRecent;
-		if (setRecent) {
+		if (g_recentFiles.HasAny()) {
 			tabHolder_->SetCurrentTab(std::clamp(g_Config.iDefaultTab, 0, g_Config.bRemoteTab ? 3 : 2), true);
 		} else if (g_Config.iMaxRecent > 0) {
 			tabHolder_->SetCurrentTab(1, true);	
@@ -1003,8 +916,6 @@ void GridSettingsPopupScreen::GridMinusClick(UI::EventParams &e) {
 
 void GridSettingsPopupScreen::OnRecentClearClick(UI::EventParams &e) {
 	g_recentFiles.Clear();
-	// [PPSSPP-FORK] MultiCore: also clear GBA recent files
-	g_recentFilesGBA.Clear();
 	OnRecentChanged.Trigger(e);
 	TriggerFinish(DR_OK);
 }

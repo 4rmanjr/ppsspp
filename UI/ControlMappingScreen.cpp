@@ -39,7 +39,6 @@
 #include "Core/KeyMap.h"
 #include "Core/HLE/sceCtrl.h"
 #include "Core/Config.h"
-#include "UI/EmuScreen.h"
 #include "UI/ControlMappingScreen.h"
 #include "UI/PopupScreens.h"
 #include "UI/JoystickHistoryView.h"
@@ -224,8 +223,6 @@ static const BindingCategory cats[] = {
 	{"Control modifiers", VIRTKEY_ANALOG_ROTATE_CW},
 	{"Emulator controls", VIRTKEY_FASTFORWARD},
 	{"Extended PSP controls", VIRTKEY_AXIS_RIGHT_Y_MAX},
-	// [PPSSPP-FORK] MultiCore: GBA-specific controls category
-	{"GBA controls", VIRTKEY_GBA_A},
 	{},  // sentinel
 };
 
@@ -233,11 +230,9 @@ static const BindingCategory cats[] = {
 void ControlMappingScreen::CreateSettingsViews(UI::ViewGroup *parent) {
 	using namespace UI;
 	auto km = GetI18NCategory(I18NCat::KEYMAPPING);
-	if (!g_gbaModeActive) {
-		parent->Add(new Choice(km->T("Clear All")))->OnClick.Add([](UI::EventParams &) {
-			KeyMap::ClearAllMappings();
-		});
-	}
+	parent->Add(new Choice(km->T("Clear All")))->OnClick.Add([](UI::EventParams &) {
+		KeyMap::ClearAllMappings();
+	});
 	parent->Add(new Choice(km->T("Default All")))->OnClick.Add([](UI::EventParams &) {
 		KeyMap::RestoreDefault();
 	});
@@ -246,15 +241,11 @@ void ControlMappingScreen::CreateSettingsViews(UI::ViewGroup *parent) {
 	if (!KeyMap::HasBuiltinController(sysName) && KeyMap::GetSeenPads().size()) {
 		parent->Add(new Choice(km->T("Autoconfigure")))->OnClick.Handle(this, &ControlMappingScreen::OnAutoConfigure);
 	}
-	parent->Add(new Choice(km->T(
-		g_gbaModeActive ? "Show Key Map" :
-		"Show PSP")))->OnClick.Add([this](UI::EventParams &params) {
+	parent->Add(new Choice(km->T("Show PSP")))->OnClick.Add([this](UI::EventParams &params) {
 		screenManager()->push(new VisualMappingScreen(gamePath_));
 	});
-	if (!g_gbaModeActive) {
-		parent->Add(new CheckBox(&g_Config.bAllowMappingCombos, km->T("Allow combo mappings")));
-		parent->Add(new CheckBox(&g_Config.bStrictComboOrder, km->T("Strict combo input order")));
-	}
+	parent->Add(new CheckBox(&g_Config.bAllowMappingCombos, km->T("Allow combo mappings")));
+	parent->Add(new CheckBox(&g_Config.bStrictComboOrder, km->T("Strict combo input order")));
 }
 
 std::string_view ControlMappingScreen::GetTitle() const {
@@ -279,19 +270,13 @@ void ControlMappingScreen::CreateContentViews(UI::ViewGroup *parent) {
 	CollapsibleSection *curSection = nullptr;
 	for (size_t i = 0; i < numMappableKeys; i++) {
 		if (curCat < (int)ARRAY_SIZE(cats) && mappableKeys[i].key == cats[curCat + 1].firstKey) {
-			if (curCat >= 0 && curSection) {
+			if (curCat >= 0) {
 				curSection->SetOpenPtr(&categoryToggles_[curCat]);
 			}
 			curCat++;
-			bool skipCat = g_gbaModeActive && (curCat <= 1 || curCat == 3);
-			if (skipCat) {
-				curSection = nullptr;
-				continue;
-			}
 			curSection = rootLayout->Add(new CollapsibleSection(km->T(cats[curCat].catName)));
 			curSection->SetSpacing(6.0f);
 		}
-		if (!curSection) continue;
 		SingleControlMapper *mapper = curSection->Add(
 			new SingleControlMapper(mappableKeys[i].key, mappableKeys[i].name, portrait, screenManager()));
 		mapper->SetTag(StringFromFormat("KeyMap%s", mappableKeys[i].name));

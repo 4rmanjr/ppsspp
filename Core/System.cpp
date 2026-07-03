@@ -70,9 +70,6 @@
 #include "Core/ELF/ParamSFO.h"
 #include "Core/SaveState.h"
 #include "Core/Util/RecentFiles.h"
-#ifdef PPSSPP_MULTICORE
-#include "EmuCore/EmuCore.h"
-#endif
 #include "Common/StringUtils.h"
 #include "Common/ExceptionHandlerSetup.h"
 #include "GPU/GPUCommon.h"
@@ -510,10 +507,6 @@ static bool CPU_Init(FileLoader *fileLoader, IdentifiedFileType type, std::strin
 	}
 
 	if (g_CoreParameter.updateRecent) {
-#ifdef PPSSPP_MULTICORE
-		// [PPSSPP-FORK] MultiCore: non-PSP files go to separate recent list (EmuScreen handles it)
-		if (EmuCore::DetectType(g_CoreParameter.fileToStart) == EmuCore::Type::PSP)
-#endif
 		g_recentFiles.Add(g_CoreParameter.fileToStart.ToString());
 	}
 
