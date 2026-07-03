@@ -253,6 +253,16 @@ bool TLSServerContext::AcceptTLS(int clientFd, int &tlsFd) {
 		return true;  // Fallback to plain TCP
 	}
 
+	// [PPSSPP-FORK] LANSync: Peek first byte to detect TLS vs plain HTTP.
+	// Without this, SSL_accept consumes the HTTP request data on failure,
+	// making it unavailable for the plain TCP handler below.
+	char firstByte = 0;
+	int peeked = recv(clientFd, (char *)&firstByte, 1, MSG_PEEK);
+	if (peeked <= 0 || firstByte != 0x16) {  // 0x16 = TLS ContentType::handshake
+		tlsFd = clientFd;
+		return false;  // Not TLS — caller falls back to plain TCP
+	}
+
 	SSL *ssl = SSL_new((SSL_CTX *)sslCtx_);
 	if (!ssl) return false;
 
