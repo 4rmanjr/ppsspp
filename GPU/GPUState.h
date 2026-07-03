@@ -26,12 +26,11 @@
 #include "GPU/GPU.h"
 #include "GPU/ge_constants.h"
 #include "GPU/Common/ShaderCommon.h"
-#include "Common/Math/SIMDHeaders.h"
 #include "Common/Math/lin/vec3.h"
 
 class PointerWrap;
 
-struct GPUgstate {
+struct GEState {
 	// Getting rid of this ugly union in favor of the accessor functions
 	// might be a good idea....
 	union {
@@ -484,7 +483,7 @@ enum : u32 {
 	// Free bit: 18
 	GPU_USE_FRAMEBUFFER_ARRAYS = FLAG_BIT(19),
 	GPU_USE_FRAMEBUFFER_FETCH = FLAG_BIT(20),
-	// Free bit: 21,
+	// Free bit: 21
 	GPU_ROUND_FRAGMENT_DEPTH_TO_16BIT = FLAG_BIT(22),
 	GPU_ROUND_DEPTH_TO_16BIT = FLAG_BIT(23),  // Can be disabled either per game or if we use a real 16-bit depth buffer
 	GPU_USE_CLIP_DISTANCE = FLAG_BIT(24),
@@ -514,7 +513,7 @@ enum class SubmitType {
 	SPLINE,
 };
 
-extern GPUgstate gstate;
+extern GEState gstate;
 
 struct GPUStateCache {
 	bool Use(u32 flags) const { return (useFlags_ & flags) != 0; } // Return true if ANY of flags are true.
@@ -564,12 +563,6 @@ struct GPUStateCache {
 	void SetTextureIsVideo(bool isVideo) {
 		textureIsVideo = isVideo;
 	}
-	void SetTextureIsBGRA(bool isBGRA) {
-		if (bgraTexture != isBGRA) {
-			bgraTexture = isBGRA;
-			Dirty(DIRTY_FRAGMENTSHADER_STATE);
-		}
-	}
 	void SetTextureIsFramebuffer(bool isFramebuffer) {
 		if (textureIsFramebuffer != isFramebuffer) {
 			textureIsFramebuffer = isFramebuffer;
@@ -586,21 +579,6 @@ struct GPUStateCache {
 	// When checking for a single flag, use Use()/UseAll().
 	u32 GetUseFlags() const {
 		return useFlags_;
-	}
-
-	void UpdateUVScaleOffset() {
-#if defined(_M_SSE)
-		__m128i values = _mm_slli_epi32(_mm_load_si128((const __m128i *)&gstate.texscaleu), 8);
-		_mm_storeu_si128((__m128i *)&uv, values);
-#elif PPSSPP_ARCH(ARM_NEON)
-		const uint32x4_t values = vshlq_n_u32(vld1q_u32((const u32 *)&gstate.texscaleu), 8);
-		vst1q_u32((u32 *)&uv, values);
-#else
-		uv.uScale = getFloat24(gstate.texscaleu);
-		uv.vScale = getFloat24(gstate.texscalev);
-		uv.uOff = getFloat24(gstate.texoffsetu);
-		uv.vOff = getFloat24(gstate.texoffsetv);
-#endif
 	}
 
 private:
@@ -625,9 +603,6 @@ public:
 
 	int skipDrawReason;
 
-	UVScale uv;
-
-	bool bgraTexture;
 	bool needShaderTexClamp;
 	bool textureIsArray;
 	bool textureIsFramebuffer;

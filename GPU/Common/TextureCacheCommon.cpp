@@ -611,7 +611,6 @@ TexCacheEntry *TextureCacheCommon::SetTexture() {
 			gstate_c.SetTextureIsVideo(false);
 			gstate_c.SetTextureIs3D(entry->status & TexStatus::IS_3D);
 			gstate_c.SetTextureIsArray(false);
-			gstate_c.SetTextureIsBGRA(entry->status & TexStatus::BGRA);
 			gstate_c.SetTextureIsFramebuffer(false);
 			if (entry->status & TexStatus::CLUT8_INDEXED) {
 				gstate_c.SetShaderDepal(ShaderDepalMode::NORMAL, GE_FORMAT_CLUT8);
@@ -709,7 +708,6 @@ TexCacheEntry *TextureCacheCommon::SetTexture() {
 	entry->dim = dim;
 	entry->format = texFormat;
 	entry->maxLevel = maxLevel;
-	entry->status &= ~TexStatus::BGRA;
 
 	entry->bufw = bufw;
 
@@ -1218,7 +1216,6 @@ void TextureCacheCommon::SetTextureFramebuffer(const AttachCandidate &candidate)
 		gstate_c.curTextureWidth = texWidth;
 		gstate_c.curTextureHeight = texHeight;
 		gstate_c.SetTextureIsFramebuffer(true);
-		gstate_c.SetTextureIsBGRA(false);
 
 		if ((gstate_c.curTextureXOffset == 0) != (fbInfo.xOffset == 0) || (gstate_c.curTextureYOffset == 0) != (fbInfo.yOffset == 0)) {
 			gstate_c.Dirty(DIRTY_FRAGMENTSHADER_STATE);
@@ -2240,7 +2237,6 @@ void TextureCacheCommon::ApplyTexture(bool doBind, bool flatZ) {
 		gstate_c.SetTextureSolidAlpha(false);
 		gstate_c.SetTextureIs3D(false);
 		gstate_c.SetTextureIsArray(false);
-		gstate_c.SetTextureIsBGRA(false);
 	} else {
 		if (doBind) {
 			BindTexture(entry, flatZ);
@@ -2248,7 +2244,6 @@ void TextureCacheCommon::ApplyTexture(bool doBind, bool flatZ) {
 		gstate_c.SetTextureSolidAlpha((entry->status & TexStatus::ALPHA_SOLID) != 0);
 		gstate_c.SetTextureIs3D((entry->status & TexStatus::IS_3D) != 0);
 		gstate_c.SetTextureIsArray(false);
-		gstate_c.SetTextureIsBGRA((entry->status & TexStatus::BGRA) != 0);
 		if (entry->status & TexStatus::CLUT8_INDEXED) {
 			bool smoothedDepal = false;
 			u32 depthUpperBits = 0;
@@ -2301,7 +2296,7 @@ static bool CanDepalettizeBufferAs(GETextureFormat texFormat, GEBufferFormat buf
 // But we only do it if the mask/shift exactly matches a color channel, else something different might be going
 // on and we definitely don't want to interpolate.
 // Great enhancement for Test Drive and Manhunt 2.
-static bool CanUseSmoothDepal(const GPUgstate &gstate, GEBufferFormat framebufferFormat, const ClutTexture &clutTexture) {
+static bool CanUseSmoothDepal(const GEState &gstate, GEBufferFormat framebufferFormat, const ClutTexture &clutTexture) {
 	for (int i = 0; i < ClutTexture::MAX_RAMPS; i++) {
 		if (gstate.getClutIndexStartPos() == clutTexture.rampStarts[i] &&
 			gstate.getClutIndexMask() < clutTexture.rampLengths[i]) {
@@ -3124,9 +3119,6 @@ std::string TexStatusToString(TexStatus status) {
 	}
 	if (status & TexStatus::VIDEO) {
 		result += "VIDEO ";
-	}
-	if (status & TexStatus::BGRA) {
-		result += "BGRA ";
 	}
 	return result.empty() ? "None" : result;
 }

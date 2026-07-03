@@ -195,10 +195,10 @@ struct FramebufferHeuristicParams {
 	int16_t scissorBottom;
 };
 
-struct GPUgstate;
-extern GPUgstate gstate;
+struct GEState;
+extern GEState gstate;
 
-void GetFramebufferHeuristicInputs(FramebufferHeuristicParams *params, const GPUgstate &gstate);
+void GetFramebufferHeuristicInputs(FramebufferHeuristicParams *params, const GEState &gstate);
 
 enum BindFramebufferColorFlags {
 	BINDFBCOLOR_SKIP_COPY = 0,
@@ -624,8 +624,6 @@ protected:
 	int pixelHeight_ = 0;
 	int bloomHack_ = 0;
 	bool updatePostShaders_ = false;
-
-	Draw::DataFormat preferredPixelsFormat_ = Draw::DataFormat::R8G8B8A8_UNORM;
 
 	struct TempFBOInfo {
 		Draw::Framebuffer *fbo;
