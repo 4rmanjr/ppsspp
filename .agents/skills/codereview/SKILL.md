@@ -104,6 +104,10 @@ When the user types `/codereview`, perform a complete code review of the latest 
    - **Android JNI & Lifecycle Safety:** Android JNI calls must clean up local references. Verify that JNI actions and background audio push events suspend completely when the emulator screen is paused or minimized, avoiding memory leaks or `DeadObjectException` crashes. Flag P2 if found.
    - **Dangling callback / lambda capture:** If a lambda captures `this` or a raw pointer and is stored for later execution (e.g., a scheduled event), verify the owner outlives the callback. Flag P2 if found.
    - **Reentrancy:** State machines in memory mappers or IRQ handlers can be re-entered via recursive CPU execution. Verify they guard against this (flag or early-out). Flag P2 if found.
+   - **Blocking destructor with thread join:** If a class's destructor calls `JoinAllThreads()` or similar blocking join, verify there's a mechanism to unblock stuck threads first (e.g., set cancellation flag, close sockets, add join timeout). A destructor that blocks indefinitely on a stuck network thread hangs the entire process on exit. Flag P2 if found.
+   - **TLS generated but not used:** If TLS certificates are generated and stored (`GenerateCertificate()`, `SaveToKeystore()`), verify they're actually used for connections (e.g., `SSL_accept`/`SSL_connect` called). Generating TLS without wrapping sockets defeats the security purpose. Flag P2 if found.
+   - **Unbounded dynamic buffer growth:** When reading network data into a `std::vector` that grows (e.g., `buf.resize(buf.size() * 2)`), verify there's an upper bound (e.g., `MAX_UPLOAD_SIZE`). Unbounded growth allows a malicious peer to exhaust memory. Flag P4 if found.
+   - **Config dual state:** When a feature has its own config struct (e.g., `LANSyncConfig`) AND is also stored in `g_Config`, verify there's a single source of truth. Two independent config objects for the same feature cause settings to silently diverge. Flag P2 if found.
 
 6. **Check against AGENTS.md rules:**
    - 🔴 FORBIDDEN: No upstream code deleted/modified/restructured

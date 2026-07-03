@@ -511,7 +511,7 @@ void NativeInit(int argc, const char *argv[], const char *savegame_dir, const ch
 		CreateSysDirectories();
 	}
 
-	// Initialize LAN sync
+	// [PPSSPP-FORK] LANSync: initialize Android LAN sync
 	AndroidLANSync::Instance().Init();
 #elif PPSSPP_PLATFORM(UWP) && !defined(__LIBRETRO__)
 	Path memstickDirFile = g_Config.internalDataDirectory / "memstick_dir.txt";
@@ -563,7 +563,7 @@ void NativeInit(int argc, const char *argv[], const char *savegame_dir, const ch
 		g_Config.currentDirectory = Path(".");
 	}
 
-	// Initialize LAN sync (desktop SDL/Qt)
+	// [PPSSPP-FORK] LANSync: initialize Linux/macOS LAN sync
 	NOTICE_LOG(Log::System, "[BOOT] Initializing LAN sync...");
 	GetLinuxLANSync().Init();
 	NOTICE_LOG(Log::System, "[BOOT] LAN sync initialized OK");
@@ -787,7 +787,7 @@ void NativeInit(int argc, const char *argv[], const char *savegame_dir, const ch
 
 	ApplyAchievementsHostOverride();
 
-	// Auto-enable LAN sync if config was saved with it enabled
+	// [PPSSPP-FORK] LANSync: auto-enable LAN sync if config was saved with it enabled
 #if PPSSPP_PLATFORM(ANDROID)
 	if (g_Config.lanSync.bEnabled) {
 		std::string name = g_Config.lanSync.sDeviceName;
@@ -1762,9 +1762,11 @@ void NativeShutdown() {
 #endif
 
 #if PPSSPP_PLATFORM(ANDROID)
+	// [PPSSPP-FORK] LANSync: shutdown Android LAN sync
 	AndroidLANSync::Instance().Shutdown();
 #endif
 #if (PPSSPP_PLATFORM(LINUX) || PPSSPP_PLATFORM(MAC)) && !PPSSPP_PLATFORM(ANDROID)
+	// [PPSSPP-FORK] LANSync: shutdown Linux/macOS LAN sync
 	GetLinuxLANSync().Shutdown();
 #endif
 	INFO_LOG(Log::System, "NativeShutdown end");

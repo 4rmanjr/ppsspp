@@ -265,15 +265,29 @@ bool TLSServerContext::AcceptTLS(int clientFd, int &tlsFd) {
 		return false;
 	}
 
-	// Return the SSL handle via tlsFd (caller must manage SSL lifetime)
-	// For now, we store the SSL* in a thread-local or return via tlsFd
-	// The caller should use SSL_read/SSL_write instead of recv/send
-	tlsFd = clientFd;  // Same fd, now wrapped in SSL
-	// Note: Caller must SSL_free(ssl) when done
-	// TODO: Store SSL* in a map keyed by fd for proper lifecycle management
+	// Store SSL* for lifecycle management
+	sslMap_[clientFd] = ssl;
+	tlsFd = clientFd;
 
 	INFO_LOG(Log::System, "TLS: SSL_accept succeeded, cipher=%s", SSL_get_cipher_name(ssl));
 	return true;
+}
+
+void *TLSServerContext::GetSSL(int fd) {
+	auto it = sslMap_.find(fd);
+	return (it != sslMap_.end()) ? it->second : nullptr;
+}
+
+void TLSServerContext::CloseTLS(int fd) {
+	auto it = sslMap_.find(fd);
+	if (it != sslMap_.end()) {
+		SSL *ssl = (SSL *)it->second;
+		if (ssl) {
+			SSL_shutdown(ssl);
+			SSL_free(ssl);
+		}
+		sslMap_.erase(it);
+	}
 }
 
 #else  // !HAS_OPENSSL
@@ -305,6 +319,14 @@ std::string TLSServerContext::GetPrivateKeyPEM() const { return ""; }
 bool TLSServerContext::AcceptTLS(int clientFd, int &tlsFd) {
 	tlsFd = clientFd;
 	return true;  // Pass-through
+}
+
+void *TLSServerContext::GetSSL(int fd) {
+	return nullptr;  // No TLS in fallback mode
+}
+
+void TLSServerContext::CloseTLS(int fd) {
+	// No-op in plain TCP mode
 }
 
 #endif  // HAS_OPENSSL

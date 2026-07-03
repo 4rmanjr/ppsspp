@@ -34,7 +34,7 @@
 #include <QMessageBox>
 
 #include "Core/SaveStateLANSync.h"
-#include "Core/LANSyncConfig.h"
+#include "Core/Config.h"
 #include "Common/Log.h"
 #include "Common/StringUtils.h"
 
@@ -58,9 +58,9 @@ public:
 
 		// Enable toggle
 		enableCheck_ = new QCheckBox("Enable LAN Sync");
-		enableCheck_->setChecked(g_LANSyncConfig.bEnabled);
+		enableCheck_->setChecked(g_Config.lanSync.bEnabled);
 		connect(enableCheck_, &QCheckBox::toggled, this, [this](bool checked) {
-			g_LANSyncConfig.bEnabled = checked;
+			g_Config.lanSync.bEnabled = checked;
 			refreshUI();
 		});
 		mainLayout->addWidget(enableCheck_);
@@ -68,7 +68,7 @@ public:
 		// Device name
 		auto *nameLayout = new QHBoxLayout;
 		nameLayout->addWidget(new QLabel("Device Name:"));
-		nameEdit_ = new QLineEdit(QString::fromStdString(g_LANSyncConfig.sDeviceName));
+		nameEdit_ = new QLineEdit(QString::fromStdString(g_Config.lanSync.sDeviceName));
 		nameEdit_->setPlaceholderText("PPSSPP-PC");
 		nameLayout->addWidget(nameEdit_);
 		mainLayout->addLayout(nameLayout);
@@ -84,7 +84,7 @@ public:
 		// Conflict resolution
 		conflictCombo_ = new QComboBox;
 		conflictCombo_->addItems({"Newest Wins", "Keep Local", "Keep Remote", "Prompt"});
-		conflictCombo_->setCurrentIndex(g_LANSyncConfig.iConflictResolution);
+		conflictCombo_->setCurrentIndex(g_Config.lanSync.iConflictResolution);
 		mainLayout->addWidget(MakeGroupBox("Conflict Resolution",
 			new QVBoxLayout));  // simplified
 		((QGroupBox *)mainLayout->itemAt(mainLayout->count() - 1)->widget())->layout()->addWidget(conflictCombo_);

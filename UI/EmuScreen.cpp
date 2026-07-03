@@ -457,6 +457,9 @@ EmuScreen::~EmuScreen() {
 	g_controlMapper.RemoveListener(this);
 
 	if (imguiInited_) {
+		// [PPSSPP-FORK] LANSync: cleanup SDL ImGui UI before ImGui context destruction
+		delete g_LANSyncUI;
+		g_LANSyncUI = nullptr;
 		ImGui_ImplThin3d_Shutdown();
 		ImGui::DestroyContext(ctx_);
 	}
@@ -1978,7 +1981,7 @@ void EmuScreen::renderImDebugger() {
 	}
 
 #if !defined(MOBILE_DEVICE)
-	// Render LAN Sync UI if enabled (desktop SDL only)
+	// [PPSSPP-FORK] LANSync: render SDL ImGui UI panels (desktop only)
 	if (g_LANSyncUI) {
 		Draw::DrawContext *draw = screenManager()->getDrawContext();
 		if (PSP_IsInited()) {

@@ -14,6 +14,7 @@
 #include <string>
 #include <functional>
 #include <memory>
+#include <map>
 
 #include "Common/Net/PlatformKeyStore.h"
 
@@ -49,13 +50,21 @@ public:
 	bool LoadFromKeystore();
 
 	// Initialize TLS context on existing socket
+	// On success, stores SSL* internally; use GetSSL() to retrieve for I/O
 	bool AcceptTLS(int clientFd, int &tlsFd);
+
+	// Get SSL* for a given fd (after AcceptTLS). Returns nullptr if not found.
+	void *GetSSL(int fd);
+
+	// Close TLS connection for a given fd and free SSL*
+	void CloseTLS(int fd);
 
 private:
 	void *sslCtx_;  // SSL_CTX* (opaque, avoid OpenSSL header in .h)
 	void *cert_;    // X509*
 	void *pkey_;    // EVP_PKEY*
 	std::string fingerprint_;
+	std::map<int, void *> sslMap_;  // fd -> SSL* for lifecycle management
 };
 
 // Client-side TOFU (Trust On First Use) cert verification

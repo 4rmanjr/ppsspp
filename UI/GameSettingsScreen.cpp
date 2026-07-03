@@ -1093,6 +1093,7 @@ void GameSettingsScreen::CreateNetworkingSettings(UI::ViewGroup *networkingSetti
 		qc1->SetEnabledFunc([] { return g_Config.bEnableQuickChat && g_Config.bEnableNetworkChat; });
 	}
 
+	// [PPSSPP-FORK] LANSync: LAN save state sync settings section
 	networkingSettings->Add(new ItemHeader(n->T("LAN Save State Sync")));
 
 	CheckBox *enableCb = networkingSettings->Add(new CheckBox(&g_Config.lanSync.bEnabled, n->T("Enable LAN Sync")));

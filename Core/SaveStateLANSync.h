@@ -276,7 +276,10 @@ private:
 	// Pending pair requests
 	mutable std::vector<PendingPairRequest> pendingRequests_;
 	mutable std::mutex pendingMutex_;
-	mutable int pendingRequestCounter_ = 0;
+	std::atomic<int> pendingRequestCounter_{0};
+
+	// Pairing PIN (written on UI thread, read on server thread)
+	mutable std::mutex pinMutex_;
 
 	// Background threads (must be joined before destruction)
 	std::vector<std::thread> backgroundThreads_;

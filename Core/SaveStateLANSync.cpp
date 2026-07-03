@@ -170,7 +170,14 @@ SaveStateLANSync &SaveStateLANSync::Instance() {
 	return instance;
 }
 
-SaveStateLANSync::~SaveStateLANSync() { 
+SaveStateLANSync::~SaveStateLANSync() {
+	// Signal all background threads to stop before joining
+	syncCancelled_ = true;
+	serverRunning_ = false;
+	if (listenSock_ >= 0) {
+		closesocket(listenSock_);
+		listenSock_ = -1;
+	}
 	Shutdown();
 	JoinAllThreads();
 }
@@ -459,6 +466,16 @@ bool SaveStateLANSync::StartServer() {
 					}
 				}
 #endif
+				// Wrap socket in TLS if available
+				// TODO: Replace recv/send with SSL_read/SSL_write when sslHandle is set.
+				// Current implementation calls AcceptTLS for cert exchange but data
+				// still flows over plain TCP until WriteHTTPResponse is refactored.
+				int ioFd = clientFd;
+				void *sslHandle = nullptr;
+				if (tlsCtx_ && tlsCtx_->AcceptTLS(clientFd, ioFd)) {
+					sslHandle = tlsCtx_->GetSSL(clientFd);
+				}
+
 				// Read full request (headers + body)
 				std::string request;
 				char tempBuf[16384];
@@ -487,7 +504,11 @@ bool SaveStateLANSync::StartServer() {
 						if (bodySize >= contentLength) break;
 					}
 				}
-				if (request.empty()) { closesocket(clientFd); return; }
+				if (request.empty()) {
+					closesocket(clientFd);
+					if (sslHandle && tlsCtx_) tlsCtx_->CloseTLS(clientFd);
+					return;
+				}
 
 				// Parse HTTP request line
 				std::string method, path;
@@ -529,6 +550,7 @@ bool SaveStateLANSync::StartServer() {
 							WriteHTTPResponse(clientFd, 401,
 							                  "{\"error\":\"unauthorized\"}");
 							closesocket(clientFd);
+							if (sslHandle && tlsCtx_) tlsCtx_->CloseTLS(clientFd);
 							return;
 						}
 					}
@@ -581,6 +603,7 @@ bool SaveStateLANSync::StartServer() {
 					if (!IsValidSaveFilename(filename)) {
 						WriteHTTPResponse(clientFd, 400, "{\"error\":\"invalid_filename\"}");
 						closesocket(clientFd);
+						if (sslHandle && tlsCtx_) tlsCtx_->CloseTLS(clientFd);
 						return;
 					}
 
@@ -614,6 +637,7 @@ bool SaveStateLANSync::StartServer() {
 						if (contentLength > MAX_UPLOAD_SIZE) {
 							WriteHTTPResponse(clientFd, 413, "{\"error\":\"payload_too_large\"}");
 							closesocket(clientFd);
+							if (sslHandle && tlsCtx_) tlsCtx_->CloseTLS(clientFd);
 							return;
 						}
 						
@@ -653,6 +677,13 @@ bool SaveStateLANSync::StartServer() {
 							int slot = (lastUnderscore != std::string::npos && dot != std::string::npos) ?
 								atoi(filename.substr(lastUnderscore + 1, dot - lastUnderscore - 1).c_str()) : -1;
 
+							if (slot < 0 || slot > 99) {
+								WriteHTTPResponse(clientFd, 400, "{\"error\":\"invalid_slot\"}");
+								closesocket(clientFd);
+								if (sslHandle && tlsCtx_) tlsCtx_->CloseTLS(clientFd);
+								return;
+							}
+
 							std::string response;
 							HandleSaveUpload(gameId, slot, allBody, "", response);
 							WriteHTTPResponse(clientFd, 201, response);
@@ -664,6 +695,9 @@ bool SaveStateLANSync::StartServer() {
 					WriteHTTPResponse(clientFd, 404, "{\"error\":\"not_found\"}");
 				}
 				closesocket(clientFd);
+				if (sslHandle && tlsCtx_) {
+					tlsCtx_->CloseTLS(clientFd);
+				}
 			}));
 		}
 		closesocket(listenSock_);
@@ -696,11 +730,15 @@ std::string SaveStateLANSync::GeneratePairingPin() {
 	char pin[7];
 	for (int i = 0; i < 6; i++) pin[i] = '0' + dist(gen);
 	pin[6] = '\0';
+	std::lock_guard<std::mutex> lock(pinMutex_);
 	pairingPin_ = pin;
 	return pairingPin_;
 }
 
-void SaveStateLANSync::CancelPairing() { pairingPin_.clear(); }
+void SaveStateLANSync::CancelPairing() {
+	std::lock_guard<std::mutex> lock(pinMutex_);
+	pairingPin_.clear();
+}
 
 void SaveStateLANSync::PairWithPeer(const std::string &peerId, const std::string &pin,
                                      std::function<void(bool, const std::string &)> callback) {
@@ -1083,7 +1121,13 @@ bool SaveStateLANSync::DownloadSave(const PeerInfo &peer, const Path &localPath,
 		int total = 0, n;
 		while ((n = recv(sock, (char *)buf.data() + total, buf.size() - total - 1, 0)) > 0) {
 			total += n;
-			if (total >= (int)buf.size() - 1024) buf.resize(buf.size() * 2);
+			if (total >= (int)buf.size() - 1024) {
+				if (buf.size() > (size_t)MAX_UPLOAD_SIZE) {
+					closesocket(sock);
+					return false;
+				}
+				buf.resize(buf.size() * 2);
+			}
 		}
 		if (total > 0) {
 			std::string resp((char *)buf.data(), total);
@@ -1158,22 +1202,22 @@ void SaveStateLANSync::SyncWithPeer(const std::string &peerId, SyncDirection dir
 		for (auto &p : pairedPeers_) { if (p.id == peerId && p.online) { target = p; break; } }
 	}
 	if (target.id.empty()) {
-		fprintf(stderr, "SyncWithPeer: peer not found or offline (id=%s)\n", peerId.c_str());
+		INFO_LOG(Log::System, "LANSync: SyncWithPeer peer not found or offline (id=%s)", peerId.c_str());
 		if (onDone) { SyncResult r; r.success = false; onDone(r); }
 		return;
 	}
 
-	fprintf(stderr, "SyncWithPeer: starting sync with %s (%s:%d)\n", target.id.c_str(), target.host.c_str(), target.port);
-	syncStatus_ = SyncStatus::SYNCING;
+	INFO_LOG(Log::System, "LANSync: SyncWithPeer starting sync with %s (%s:%d)", target.id.c_str(), target.host.c_str(), target.port);
 	syncCancelled_ = false;
 
-	// Initialize syncProgress_ for GetProgress() callers
+	// Initialize syncProgress_ BEFORE setting status (avoids stale progress with new status)
 	{
 		std::lock_guard<std::mutex> lock(syncMutex_);
 		syncProgress_ = SyncProgress{};
 		syncProgress_.status = SyncStatus::SYNCING;
 		syncProgress_.currentPeer = target.id;
 	}
+	syncStatus_ = SyncStatus::SYNCING;
 
 	AddBackgroundThread(std::thread([this, target, onProgress, onDone]() {
 #if PPSSPP_PLATFORM(ANDROID)
@@ -1207,12 +1251,12 @@ void SaveStateLANSync::SyncWithPeer(const std::string &peerId, SyncDirection dir
 }
 
 SaveStateLANSync::SyncResult SaveStateLANSync::DoSync(const PeerInfo &peer, SaveStateLANSync::ProgressCallback onProgress) {
-	fprintf(stderr, "DoSync: START peer=%s:%d\n", peer.host.c_str(), peer.port);
+	INFO_LOG(Log::System, "LANSync DoSync: START peer=%s:%d", peer.host.c_str(), peer.port);
 	SyncResult result;
 
 	// Connect to peer
 	int sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-	if (sock < 0) { fprintf(stderr, "DoSync: socket() failed\n"); result.success = false; return result; }
+	if (sock < 0) { INFO_LOG(Log::System, "LANSync DoSync: socket() failed"); result.success = false; return result; }
 	struct timeval tv;
 	tv.tv_sec = 30; tv.tv_usec = 0;
 	setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char *)&tv, sizeof(tv));
@@ -1229,14 +1273,14 @@ SaveStateLANSync::SyncResult SaveStateLANSync::DoSync(const PeerInfo &peer, Save
 		         peer.host.c_str(), peer.port, strerror(errno));
 		closesocket(sock); result.success = false; return result;
 	}
-	fprintf(stderr, "DoSync: connected OK, scanning local dir...\n");
+	INFO_LOG(Log::System, "LANSync DoSync: connected OK, scanning local dir...");
 
 	// Scan local savestate directory for all games
 	Path saveDir = GetSysDirectory(DIRECTORY_SAVESTATE);
 	std::vector<File::FileInfo> files;
 	File::GetFilesInDir(saveDir, &files, "ppst");
 
-	fprintf(stderr, "DoSync: found %d local .ppst files in %s\n", (int)files.size(), saveDir.c_str());
+	INFO_LOG(Log::System, "LANSync DoSync: found %d local .ppst files in %s", (int)files.size(), saveDir.c_str());
 
 	// Group by game prefix
 	std::map<std::string, std::vector<int>> localGames;
@@ -1264,7 +1308,7 @@ SaveStateLANSync::SyncResult SaveStateLANSync::DoSync(const PeerInfo &peer, Save
 					if (!hadMeta || hashChanged) {
 						// New file or file changed: recompute metadata
 						if (hashChanged) {
-							fprintf(stderr, "DoSync: hash changed for %s, updating metadata\n", name.c_str());
+							INFO_LOG(Log::System, "LANSync DoSync: hash changed for %s, updating metadata", name.c_str());
 						}
 						meta.hash = currentHash;
 						meta.lastSyncTime = time(nullptr);
@@ -1318,13 +1362,13 @@ SaveStateLANSync::SyncResult SaveStateLANSync::DoSync(const PeerInfo &peer, Save
 	}
 	closesocket(sock);
 
-	if (response.empty()) { fprintf(stderr, "DoSync: empty response from peer\n"); result.success = false; return result; }
+	if (response.empty()) { INFO_LOG(Log::System, "LANSync DoSync: empty response from peer"); result.success = false; return result; }
 
 	// Parse response: extract body after \r\n\r\n
 	size_t bodyStart = response.find("\r\n\r\n");
-	if (bodyStart == std::string::npos) { fprintf(stderr, "DoSync: no header/body separator\n"); result.success = false; return result; }
+	if (bodyStart == std::string::npos) { INFO_LOG(Log::System, "LANSync DoSync: no header/body separator"); result.success = false; return result; }
 	std::string jsonBody = response.substr(bodyStart + 4);
-	fprintf(stderr, "DoSync: remote save list body (%d bytes): %.200s\n", (int)jsonBody.size(), jsonBody.c_str());
+	INFO_LOG(Log::System, "LANSync DoSync: remote save list body (%d bytes): %.200s", (int)jsonBody.size(), jsonBody.c_str());
 
 	// Extract HLC from JSON field
 	auto extractHLC = [&](size_t searchStart, const std::string &field) -> HLC {
@@ -1673,7 +1717,10 @@ void SaveStateLANSync::OnSaveStateLoaded(const std::string &gamePrefix, int slot
 bool SaveStateLANSync::IsServerRunning() const { return serverPort_ > 0; }
 SaveStateLANSync::SyncStatus SaveStateLANSync::GetStatus() const { return syncStatus_; }
 SaveStateLANSync::SyncProgress SaveStateLANSync::GetProgress() const { std::lock_guard<std::mutex> lock(syncMutex_); return syncProgress_; }
-std::string SaveStateLANSync::GetCurrentPin() const { return pairingPin_; }
+std::string SaveStateLANSync::GetCurrentPin() const {
+	std::lock_guard<std::mutex> lock(pinMutex_);
+	return pairingPin_;
+}
 
 std::string SaveStateLANSync::GetDeviceId() const { return deviceId_; }
 
@@ -1784,9 +1831,12 @@ void SaveStateLANSync::HandlePairRequest(const std::string &body, std::string &r
 	peerId = extractStr("id");
 
 	// Validate PIN
-	if (pin != pairingPin_ || pairingPin_.empty()) {
-		response = "{\"error\":\"invalid_pin\"}";
-		return;
+	{
+		std::lock_guard<std::mutex> lock(pinMutex_);
+		if (pin != pairingPin_ || pairingPin_.empty()) {
+			response = "{\"error\":\"invalid_pin\"}";
+			return;
+		}
 	}
 
 	// Generate token — store the same token that we return to the client

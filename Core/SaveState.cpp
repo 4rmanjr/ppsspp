@@ -434,6 +434,7 @@ int g_screenshotFailures;
 				Load(fn, slot, callback);
 			}
 			
+			// [PPSSPP-FORK] LANSync: hook for save state metadata tracking
 			if (g_Config.lanSync.bEnabled) {
 				SaveStateLANSync::Instance().OnSaveStateLoaded(std::string(gamePrefix), slot);
 			}
@@ -508,6 +509,7 @@ int g_screenshotFailures;
 			ScheduleSaveScreenshot(shot);
 			Save(fn.WithExtraExtension(".tmp"), slot, renameCallback);
 			
+			// [PPSSPP-FORK] LANSync: hook for save state metadata tracking
 			if (g_Config.lanSync.bEnabled) {
 				SaveStateLANSync::Instance().OnSaveStateSaved(std::string(gamePrefix), slot);
 			}
@@ -956,7 +958,7 @@ int g_screenshotFailures;
 				op.callback(callbackResult, callbackMessage, callbackMetadata);
 			}
 
-			// LAN sync hooks (non-blocking)
+			// [PPSSPP-FORK] LANSync: hooks for save state metadata tracking (non-blocking)
 			if (callbackResult != Status::FAILURE && op.slot >= 0) {
 				std::string gamePrefix = GenerateFullDiscId(g_paramSFO);
 				if (op.type == OperationType::Load) {
