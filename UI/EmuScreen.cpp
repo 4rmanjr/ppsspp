@@ -457,9 +457,11 @@ EmuScreen::~EmuScreen() {
 	g_controlMapper.RemoveListener(this);
 
 	if (imguiInited_) {
+#if !defined(MOBILE_DEVICE)
 		// [PPSSPP-FORK] LANSync: cleanup SDL ImGui UI before ImGui context destruction
 		delete g_LANSyncUI;
 		g_LANSyncUI = nullptr;
+#endif
 		ImGui_ImplThin3d_Shutdown();
 		ImGui::DestroyContext(ctx_);
 	}

@@ -418,4 +418,35 @@ void AndroidLANSync::StopQRScan() {
 	// QR scan stops when result is received or user cancels
 }
 
+// [PPSSPP-FORK] LANSync: In-app dialog support for Android
+void AndroidLANSync::ShowConflictDialog(const std::string &slotName, int64_t localTime, int64_t remoteTime,
+                                        int64_t localSize, int64_t remoteSize,
+                                        std::function<void(int)> callback) {
+	// For Android, we use the C++ UI toolkit (same as Linux/SDL)
+	// The dialog is shown via screenManager()->push() from the UI thread
+	// This is called from the sync worker thread, so we need to post to UI thread
+	INFO_LOG(Log::System, "AndroidLANSync: ShowConflictDialog for %s", slotName.c_str());
+
+	// Store callback for later invocation from UI thread
+	// The actual dialog creation happens in UI/LANPeerListScreen.cpp
+	// This is a placeholder that will be connected to the UI layer
+}
+
+void AndroidLANSync::ShowServerPairingScreen(std::function<void()> onClose) {
+	// Show server pairing screen with QR code and PIN
+	// Similar to conflict dialog, this uses the C++ UI toolkit
+	INFO_LOG(Log::System, "AndroidLANSync: ShowServerPairingScreen");
+
+	// Placeholder for UI connection
+}
+
+void AndroidLANSync::ShowLargeSaveWarning(const std::string &slotName, int64_t sizeBytes,
+                                         std::function<void(bool)> callback) {
+	// Show warning for large save state (>50MB)
+	INFO_LOG(Log::System, "AndroidLANSync: ShowLargeSaveWarning for %s (%lld bytes)",
+	         slotName.c_str(), (long long)sizeBytes);
+
+	// Placeholder for UI connection
+}
+
 #endif  // PPSSPP_PLATFORM(ANDROID)

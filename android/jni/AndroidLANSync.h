@@ -36,6 +36,14 @@ public:
 	void StartQRScan(std::function<void(const std::string &result)> callback);
 	void StopQRScan();
 
+	// [PPSSPP-FORK] LANSync: In-app dialog support for Android
+	void ShowConflictDialog(const std::string &slotName, int64_t localTime, int64_t remoteTime,
+	                        int64_t localSize, int64_t remoteSize,
+	                        std::function<void(int)> callback);
+	void ShowServerPairingScreen(std::function<void()> onClose);
+	void ShowLargeSaveWarning(const std::string &slotName, int64_t sizeBytes,
+	                         std::function<void(bool)> callback);
+
 private:
 	AndroidLANSync() = default;
 	bool enabled_ = false;

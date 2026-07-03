@@ -45,6 +45,13 @@ This is a PPSSPP fork with custom features that **must remain compatible** with 
 - ✅ On upstream merge conflict: **upstream code wins** — custom code is moved/adjusted, not the other way around.
 - ✅ Per-feature settings isolated in separate config sections (don't mix with PSP).
 
+### 🟢 Platform Parity (Linux & Android)
+- ✅ Fitur kustom harus berfungsi di **Linux dan Android** dengan kualitas setara.
+- ✅ Jika fitur menggunakan platform-specific API (mDNS, key storage), harus punya **fallback** di platform lain.
+- ✅ UI dialogs harus tersedia di kedua platform (native Android UI atau ImGui fallback).
+- ✅ Tidak ada kode yang hanya aktif di satu platform tanpa justifikasi tertulis.
+- ✅ Core logic (sync protocol, conflict resolution, file transfer) harus **identik** di kedua platform — hanya UI layer yang boleh berbeda.
+
 ## Patterns
 
 ### 🟢 IsFeature() Pattern — Reduce #ifdef at Call Site
