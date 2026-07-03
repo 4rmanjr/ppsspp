@@ -125,8 +125,8 @@ private:
 	float lowPassL_ = 0.0f;
 	float lowPassR_ = 0.0f;
 
-	// [PPSSPP-FORK] GBA Audio Parity: staging buffer to break 735-sample push into 64-sample blocks
-	int32_t stagingBuffer_[64 * 2]{};
+	// [PPSSPP-FORK] GBA Audio Parity: staging buffer to hold full audio frame (TARGET_PAIRS stereo pairs)
+	int32_t stagingBuffer_[TARGET_PAIRS * 2]{};
 	size_t stagingFill_ = 0;
 
 	// [PPSSPP-FORK] GBA Audio Parity: appended after mGBA core state in .ppst file
