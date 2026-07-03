@@ -1,11 +1,13 @@
-// PPSSPP Project - LAN Save State Sync
-// Save state sync metadata implementation
+// [PPSSPP-FORK] LANSync: Save state sync metadata implementation
+// Only add new lines. Do not delete/modify upstream lines.
+
+#ifdef PPSSPP_LANSYNC
 
 #include "ppsspp_config.h"
 
 #include <cstdint>
 
-#include "Core/SaveStateSyncMetadata.h"
+#include "LANSync/SaveStateSyncMetadata.h"
 #include "Common/File/FileUtil.h"
 #include "Common/StringUtils.h"
 #include "Common/Log.h"
@@ -109,3 +111,5 @@ bool SaveStateSyncMetadata::WriteToFile(const Path &ppstPath) const {
 	}
 	return ok;
 }
+
+#endif // PPSSPP_LANSYNC

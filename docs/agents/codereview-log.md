@@ -20,3 +20,4 @@ Track bug patterns found during code reviews for continuous improvement.
 | 2026-07-03 | Missing [PPSSPP-FORK] markers on upstream hooks | AGENTS.md | P5 | SaveState.cpp, EmuScreen.cpp+ | no (existing rule) |
 | 2026-07-03 | Custom files in Core/ directory | AGENTS.md | P5 | Core/SaveStateLANSync.* | no (existing rule) |
 | 2026-07-03 | PPSSPP_LANSYNC feature flag not implemented | AGENTS.md | P5 | N/A | no (existing rule) |
+| 2026-07-03 | [FIXED] Files moved from Core/ to LANSync/ + feature flag + [PPSSPP-FORK] markers added | Refactor | P0 | Core/* → LANSync/* | yes |

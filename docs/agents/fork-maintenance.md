@@ -45,7 +45,7 @@ Every custom feature has its own preprocessor flag:
 
 | Flag | Feature |
 |------|---------|
-| `PPSSPP_LANSYNC` | LAN sync core |
+| `PPSSPP_LANSYNC` | LAN sync core (option in CMakeLists.txt, default ON) |
 | `PPSSPP_MDNS` | MDNS discovery |
 | `PPSSPP_TLS` | TLS server/secure communication |
 | `PPSSPP_UDP_DISCOVERY` | UDP peer discovery |

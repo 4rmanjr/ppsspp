@@ -1,3 +1,8 @@
+// [PPSSPP-FORK] LANSync: Linux platform backend
+// Only add new lines. Do not delete/modify upstream lines.
+
+#ifdef PPSSPP_LANSYNC
+
 // PPSSPP Project - LAN Save State Sync
 // Linux platform backend - wires together mDNS, UDP, TLS, and PlatformKeyStore
 // for the Linux platform (SDL + Qt frontends share this backend).
@@ -16,7 +21,7 @@
 #include <vector>
 #include <memory>
 
-#include "Core/SaveStateLANSync.h"
+#include "LANSync/SaveStateLANSync.h"
 
 // LinuxLANSync wraps the core SaveStateLANSync with Linux-specific init.
 // It handles:
@@ -58,3 +63,5 @@ private:
 
 // Singleton accessor
 LinuxLANSync &GetLinuxLANSync();
+
+#endif // PPSSPP_LANSYNC

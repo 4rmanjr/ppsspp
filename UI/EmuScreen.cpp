@@ -76,7 +76,9 @@ using namespace std::placeholders;
 #include "Core/Screenshot.h"
 #include "UI/ImDebugger/ImDebugger.h"
 #if !defined(MOBILE_DEVICE)
+#ifdef PPSSPP_LANSYNC
 #include "SDL/SDLLANSync.h"
+#endif
 #endif
 #include "Core/HLE/__sceAudio.h"
 #include "Core/HW/Display.h"
@@ -459,8 +461,10 @@ EmuScreen::~EmuScreen() {
 	if (imguiInited_) {
 #if !defined(MOBILE_DEVICE)
 		// [PPSSPP-FORK] LANSync: cleanup SDL ImGui UI before ImGui context destruction
+	#ifdef PPSSPP_LANSYNC
 		delete g_LANSyncUI;
 		g_LANSyncUI = nullptr;
+	#endif
 #endif
 		ImGui_ImplThin3d_Shutdown();
 		ImGui::DestroyContext(ctx_);
@@ -1917,7 +1921,9 @@ void EmuScreen::runImDebugger() {
 
 #if !defined(MOBILE_DEVICE)
 			// Initialize LAN Sync UI (desktop SDL only)
+			#ifdef PPSSPP_LANSYNC
 			new SDLLANSyncUI();
+			#endif
 #endif
 		}
 
@@ -1984,6 +1990,7 @@ void EmuScreen::renderImDebugger() {
 
 #if !defined(MOBILE_DEVICE)
 	// [PPSSPP-FORK] LANSync: render SDL ImGui UI panels (desktop only)
+	#ifdef PPSSPP_LANSYNC
 	if (g_LANSyncUI) {
 		Draw::DrawContext *draw = screenManager()->getDrawContext();
 		if (PSP_IsInited()) {
@@ -1997,6 +2004,7 @@ void EmuScreen::renderImDebugger() {
 			ImGui_ImplThin3d_RenderDrawData(ImGui::GetDrawData(), draw);
 		}
 	}
+	#endif
 #endif
 }
 

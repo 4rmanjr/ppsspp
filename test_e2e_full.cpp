@@ -2,7 +2,7 @@
 // Starts server, tests all HTTP API endpoints, then stops
 // Compile: g++ -std=c++17 -I. -ICommon -ICore -ISDL -Iext -Iext/imgui -Iext/native -Iext \
 //          -o test_e2e_full test_e2e_full.cpp \
-//          Core/SaveStateLANSync.cpp Core/SaveStateSyncMetadata.cpp Core/LANSyncConfig.cpp \
+//          LANSync/SaveStateLANSync.cpp LANSync/SaveStateSyncMetadata.cpp LANSync/LANSyncConfig.cpp \
 //          Common/Net/UDPDiscovery.cpp Common/Net/TLSServer.cpp Common/Net/MDNS.cpp \
 //          Common/Net/PlatformKeyStore_Unix.cpp Common/Net/MDNS_Unix.cpp \
 //          Common/Data/HLC.cpp Common/Crypto/sha256.cpp \
@@ -10,9 +10,9 @@
 //          -lavahi-common -lavahi-client -lssl -lcrypto -lpthread
 
 #include "ppsspp_config.h"
-#include "Core/SaveStateLANSync.h"
-#include "Core/SaveStateSyncMetadata.h"
-#include "Core/LANSyncConfig.h"
+#include "LANSync/SaveStateLANSync.h"
+#include "LANSync/SaveStateSyncMetadata.h"
+#include "LANSync/LANSyncConfig.h"
 #include "Common/Data/HLC.h"
 #include "Common/Net/PlatformKeyStore.h"
 #include "Common/Log.h"

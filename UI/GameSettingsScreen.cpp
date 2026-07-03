@@ -106,8 +106,10 @@ extern AndroidAudioState *g_audioState;
 
 #endif
 
-#include "Core/SaveStateLANSync.h"
+#ifdef PPSSPP_LANSYNC
+#include "LANSync/SaveStateLANSync.h"
 #include "UI/LANPeerListScreen.h"
+#endif
 
 #if PPSSPP_PLATFORM(MAC) || PPSSPP_PLATFORM(IOS)
 void SetMemStickDirDarwin(int requesterToken) {
@@ -988,7 +990,9 @@ MacAddressChooser::MacAddressChooser(RequesterToken token, Path gamePath, std::s
 
 void GameSettingsScreen::CreateNetworkingSettings(UI::ViewGroup *networkingSettings) {
 #if defined(SDL)
+#ifdef PPSSPP_LANSYNC
 	extern SDLLANSyncUI *g_LANSyncUI;
+#endif
 #endif
 	using namespace UI;
 
@@ -1093,6 +1097,7 @@ void GameSettingsScreen::CreateNetworkingSettings(UI::ViewGroup *networkingSetti
 		qc1->SetEnabledFunc([] { return g_Config.bEnableQuickChat && g_Config.bEnableNetworkChat; });
 	}
 
+#ifdef PPSSPP_LANSYNC
 	// [PPSSPP-FORK] LANSync: LAN save state sync settings section
 	networkingSettings->Add(new ItemHeader(n->T("LAN Save State Sync")));
 
@@ -1193,6 +1198,7 @@ void GameSettingsScreen::CreateNetworkingSettings(UI::ViewGroup *networkingSetti
 		}
 #endif
 	});
+#endif
 
 	networkingSettings->Add(new ItemHeader(n->T("Misc", "Misc (default = compatibility)")));
 	Choice *wiki = networkingSettings->Add(new Choice(n->T("Open PPSSPP Multiplayer Wiki Page"), ImageID("I_LINK_OUT")));

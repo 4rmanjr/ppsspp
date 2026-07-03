@@ -1,7 +1,7 @@
-// PPSSPP Project - LAN Save State Sync
-// LANSyncConfig implementation
+// [PPSSPP-FORK] LANSync: LANSyncConfig implementation
+// Only add new lines. Do not delete/modify upstream lines.
 
-#include "Core/LANSyncConfig.h"
+#include "LANSync/LANSyncConfig.h"
 #include "Common/Log.h"
 
 LANSyncConfig g_LANSyncConfig;

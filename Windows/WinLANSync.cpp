@@ -1,6 +1,7 @@
-// PPSSPP Project - LAN Save State Sync
-// Windows platform backend - Phase 4 full implementation
-// WinRT DNS-SD (Win10+), DPAPI, Firewall (INetFwRule), QR code
+// [PPSSPP-FORK] LANSync: Windows platform backend
+// Only add new lines. Do not delete/modify upstream lines.
+
+#ifdef PPSSPP_LANSYNC
 
 #include "ppsspp_config.h"
 
@@ -40,7 +41,7 @@
 #include "Common/Net/PlatformKeyStore.h"
 #include "Common/Net/MDNS.h"
 #include "Common/Net/UDPDiscovery.h"
-#include "Core/SaveStateLANSync.h"
+#include "LANSync/SaveStateLANSync.h"
 
 // ==================== Utility ====================
 
@@ -375,4 +376,5 @@ void WinLANSync::RemoveFirewallRule() {
 	RemoveWindowsFirewallRule();
 }
 
+#endif // PPSSPP_LANSYNC
 #endif  // PPSSPP_PLATFORM(WINDOWS)

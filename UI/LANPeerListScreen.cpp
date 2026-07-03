@@ -1,5 +1,7 @@
 #include "ppsspp_config.h"
 
+#ifdef PPSSPP_LANSYNC
+
 #include <set>
 #include <atomic>
 
@@ -15,7 +17,7 @@
 #include "Common/System/Request.h"
 #include "Common/Data/Text/I18n.h"
 #include "Core/Config.h"
-#include "Core/SaveStateLANSync.h"
+#include "LANSync/SaveStateLANSync.h"
 
 void LANPeerListScreen::update() {
 	// Auto-refresh every 1 second (responsive to incoming pair requests)
@@ -424,3 +426,5 @@ void LANSyncLargeSaveWarningPopup::CreatePopupContents(UI::ViewGroup *parent) {
 void LANSyncLargeSaveWarningPopup::OnCompleted(DialogResult result) {
 	confirmed_ = (result == DR_OK);
 }
+
+#endif // PPSSPP_LANSYNC

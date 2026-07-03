@@ -1,3 +1,8 @@
+// [PPSSPP-FORK] LANSync: macOS Cocoa (AppKit) native UI
+// Only add new lines. Do not delete/modify upstream lines.
+
+#ifdef PPSSPP_LANSYNC
+
 // PPSSPP Project - LAN Save State Sync
 // macOS Cocoa (AppKit) native UI - Phase 9
 // NSWindow, NSPanel, CIQRCodeGenerator, NSVisualEffectView

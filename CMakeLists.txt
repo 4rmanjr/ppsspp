@@ -211,6 +211,11 @@ option(USE_CCACHE "Use ccache if detected" ON)
 option(USE_NO_MMAP "Disable mmap usage" OFF)
 option(USE_IAP "IAP enabled" OFF)
 option(GOLD "Gold build" OFF)
+option(PPSSPP_LANSYNC "Enable LAN Save State Sync" ON)
+
+if(PPSSPP_LANSYNC)
+	add_compile_definitions(PPSSPP_LANSYNC)
+endif()
 
 if(USE_CCACHE)
 	include(ccache)
@@ -1533,10 +1538,12 @@ elseif(USING_QT_UI)
 		Qt/mainwindow.cpp
 		Qt/mainwindow.h
 	)
-	list(APPEND NativeAppSource
-		UI/LANSyncSettings.h
-		UI/LANSyncSettings.cpp
-	)
+	if(PPSSPP_LANSYNC)
+		list(APPEND NativeAppSource
+			UI/LANSyncSettings.h
+			UI/LANSyncSettings.cpp
+		)
+	endif()
 	add_compile_definitions(USING_QT_UI)
 	if(USING_GLES2)
 		add_compile_definitions(QT_OPENGL_ES QT_OPENGL_ES_2)
@@ -1689,8 +1696,6 @@ list(APPEND NativeAppSource
 	UI/GameInfoCache.cpp
 	UI/IAPScreen.cpp
 	UI/IAPScreen.h
-	UI/LANSyncSettings.cpp
-	UI/LANSyncSettings.h
 	UI/MainScreen.h
 	UI/MainScreen.cpp
 	UI/GameBrowser.h
@@ -1709,8 +1714,6 @@ list(APPEND NativeAppSource
 	UI/GameScreen.cpp
 	UI/GameSettingsScreen.h
 	UI/GameSettingsScreen.cpp
-	UI/LANPeerListScreen.h
-	UI/LANPeerListScreen.cpp
 	UI/DeveloperToolsScreen.h
 	UI/DeveloperToolsScreen.cpp
 	UI/DriverManagerScreen.h
@@ -1764,6 +1767,15 @@ list(APPEND NativeAppSource
 	UI/RetroAchievementScreens.cpp
 	UI/RetroAchievementScreens.h
 )
+
+if(PPSSPP_LANSYNC)
+	list(APPEND NativeAppSource
+		UI/LANSyncSettings.cpp
+		UI/LANSyncSettings.h
+		UI/LANPeerListScreen.h
+		UI/LANPeerListScreen.cpp
+	)
+endif()
 
 if(ANDROID)
 	if(ARM)
@@ -2266,8 +2278,8 @@ add_library(${CoreLibName} ${CoreLinkType}
 	Core/KeyMap.h
 	Core/KeyMapDefaults.cpp
 	Core/KeyMapDefaults.h
-	Core/LANSyncConfig.cpp
-	Core/LANSyncConfig.h
+	LANSync/LANSyncConfig.cpp
+	LANSync/LANSyncConfig.h
 	Core/LuaContext.cpp
 	Core/LuaContext.h
 	Core/RetroAchievements.h
@@ -2640,13 +2652,13 @@ add_library(${CoreLibName} ${CoreLinkType}
 	Core/Replay.h
 	Core/SaveState.cpp
 	Core/SaveState.h
-	Core/SaveStateLANSync.cpp
-	Core/SaveStateLANSync.h
+	LANSync/SaveStateLANSync.cpp
+	LANSync/SaveStateLANSync.h
 
 	Core/SaveStateRewind.cpp
 	Core/SaveStateRewind.h
-	Core/SaveStateSyncMetadata.cpp
-	Core/SaveStateSyncMetadata.h
+	LANSync/SaveStateSyncMetadata.cpp
+	LANSync/SaveStateSyncMetadata.h
 	Core/Screenshot.cpp
 	Core/Screenshot.h
 	Core/System.cpp

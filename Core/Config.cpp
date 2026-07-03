@@ -1171,7 +1171,8 @@ static const ConfigSetting vrSettings[] = {
 	ConfigSetting("VRHeadUpDisplayScale", SETTING(g_Config, fHeadUpDisplayScale), 0.3f, CfgFlag::PER_GAME),
 };
 
-// LAN Save State Sync settings
+#ifdef PPSSPP_LANSYNC
+// [PPSSPP-FORK] LANSync: LAN Save State Sync settings
 static const ConfigSetting lansyncSettings[] = {
 	ConfigSetting("LANSyncEnabled", SETTING(g_Config.lanSync, bEnabled), CfgFlag::DEFAULT),
 	ConfigSetting("LANSyncDeviceName", SETTING(g_Config.lanSync, sDeviceName), (const char *)"", CfgFlag::DEFAULT),
@@ -1183,6 +1184,7 @@ static const ConfigSetting lansyncSettings[] = {
 	ConfigSetting("LANSyncUseTLS", SETTING(g_Config.lanSync, bUseTLS), CfgFlag::DEFAULT),
 	ConfigSetting("LANSyncAutoSync", SETTING(g_Config.lanSync, bAutoSync), CfgFlag::DEFAULT),
 };
+#endif
 
 // The first column says what structure the parameters are relative to.
 static const ConfigSectionMeta g_sectionMeta[] = {
@@ -1198,7 +1200,10 @@ static const ConfigSectionMeta g_sectionMeta[] = {
 	{ &g_Config, themeSettings, ARRAY_SIZE(themeSettings), "Theme" },
 	{ &g_Config, vrSettings, ARRAY_SIZE(vrSettings), "VR" },
 	{ &g_Config, achievementSettings, ARRAY_SIZE(achievementSettings), "Achievements" },
+#ifdef PPSSPP_LANSYNC
+	// [PPSSPP-FORK] LANSync: register LAN sync config section
 	{ &g_Config.lanSync, lansyncSettings, ARRAY_SIZE(lansyncSettings), "LANSync"},
+#endif
 	{ &g_Config, upgradeSettings, ARRAY_SIZE(upgradeSettings), "Upgrade" },
 	{ &g_Config.displayLayoutLandscape, displayLayoutSettings, ARRAY_SIZE(displayLayoutSettings), "DisplayLayout.Landscape", "Graphics" },  // We read the old settings from [Graphics], since most people played in landscape before.
 	{ &g_Config.displayLayoutPortrait, displayLayoutSettings, ARRAY_SIZE(displayLayoutSettings), "DisplayLayout.Portrait"},  // These we don't want to read from the old settings, since for most people, those settings will be bad.

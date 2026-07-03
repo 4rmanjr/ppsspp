@@ -1,5 +1,7 @@
 #pragma once
 
+#ifdef PPSSPP_LANSYNC
+
 #include <string>
 #include <vector>
 #include <atomic>
@@ -7,7 +9,7 @@
 #include "Common/UI/UIScreen.h"
 #include "Common/UI/PopupScreens.h"
 #include "Common/UI/ViewGroup.h"
-#include "Core/SaveStateLANSync.h"
+#include "LANSync/SaveStateLANSync.h"
 
 class LANPeerListScreen : public UI::PopupScreen {
 public:
@@ -123,3 +125,5 @@ private:
 	int64_t sizeBytes_;
 	bool confirmed_ = false;
 };
+
+#endif // PPSSPP_LANSYNC

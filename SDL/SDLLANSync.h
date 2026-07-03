@@ -1,3 +1,8 @@
+// [PPSSPP-FORK] LANSync: SDL ImGui UI dialogs for LAN save state sync
+// Only add new lines. Do not delete/modify upstream lines.
+
+#ifdef PPSSPP_LANSYNC
+
 // PPSSPP Project - LAN Save State Sync
 // SDL ImGui UI dialogs for LAN save state sync
 //
@@ -114,3 +119,5 @@ private:
 
 // Global instance (created in SDLMain.cpp)
 extern SDLLANSyncUI *g_LANSyncUI;
+
+#endif // PPSSPP_LANSYNC

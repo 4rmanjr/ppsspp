@@ -1,5 +1,5 @@
-// PPSSPP Project - LAN Save State Sync
-// Save state sync metadata sidecar file (.ppst.sync.json)
+// [PPSSPP-FORK] LANSync: Save state sync metadata sidecar file (.ppst.sync.json)
+// Only add new lines. Do not delete/modify upstream lines.
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -9,6 +9,8 @@
 // If not, see http://www.gnu.org/licenses/
 
 #pragma once
+
+#ifdef PPSSPP_LANSYNC
 
 #include <string>
 #include <string_view>
@@ -80,3 +82,5 @@ struct SaveStateSyncMetadata {
 		return !hash.empty() && !hlc.IsZero();
 	}
 };
+
+#endif // PPSSPP_LANSYNC

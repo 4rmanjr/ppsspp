@@ -1,6 +1,7 @@
-// PPSSPP Project - LAN Save State Sync
-// SDL ImGui UI implementation for LAN sync dialogs.
-// Follows existing patterns from UI/ImDebugger/
+// [PPSSPP-FORK] LANSync: SDL ImGui UI implementation for LAN sync dialogs.
+// Only add new lines. Do not delete/modify upstream lines.
+
+#ifdef PPSSPP_LANSYNC
 
 #include "ppsspp_config.h"
 
@@ -19,7 +20,7 @@
 #include "SDL/SDLLANSync.h"
 #include "SDL/LinuxLANSync.h"
 
-#include "Core/SaveStateLANSync.h"
+#include "LANSync/SaveStateLANSync.h"
 #include "Core/System.h"
 #include "Common/Log.h"
 #include "Common/StringUtils.h"
@@ -663,3 +664,5 @@ void SDLLANSyncUI::DrawPeerList() {
 			peer.online ? "Online" : "Offline");
 	}
 }
+
+#endif // PPSSPP_LANSYNC

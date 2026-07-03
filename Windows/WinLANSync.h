@@ -1,20 +1,14 @@
-// PPSSPP Project - LAN Save State Sync
-// Windows platform backend
-// Phase 4: WinRT DNS-SD (Win10+) + UDP fallback, DPAPI, Firewall (INetFwRule)
-//
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, version 2.0 or later versions.
-//
-// A copy of the GPL 2.0 should have been included with the program.
-// If not, see http://www.gnu.org/licenses/
+// [PPSSPP-FORK] LANSync: Windows platform backend
+// Only add new lines. Do not delete/modify upstream lines.
+
+#ifdef PPSSPP_LANSYNC
 
 #pragma once
 
 #include <string>
 #include <vector>
 
-#include "Core/SaveStateLANSync.h"
+#include "LANSync/SaveStateLANSync.h"
 
 class WinLANSync {
 public:
@@ -38,3 +32,5 @@ private:
 	bool AddFirewallRule(int port);
 	void RemoveFirewallRule();
 };
+
+#endif // PPSSPP_LANSYNC

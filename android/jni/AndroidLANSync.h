@@ -11,11 +11,13 @@
 
 #pragma once
 
+#ifdef PPSSPP_LANSYNC
+
 #include <string>
 #include <functional>
 #include <vector>
 
-#include "Core/SaveStateLANSync.h"
+#include "LANSync/SaveStateLANSync.h"
 
 class AndroidLANSync {
 public:
@@ -49,3 +51,5 @@ private:
 	bool enabled_ = false;
 	std::string deviceName_;
 };
+
+#endif // PPSSPP_LANSYNC

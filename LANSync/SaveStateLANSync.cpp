@@ -1,5 +1,5 @@
-// PPSSPP Project - LAN Save State Sync
-// Save State LAN Sync Manager - full implementation
+// [PPSSPP-FORK] LANSync: Save State LAN Sync Manager - full implementation
+// Only add new lines. Do not delete/modify upstream lines.
 
 #include "ppsspp_config.h"
 
@@ -19,9 +19,9 @@
 #include <sstream>
 #include <iomanip>
 
-#include "Core/SaveStateLANSync.h"
-#include "Core/SaveStateSyncMetadata.h"
-#include "Core/LANSyncConfig.h"
+#include "LANSync/SaveStateLANSync.h"
+#include "LANSync/SaveStateSyncMetadata.h"
+#include "LANSync/LANSyncConfig.h"
 #include "Core/Config.h"
 #include "Core/Core.h"
 #include "Core/SaveState.h"
@@ -49,6 +49,8 @@
 #if PPSSPP_PLATFORM(ANDROID)
 #include <jni.h>
 #endif
+
+#ifdef PPSSPP_LANSYNC
 
 // ==================== Utility ====================
 
@@ -2230,3 +2232,5 @@ void SaveStateLANSync::HandleSaveUpload(const std::string &gameId, int slot,
 
 	response = "{\"ok\":true}";
 }
+
+#endif // PPSSPP_LANSYNC

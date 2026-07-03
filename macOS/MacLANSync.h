@@ -1,3 +1,8 @@
+// [PPSSPP-FORK] LANSync: macOS backend
+// Only add new lines. Do not delete/modify upstream lines.
+
+#ifdef PPSSPP_LANSYNC
+
 // PPSSPP Project - LAN Save State Sync
 // macOS backend - wraps LinuxLANSync (shared Unix code) with macOS-specific init.
 // Uses Bonjour dns_sd.h (via MDNS_Unix.cpp) and Keychain (via PlatformKeyStore_Unix.cpp).
@@ -25,3 +30,5 @@ using MacLANSync = LinuxLANSync;
 inline MacLANSync &GetMacLANSync() {
 	return GetLinuxLANSync();
 }
+
+#endif // PPSSPP_LANSYNC

@@ -1,7 +1,7 @@
-// PPSSPP Project - LAN Save State Sync
-// Save State LAN Sync Manager - core orchestration layer.
+// [PPSSPP-FORK] LANSync: Save State LAN Sync Manager - core orchestration layer.
 // Coordinates mDNS discovery, UDP fallback, TLS connections,
 // HTTP sync protocol, conflict resolution, and metadata management.
+// Only add new lines. Do not delete/modify upstream lines.
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -11,6 +11,8 @@
 // If not, see http://www.gnu.org/licenses/
 
 #pragma once
+
+#ifdef PPSSPP_LANSYNC
 
 #include <string>
 #include <string_view>
@@ -23,7 +25,7 @@
 
 #include "Common/File/Path.h"
 #include "Common/Data/HLC.h"
-#include "Core/SaveStateSyncMetadata.h"
+#include "LANSync/SaveStateSyncMetadata.h"
 
 namespace mDNS {
 class Browser;
@@ -287,3 +289,5 @@ private:
 	void AddBackgroundThread(std::thread t);
 	void JoinAllThreads();
 };
+
+#endif // PPSSPP_LANSYNC

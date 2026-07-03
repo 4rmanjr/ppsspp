@@ -146,7 +146,9 @@
 #include "android/jni/app-android.h"
 #include "android/jni/AndroidLANSync.h"
 #elif !defined(MOBILE_DEVICE)
+#ifdef PPSSPP_LANSYNC
 #include "SDL/LinuxLANSync.h"
+#endif
 #endif
 
 #if PPSSPP_ARCH(ARM) && defined(__ANDROID__)
@@ -511,8 +513,10 @@ void NativeInit(int argc, const char *argv[], const char *savegame_dir, const ch
 		CreateSysDirectories();
 	}
 
+	#ifdef PPSSPP_LANSYNC
 	// [PPSSPP-FORK] LANSync: initialize Android LAN sync
 	AndroidLANSync::Instance().Init();
+	#endif
 #elif PPSSPP_PLATFORM(UWP) && !defined(__LIBRETRO__)
 	Path memstickDirFile = g_Config.internalDataDirectory / "memstick_dir.txt";
 	if (File::Exists(memstickDirFile)) {
@@ -563,10 +567,12 @@ void NativeInit(int argc, const char *argv[], const char *savegame_dir, const ch
 		g_Config.currentDirectory = Path(".");
 	}
 
+	#ifdef PPSSPP_LANSYNC
 	// [PPSSPP-FORK] LANSync: initialize Linux/macOS LAN sync
 	NOTICE_LOG(Log::System, "[BOOT] Initializing LAN sync...");
 	GetLinuxLANSync().Init();
 	NOTICE_LOG(Log::System, "[BOOT] LAN sync initialized OK");
+	#endif
 #endif
 
 	if (g_Config.currentDirectory.empty()) {
@@ -787,6 +793,7 @@ void NativeInit(int argc, const char *argv[], const char *savegame_dir, const ch
 
 	ApplyAchievementsHostOverride();
 
+	#ifdef PPSSPP_LANSYNC
 	// [PPSSPP-FORK] LANSync: auto-enable LAN sync if config was saved with it enabled
 #if PPSSPP_PLATFORM(ANDROID)
 	if (g_Config.lanSync.bEnabled) {
@@ -801,6 +808,7 @@ void NativeInit(int argc, const char *argv[], const char *savegame_dir, const ch
 		GetLinuxLANSync().Enable(name);
 	}
 #endif
+	#endif
 
 	DEBUG_LOG(Log::System, "ScreenManager!");
 	g_screenManager = new ScreenManager();
@@ -1762,12 +1770,16 @@ void NativeShutdown() {
 #endif
 
 #if PPSSPP_PLATFORM(ANDROID)
+	#ifdef PPSSPP_LANSYNC
 	// [PPSSPP-FORK] LANSync: shutdown Android LAN sync
 	AndroidLANSync::Instance().Shutdown();
+	#endif
 #endif
 #if (PPSSPP_PLATFORM(LINUX) || PPSSPP_PLATFORM(MAC)) && !PPSSPP_PLATFORM(ANDROID)
+	#ifdef PPSSPP_LANSYNC
 	// [PPSSPP-FORK] LANSync: shutdown Linux/macOS LAN sync
 	GetLinuxLANSync().Shutdown();
+	#endif
 #endif
 	INFO_LOG(Log::System, "NativeShutdown end");
 }

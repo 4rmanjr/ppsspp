@@ -1,3 +1,8 @@
+// [PPSSPP-FORK] LANSync: Android platform backend - JNI bridge
+// Only add new lines. Do not delete/modify upstream lines.
+
+#ifdef PPSSPP_LANSYNC
+
 // PPSSPP Project - LAN Save State Sync
 // Android platform backend - Phase 3 full implementation
 // JNI bridge to NsdManager, Keystore, ForegroundService, ML Kit QR scan
@@ -28,7 +33,7 @@
 
 #include "android/jni/AndroidLANSync.h"
 #include "Core/Config.h"
-#include "Core/SaveStateLANSync.h"
+#include "LANSync/SaveStateLANSync.h"
 #include "Common/Log.h"
 #include "Common/Net/PlatformKeyStore.h"
 #include "Common/Net/MDNS.h"
@@ -449,4 +454,5 @@ void AndroidLANSync::ShowLargeSaveWarning(const std::string &slotName, int64_t s
 	// Placeholder for UI connection
 }
 
+#endif // PPSSPP_LANSYNC
 #endif  // PPSSPP_PLATFORM(ANDROID)

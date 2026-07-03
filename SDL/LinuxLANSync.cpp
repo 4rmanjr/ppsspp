@@ -1,5 +1,7 @@
-// PPSSPP Project - LAN Save State Sync
-// Linux platform backend implementation
+// [PPSSPP-FORK] LANSync: Linux platform backend implementation
+// Only add new lines. Do not delete/modify upstream lines.
+
+#ifdef PPSSPP_LANSYNC
 
 #include "ppsspp_config.h"
 
@@ -24,7 +26,7 @@
 #include "Common/StringUtils.h"
 
 #include "Core/Config.h"
-#include "Core/SaveStateLANSync.h"
+#include "LANSync/SaveStateLANSync.h"
 
 LinuxLANSync &GetLinuxLANSync() {
 	static LinuxLANSync instance;
@@ -176,4 +178,5 @@ std::vector<std::string> LinuxLANSync::GetLocalIPs() const {
 	return ips;
 }
 
+#endif // PPSSPP_LANSYNC
 #endif  // (LINUX || MAC) && !ANDROID

@@ -52,7 +52,9 @@
 #include "Core/MemMap.h"
 #include "Core/MIPS/JitCommon/JitBlockCache.h"
 #include "Core/RetroAchievements.h"
-#include "Core/SaveStateLANSync.h"
+#ifdef PPSSPP_LANSYNC
+#include "LANSync/SaveStateLANSync.h"
+#endif
 #include "HW/MemoryStick.h"
 
 #ifndef MOBILE_DEVICE
@@ -434,10 +436,12 @@ int g_screenshotFailures;
 				Load(fn, slot, callback);
 			}
 			
+			#ifdef PPSSPP_LANSYNC
 			// [PPSSPP-FORK] LANSync: hook for save state metadata tracking
 			if (g_Config.lanSync.bEnabled) {
 				SaveStateLANSync::Instance().OnSaveStateLoaded(std::string(gamePrefix), slot);
 			}
+			#endif
 		} else {
 			if (callback) {
 				auto sy = GetI18NCategory(I18NCat::SYSTEM);
@@ -509,10 +513,12 @@ int g_screenshotFailures;
 			ScheduleSaveScreenshot(shot);
 			Save(fn.WithExtraExtension(".tmp"), slot, renameCallback);
 			
+			#ifdef PPSSPP_LANSYNC
 			// [PPSSPP-FORK] LANSync: hook for save state metadata tracking
 			if (g_Config.lanSync.bEnabled) {
 				SaveStateLANSync::Instance().OnSaveStateSaved(std::string(gamePrefix), slot);
 			}
+			#endif
 		} else {
 			if (callback) {
 				auto sy = GetI18NCategory(I18NCat::SYSTEM);
@@ -958,6 +964,7 @@ int g_screenshotFailures;
 				op.callback(callbackResult, callbackMessage, callbackMetadata);
 			}
 
+			#ifdef PPSSPP_LANSYNC
 			// [PPSSPP-FORK] LANSync: hooks for save state metadata tracking (non-blocking)
 			if (callbackResult != Status::FAILURE && op.slot >= 0) {
 				std::string gamePrefix = GenerateFullDiscId(g_paramSFO);
@@ -967,6 +974,7 @@ int g_screenshotFailures;
 					SaveStateLANSync::Instance().OnSaveStateSaved(gamePrefix, op.slot);
 				}
 			}
+			#endif
 		}
 		if (operations.size()) {
 			// Avoid triggering frame skipping due to slowdown

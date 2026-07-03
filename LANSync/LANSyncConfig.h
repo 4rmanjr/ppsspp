@@ -1,7 +1,7 @@
-// PPSSPP Project - LAN Save State Sync
-// Configuration block for LAN sync settings.
+// [PPSSPP-FORK] LANSync: Configuration block for LAN sync settings.
 // Storage: Integrated into Config struct as g_Config.lanSync.
 // Load/save via Config::Load()/Config::Save() in Config.cpp.
+// Only add new lines. Do not delete/modify upstream lines.
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
