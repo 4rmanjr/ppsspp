@@ -46,11 +46,11 @@ This is a PPSSPP fork with custom features that **must remain compatible** with 
 - ✅ Per-feature settings isolated in separate config sections (don't mix with PSP).
 
 ### 🟢 Platform Parity (Linux & Android)
-- ✅ Fitur kustom harus berfungsi di **Linux dan Android** dengan kualitas setara.
-- ✅ Jika fitur menggunakan platform-specific API (mDNS, key storage), harus punya **fallback** di platform lain.
-- ✅ UI dialogs harus tersedia di kedua platform (native Android UI atau ImGui fallback).
-- ✅ Tidak ada kode yang hanya aktif di satu platform tanpa justifikasi tertulis.
-- ✅ Core logic (sync protocol, conflict resolution, file transfer) harus **identik** di kedua platform — hanya UI layer yang boleh berbeda.
+- ✅ Custom features must work on **both Linux and Android** with equivalent quality.
+- ✅ If a feature uses platform-specific APIs (mDNS, key storage), it must have a **fallback** on other platforms.
+- ✅ UI dialogs must be available on both platforms (native Android UI or ImGui fallback).
+- ✅ No code may be active on only one platform without written justification.
+- ✅ Core logic (sync protocol, conflict resolution, file transfer) must be **identical** on both platforms — only the UI layer may differ.
 
 ## Patterns
 
@@ -94,9 +94,9 @@ cd android && ./gradlew assembleGoldRelease
 
 Output APK: `android/build/outputs/apk/gold/release/android-gold-release-unsigned.apk`
 
-> **Signing:** Gunakan **project-level debug keystore** yang sudah di-commit (`debug.keystore` di root project).
-> ⚠️ **JANGAN pernah build `assembleGoldDebug`** — selalu pakai `assembleGoldRelease`.
-> Setelah build, align + sign dengan `apksigner` (butuh v2/v3 untuk Android 11+):
+> **Signing:** Use the **project-level debug keystore** already committed (`debug.keystore` in root project).
+> ⚠️ **NEVER build `assembleGoldDebug`** — always use `assembleGoldRelease`.
+> After build, align + sign with `apksigner` (v2/v3 required for Android 11+):
 > ```bash
 > zipalign -f -p 4 \
 >   android/build/outputs/apk/gold/release/android-gold-release-unsigned.apk \
@@ -109,8 +109,8 @@ Output APK: `android/build/outputs/apk/gold/release/android-gold-release-unsigne
 >   --key-pass pass:android \
 >   android/build/outputs/apk/gold/release/android-gold-release-aligned.apk
 > ```
-> Alias: `debug` (cek dengan `keytool -list -keystore debug.keystore -storepass android`).
-> `zipalign` dan `apksigner` ada di `$ANDROID_HOME/build-tools/<version>/`.
+> Alias: `debug` (verify with `keytool -list -keystore debug.keystore -storepass android`).
+> `zipalign` and `apksigner` are located at `$ANDROID_HOME/build-tools/<version>/`.
 
 ## Navigation — When to Read Which File
 

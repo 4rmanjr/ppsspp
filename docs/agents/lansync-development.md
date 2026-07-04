@@ -26,8 +26,8 @@ All LAN sync features are distributed across non-core directories:
 
 ## Additional Rules
 
-1. **Hooks di upstream file** di-wrap dengan `#ifdef PPSSPP_LANSYNC`. Hooks minimal (≤3 lines) di `Core/SaveState.cpp`, `Core/Config.h`, `Core/Config.cpp`, `UI/NativeApp.cpp`, `UI/EmuScreen.cpp`, `UI/GameSettingsScreen.cpp`. Seluruh logika sync ada di `LANSync/SaveStateLANSync.cpp`.
+1. **Hooks in upstream files** are wrapped with `#ifdef PPSSPP_LANSYNC`. Minimal hooks (≤3 lines) in `Core/SaveState.cpp`, `Core/Config.h`, `Core/Config.cpp`, `UI/NativeApp.cpp`, `UI/EmuScreen.cpp`, `UI/GameSettingsScreen.cpp`. All sync logic lives in `LANSync/SaveStateLANSync.cpp`.
 2. **Platform-specific code** separated per platform (`SDL/`, `Windows/`, `macOS/`), not mixed in `Common/`.
-3. **Every new feature** must have its own `#ifdef` flag (see `fork-maintenance.md`). LAN Sync menggunakan `PPSSPP_LANSYNC` (didefinisikan di `CMakeLists.txt` dengan `option(PPSSPP_LANSYNC ON)`).
+3. **Every new feature** must have its own `#ifdef` flag (see `fork-maintenance.md`). LAN Sync uses `PPSSPP_LANSYNC` (defined in `CMakeLists.txt` with `option(PPSSPP_LANSYNC ON)`).
 4. **Test** — every change must build with `./b.sh --debug` without errors.
 5. **End-to-end test** available in `test_e2e_lansync.cpp` and `test_e2e_full.cpp` — run before submitting changes.

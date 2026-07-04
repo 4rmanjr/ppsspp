@@ -1,15 +1,15 @@
-# LAN Save State Sync — Progres Implementasi
+# LAN Save State Sync — Implementation Progress
 
 > **Last updated**: 2026-07-04
 > **Target**: PPSSPP 1.21+ with LAN Sync
-> **Fokus**: Android + Linux SDL only
+> **Scope**: Android + Linux SDL only
 > **Progress**: 65/66 tasks (98%)
 
 ---
 
-## Status Keseluruhan
+## Overall Status
 
-| Area | Status | Catatan |
+| Area | Status | Notes |
 |------|--------|---------|
 | Core Sync Engine | ✅ Done | HLC conflict resolution, metadata sidecars |
 | Network Core | ✅ Done | mDNS, UDP, TLS cert gen, HTTP protocol |
@@ -23,7 +23,7 @@
 ## File Inventory
 
 ### Core Files (LANSync/)
-| File | Status | Deskripsi |
+| File | Status | Description |
 |------|--------|-----------|
 | `LANSync/SaveStateLANSync.h` | ✅ | Sync manager interface (singleton) |
 | `LANSync/SaveStateLANSync.cpp` | ✅ | Full implementation (2236 lines) |
@@ -33,7 +33,7 @@
 | `LANSync/LANSyncConfig.cpp` | ✅ | Config block — guarded with `#ifdef PPSSPP_LANSYNC` |
 
 ### Network Core (Common/Net/)
-| File | Status | Deskripsi |
+| File | Status | Description |
 |------|--------|-----------|
 | `Common/Net/MDNS.h` | ✅ | mDNS interface + cross-platform stub |
 | `Common/Net/MDNS.cpp` | ✅ | Common interface |
@@ -50,7 +50,7 @@
 | `Common/Data/HLC.cpp` | ✅ | HLC + DetectConflict — guarded with `#ifdef PPSSPP_LANSYNC` |
 
 ### Platform Backends
-| File | Status | Deskripsi |
+| File | Status | Description |
 |------|--------|-----------|
 | `SDL/LinuxLANSync.h` | ✅ | Linux backend interface |
 | `SDL/LinuxLANSync.cpp` | ✅ | Avahi + libsecret + OpenSSL |
@@ -60,7 +60,7 @@
 | `android/jni/AndroidLANSync.cpp` | ✅ | JNI bridge + NsdManager + Keystore |
 
 ### Android Java
-| File | Status | Deskripsi |
+| File | Status | Description |
 |------|--------|-----------|
 | `android/src/.../LANSyncService.java` | ✅ | ForegroundService + NsdManager |
 | `android/src/.../LANSyncManager.java` | ✅ | NsdManager wrapper |
@@ -69,13 +69,13 @@
 | `android/src/.../test/LANSyncTestActivity.java` | ✅ | Test activity |
 
 ### UI
-| File | Status | Deskripsi |
+| File | Status | Description |
 |------|--------|-----------|
 | `UI/LANPeerListScreen.h` | ✅ | Android peer list |
 | `UI/LANPeerListScreen.cpp` | ✅ | Android peer list + manual entry + QR scan |
 
 ### Modified Upstream Files (additive only)
-| File | Lines Added | Deskripsi |
+| File | Lines Added | Description |
 |------|-------------|-----------|
 | `Core/SaveState.cpp` | +11 | Hook: `OnSaveStateSaved()` / `OnSaveStateLoaded()` |
 | `Core/Config.h` | +15 | `LANSyncConfig` struct |
@@ -86,7 +86,7 @@
 | `UI/EmuScreen.cpp` | +10 | SDLLANSyncUI creation + render loop |
 
 ### Test Files
-| File | Status | Deskripsi |
+| File | Status | Description |
 |------|--------|-----------|
 | `test_lansync.cpp` | ✅ | Unit test (HLC, metadata, socket) — pass on Termux + Debian |
 | `test_e2e_lansync.cpp` | ✅ | E2E test (HTTP API) — compiled |
@@ -147,22 +147,22 @@
 ## ⚠️ Known Issues
 
 ### 1. ~~CMakeLists.txt Duplicate Entries~~ ✅ Fixed
-13 file `Common/Net/` terdaftar 2x (lines 867-877 dan 891-903) —
-**FIXED** (2026-07-04): duplicate dihapus, `[PPSSPP-FORK]` markers ditambahkan.
+13 `Common/Net/` files were listed twice (lines 867-877 and 891-903) —
+**FIXED** (2026-07-04): duplicates removed, `[PPSSPP-FORK]` markers added.
 
 ### 2. ~~Dual Config State (P2)~~ ✅ Fixed
 `g_LANSyncConfig` global removed. `g_Config.lanSync` is now the single source of truth.
 **FIXED** (2026-07-04): dead global + extern declaration deleted.
 
 ### 3. TLS Not Wired to Socket (Bug #9)
-Cert ECDSA P-256 di-generate + fingerprint TOFU di-compute,
-tapi `AcceptTLS()` tidak dipanggil. Semua data plain TCP.
-Bug ini mempengaruhi **kedua platform**.
+ECDSA P-256 cert is generated + TOFU fingerprint is computed,
+but `AcceptTLS()` is never called. All data flows over plain TCP.
+This bug affects **both platforms**.
 
 ### 4. ~~Feature Flag Missing (P2)~~ ✅ Fixed
-`HLC.h/cpp` dan `LANSyncConfig.cpp` sekarang punya
-`#ifdef PPSSPP_LANSYNC` guard. `LANSyncConfig.h` tidak di-guard
-karena di-include oleh `Core/Config.h` (struct dibutuhkan).
+`HLC.h/cpp` and `LANSyncConfig.cpp` now have
+`#ifdef PPSSPP_LANSYNC` guards. `LANSyncConfig.h` is not guarded
+because it is included by `Core/Config.h` (struct is required).
 **FIXED** (2026-07-04).
 
 ---
@@ -371,10 +371,10 @@ StartServer()
 ### 2026-07-04
 - Created `docs/agents/lansync-progress.md`
 - Verified against actual codebase
-- Added known issues (CMakeLists.txt duplikat, dual config, TLS not wired, feature flags)
+- Added known issues (CMakeLists.txt duplicates, dual config, TLS not wired, feature flags)
 - Added code review P2/P4 issues from `codereview-log.md`
 - Scoped to Android + Linux SDL only
-- **Quick Wins completed**: C3 (CMakeLists.txt duplikat dihapus), C4 (PPSSPP_LANSYNC guards), I9 ([PPSSPP-FORK] markers)
+- **Quick Wins completed**: C3 (CMakeLists.txt duplicates removed), C4 (PPSSPP_LANSYNC guards), I9 ([PPSSPP-FORK] markers)
 - Build verified: cmake configure + compile OK for PPSSPP_LANSYNC=ON and OFF (Debian proot)
 - **C6 fixed**: Dead `g_LANSyncConfig` global removed. `g_Config.lanSync` is now single source of truth.
 
