@@ -18,8 +18,13 @@ When the user types `/codereview`, perform a complete code review of the latest 
        - **Docs-only:** `.md`, `.txt`, files in `docs/`, `README`
        - **Safe:** Comment-only changes, whitespace, formatting (non-semantic only — must not change code behavior)
        - **Structural:** `CMakeLists.txt`, `.h` headers, new source files, `#ifdef PPSSPP_*` blocks
-       - **Implementation:** `.cpp` files only (no headers)
-     * **Decision logic:**
+        - **Implementation:** `.cpp` files only (no headers)
+      * **CMakeLists duplicate check:** If `CMakeLists.txt` is in the changed files, scan for duplicate source entries:
+        ```bash
+        grep -oP '[\w/]+\.(cpp|h)' CMakeLists.txt | sort | uniq -d
+        ```
+        If duplicates found → **P1** (build break or duplicate symbols). Must be fixed before proceeding.
+      * **Decision logic:**
        - **SKIP build** if changes are ONLY docs/comments → Report: "⚠️ Build skipped — documentation-only changes (saved 15-20 min)"
        - **REQUIRE build** if ANY structural changes (CMakeLists, headers, new files, #ifdef blocks)
        - **CONDITIONAL** if only .cpp implementation (no headers) → Default SKIP (low risk), but flag for user awareness
@@ -94,6 +99,7 @@ When the user types `/codereview`, perform a complete code review of the latest 
 
 5. **Runtime, threading & lifecycle checks:**
    - **Race conditions:** If the modified code accesses shared state (audio ring buffer, save state, video output), verify it holds the appropriate mutex or uses an atomic operation. Emulator cores are often multi-threaded (audio on a separate thread). Flag any shared write without a lock as P1.
+   - **State initialization ordering:** When code sets `status_ = X`, check if related `progress_` or `state_` variables are initialized BEFORE the status assignment. Setting status before progress causes readers to see stale/zero progress with an active status. Flag P2 if found. // [PPSSPP-FORK] Learning Loop: state init ordering
    - **C++ Memory Management & Ownership:** Verify that raw pointers instantiated with `new` (especially UI views/components) are properly owned by smart pointers or registered with a parent container (e.g. `root_->Add(...)`, `parent->Add(...)`) which manages their deletion. Unmanaged raw pointers cause leaks. Flag P4 if found.
    - **Orientation Re-creation Safety:** Screen rotation destroys and re-calls `CreateViews()`. Verify that any screen-level raw view pointers (e.g. `resumeButton_` or custom buttons) are either re-bound or reset to `nullptr` to avoid holding dangling references to destroyed views. Flag P2 if crash/UB risk, P3 if only visual parity gap.
    - **Core Shutdown & Resource Cleanup:** Verify that custom emulator cores clean up all raw buffers, release active configuration pointers, and stop pushing audio samples when shutting down to prevent memory leaks and background processes running after exit. For LAN sync: verify server sockets, mDNS announcements, and background threads are properly stopped. Flag P2 if found.
@@ -105,6 +111,7 @@ When the user types `/codereview`, perform a complete code review of the latest 
    - **Reentrancy:** State machines in memory mappers or IRQ handlers can be re-entered via recursive CPU execution. Verify they guard against this (flag or early-out). Flag P2 if found.
    - **Blocking destructor with thread join:** If a class's destructor calls `JoinAllThreads()` or similar blocking join, verify there's a mechanism to unblock stuck threads first (e.g., set cancellation flag, close sockets, add join timeout). A destructor that blocks indefinitely on a stuck network thread hangs the entire process on exit. Flag P2 if found.
    - **TLS generated but not used:** If TLS certificates are generated and stored (`GenerateCertificate()`, `SaveToKeystore()`), verify they're actually used for connections (e.g., `SSL_accept`/`SSL_connect` called). Generating TLS without wrapping sockets defeats the security purpose. Flag P2 if found.
+   - **SSL_CTX per-connection lifecycle:** When `SSL_CTX_new()` is called per-connection (client side), verify `SSL_CTX_free(ctx)` is called on ALL paths including success. After `SSL_set_fd(ssl, sock)`, the SSL object holds its own reference — ctx can be freed immediately. Leak = ~2KB per connection. Flag P4 if found. // [PPSSPP-FORK] Learning Loop: SSL_CTX client lifecycle
    - **Unbounded dynamic buffer growth:** When reading network data into a `std::vector` that grows (e.g., `buf.resize(buf.size() * 2)`), verify there's an upper bound (e.g., `MAX_UPLOAD_SIZE`). Unbounded growth allows a malicious peer to exhaust memory. Flag P4 if found.
     - **Config dual state:** When a feature has its own config struct (e.g., `LANSyncConfig`) AND is also stored in `g_Config`, verify there's a single source of truth. Two independent config objects for the same feature cause settings to silently diverge. Flag P2 if found.
     - **Platform parity violation:** When custom code uses `#if PPSSPP_PLATFORM(ANDROID)` or `#if PPSSPP_PLATFORM(LINUX)`, verify there's an `#else` branch that handles the other platform. Feature logic that only runs on one platform without justification violates AGENTS.md Platform Parity rule. Flag P2 if found.
@@ -116,6 +123,7 @@ When the user types `/codereview`, perform a complete code review of the latest 
    - 🔴 FORBIDDEN: No `#else`/`#endif` altering upstream flow
    - 🟢 REQUIRED: `[PPSSPP-FORK]` markers on all fork additions
    - 🟢 REQUIRED: Feature flags wrap custom code (zero upstream leakage)
+   - 🟢 REQUIRED: Guard on `.cpp` — When a `.h` file has `#ifdef PPSSPP_<FEATURE>`, verify the corresponding `.cpp` file also has the guard OR is conditionally compiled in `CMakeLists.txt`. Missing guard on `.cpp` means code links even when feature is OFF. Flag P2 if found.
    - 🟢 REQUIRED: Config isolated in separate sections
    - **New file checklist** — for every new `.cpp`/`.h` file introduced:
      * ✅ Directory: non-core (`UI/`, `Common/`, `ext/`, `SDL/`, `Windows/`, `macOS/`) — NOT `Core/`/`GPU/`/`HLE/`/`MIPS/`
