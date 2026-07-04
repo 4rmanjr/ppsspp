@@ -344,6 +344,10 @@ When the user types `/codereview`, perform a complete code review of the latest 
      * Last archive period
    - **Purpose:** Every bug found makes future reviews stronger. Patterns that slipped through once get caught automatically next time. Rolling window keeps file manageable while archive preserves history.
 
+15. **Cleanup — remove temp build dirs:** After the review is fully complete (report written, fixes applied, learning loop done), remove any temporary build directories created during this review session. Check for directories matching `build_cr*` or `build_review*` pattern. Do NOT delete pre-existing project build dirs (`build/`, `build-*/` that existed before this session). Command: `rm -rf build_cr* build_review* 2>/dev/null`. Report: "🧹 Temp build cleaned."
+
+16. **Commit prompt:** After the review is fully complete (report written, fixes applied, learning loop done, temp build cleaned), ask the user: *"Review complete. Commit?"* Do NOT commit without explicit user confirmation (AGENTS.md rule). If user declines, stop here.
+
 - Be thorough. Check every changed line, not just the diff overview.
 - Trace full code paths, not just isolated changes.
 - **Never assume API behavior.** If you think a global state affects a rendering call, verify by:

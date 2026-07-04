@@ -1,10 +1,9 @@
 // [PPSSPP-FORK] LANSync: LANSyncConfig implementation
 // Only add new lines. Do not delete/modify upstream lines.
+#ifdef PPSSPP_LANSYNC
 
 #include "LANSync/LANSyncConfig.h"
 #include "Common/Log.h"
-
-LANSyncConfig g_LANSyncConfig;
 
 bool LANSyncConfig::ResetToDefault(std::string_view blockName) {
 	if (blockName == "LANSync" || blockName.empty()) {
@@ -21,3 +20,5 @@ bool LANSyncConfig::ResetToDefault(std::string_view blockName) {
 	}
 	return false;
 }
+
+#endif // PPSSPP_LANSYNC

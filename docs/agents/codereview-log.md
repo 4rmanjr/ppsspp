@@ -10,7 +10,7 @@ Track bug patterns found during code reviews for continuous improvement.
 | 2026-07-03 | pendingRequestCounter_ non-atomic increment | Threading | P2 | SaveStateLANSync.cpp:1867 | no (existing rule) |
 | 2026-07-03 | syncStatus_ set before syncProgress_ initialized | Threading | P2 | SaveStateLANSync.cpp:1167-1176 | no (existing rule) |
 | 2026-07-03 | Blocking destructor JoinAllThreads without cancellation | Lifecycle | P2 | SaveStateLANSync.cpp:173-176 | yes (Step 5) |
-| 2026-07-03 | g_LANSyncConfig vs g_Config.lanSync dual state | Config/State | P2 | LANSyncConfig.cpp:7 | yes (Step 5) |
+| 2026-07-03 | ~~g_LANSyncConfig vs g_Config.lanSync dual state~~ | Config/State | P2 | LANSyncConfig.cpp:7 | ✅ Fixed (C6) |
 | 2026-07-03 | TLS certs generated but AcceptTLS never called | Security | P2 | SaveStateLANSync.cpp:354-671 | yes (Step 5) |
 | 2026-07-03 | DownloadSave buffer unbounded growth | Memory Safety | P4 | SaveStateLANSync.cpp:1082-1087 | yes (Step 5) |
 | 2026-07-03 | SaveConfig() from background threads | Config/State | P4 | SaveStateLANSync.cpp:814,994+ | no (existing rule covers loops only) |

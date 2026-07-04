@@ -33,5 +33,3 @@ struct LANSyncConfig : public ConfigBlock {
 	bool ResetToDefault(std::string_view blockName) override;
 	size_t Size() const override { return sizeof(LANSyncConfig); }
 };
-
-extern LANSyncConfig g_LANSyncConfig;

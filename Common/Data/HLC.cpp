@@ -1,5 +1,6 @@
 // PPSSPP Project - LAN Save State Sync
 // HLC implementation
+#ifdef PPSSPP_LANSYNC
 
 #include "ppsspp_config.h"
 
@@ -137,3 +138,5 @@ ConflictResult DetectConflict(const HLC &localHlc,  const HLC &localParentHlc,
 
 	return result;
 }
+
+#endif // PPSSPP_LANSYNC

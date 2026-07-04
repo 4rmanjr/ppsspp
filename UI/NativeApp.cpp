@@ -147,6 +147,7 @@
 #include "android/jni/AndroidLANSync.h"
 #elif !defined(MOBILE_DEVICE)
 #ifdef PPSSPP_LANSYNC
+// [PPSSPP-FORK] LANSync: include Linux LAN sync
 #include "SDL/LinuxLANSync.h"
 #endif
 #endif

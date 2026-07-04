@@ -211,6 +211,7 @@ option(USE_CCACHE "Use ccache if detected" ON)
 option(USE_NO_MMAP "Disable mmap usage" OFF)
 option(USE_IAP "IAP enabled" OFF)
 option(GOLD "Gold build" OFF)
+# [PPSSPP-FORK] LANSync: option and compile definition
 option(PPSSPP_LANSYNC "Enable LAN Save State Sync" ON)
 
 if(PPSSPP_LANSYNC)
@@ -888,19 +889,6 @@ add_library(Common STATIC
 	Common/Net/URL.h
 	Common/Net/WebsocketServer.cpp
 	Common/Net/WebsocketServer.h
-	Common/Net/MDNS.cpp
-	Common/Net/MDNS.h
-	Common/Net/MDNS_Android.cpp
-	Common/Net/MDNS_Windows.cpp
-	Common/Net/MDNS_Unix.cpp
-	Common/Net/UDPDiscovery.cpp
-	Common/Net/UDPDiscovery.h
-	Common/Net/TLSServer.cpp
-	Common/Net/TLSServer.h
-	Common/Net/PlatformKeyStore.h
-	Common/Net/PlatformKeyStore_Android.cpp
-	Common/Net/PlatformKeyStore_Windows.cpp
-	Common/Net/PlatformKeyStore_Unix.cpp
 	Common/Profiler/Profiler.cpp
 	Common/Profiler/Profiler.h
 	Common/Render/AtlasGen.cpp
@@ -1539,6 +1527,7 @@ elseif(USING_QT_UI)
 		Qt/mainwindow.h
 	)
 	if(PPSSPP_LANSYNC)
+		# [PPSSPP-FORK] LANSync: add LANSync UI sources for Qt build
 		list(APPEND NativeAppSource
 			UI/LANSyncSettings.h
 			UI/LANSyncSettings.cpp
@@ -1769,6 +1758,7 @@ list(APPEND NativeAppSource
 )
 
 if(PPSSPP_LANSYNC)
+	# [PPSSPP-FORK] LANSync: add LANSync UI sources for NativeApp build
 	list(APPEND NativeAppSource
 		UI/LANSyncSettings.cpp
 		UI/LANSyncSettings.h

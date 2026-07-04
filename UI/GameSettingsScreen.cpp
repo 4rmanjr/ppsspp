@@ -60,6 +60,7 @@
 #include "UI/RetroAchievementScreens.h"
 
 #if defined(SDL)
+// [PPSSPP-FORK] LANSync: include SDL LAN sync UI
 #include "SDL/SDLLANSync.h"
 #endif
 #include "UI/OnScreenDisplay.h"
@@ -107,6 +108,7 @@ extern AndroidAudioState *g_audioState;
 #endif
 
 #ifdef PPSSPP_LANSYNC
+// [PPSSPP-FORK] LANSync: include LAN sync engine and peer list UI
 #include "LANSync/SaveStateLANSync.h"
 #include "UI/LANPeerListScreen.h"
 #endif
@@ -991,6 +993,7 @@ MacAddressChooser::MacAddressChooser(RequesterToken token, Path gamePath, std::s
 void GameSettingsScreen::CreateNetworkingSettings(UI::ViewGroup *networkingSettings) {
 #if defined(SDL)
 #ifdef PPSSPP_LANSYNC
+	// [PPSSPP-FORK] LANSync: extern reference to SDL LAN sync UI
 	extern SDLLANSyncUI *g_LANSyncUI;
 #endif
 #endif

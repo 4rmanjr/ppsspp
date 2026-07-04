@@ -77,6 +77,7 @@ using namespace std::placeholders;
 #include "UI/ImDebugger/ImDebugger.h"
 #if !defined(MOBILE_DEVICE)
 #ifdef PPSSPP_LANSYNC
+// [PPSSPP-FORK] LANSync: include SDL LAN sync UI
 #include "SDL/SDLLANSync.h"
 #endif
 #endif
@@ -1920,7 +1921,7 @@ void EmuScreen::runImDebugger() {
 			imguiInited_ = true;
 
 #if !defined(MOBILE_DEVICE)
-			// Initialize LAN Sync UI (desktop SDL only)
+			// [PPSSPP-FORK] LANSync: initialize SDL LAN sync UI
 			#ifdef PPSSPP_LANSYNC
 			new SDLLANSyncUI();
 			#endif

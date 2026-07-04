@@ -10,6 +10,7 @@
 // A copy of the GPL 2.0 should have been included with the program.
 // If not, see http://www.gnu.org/licenses/
 
+#ifdef PPSSPP_LANSYNC
 #pragma once
 
 #include <cstdint>
@@ -134,3 +135,5 @@ struct ConflictResult {
 // Returns the action and resolved HLC
 ConflictResult DetectConflict(const HLC &localHlc,  const HLC &localParentHlc,
                                const HLC &remoteHlc, const HLC &remoteParentHlc);
+
+#endif // PPSSPP_LANSYNC

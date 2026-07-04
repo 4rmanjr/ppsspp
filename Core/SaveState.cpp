@@ -53,6 +53,7 @@
 #include "Core/MIPS/JitCommon/JitBlockCache.h"
 #include "Core/RetroAchievements.h"
 #ifdef PPSSPP_LANSYNC
+// [PPSSPP-FORK] LANSync: include LAN sync engine
 #include "LANSync/SaveStateLANSync.h"
 #endif
 #include "HW/MemoryStick.h"

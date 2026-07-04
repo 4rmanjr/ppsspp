@@ -19,7 +19,7 @@
 | File | Description |
 |------|-------------|
 | `Core/LANSyncConfig.h` | `LANSyncConfig` struct — enabled, deviceName, autoDiscover, conflictResolution, pairedPeers, httpPort, useTLS, autoSync |
-| `Core/LANSyncConfig.cpp` | ResetToDefaults + `g_LANSyncConfig` global |
+| `Core/LANSyncConfig.cpp` | ResetToDefault implementation |
 | `Core/Config.h` | `#include "Core/LANSyncConfig.h"` + `LANSyncConfig lanSync` member |
 | `Core/Config.cpp` | `lansyncSettings[]` array (9 settings) registered as `"LANSync"` section |
 
