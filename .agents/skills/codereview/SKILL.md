@@ -9,6 +9,19 @@ description: Review the latest changes for bugs, regressions, and PSP parity vio
 
 When the user types `/codereview`, perform a complete code review of the latest changes. This skill is **core-agnostic** — it applies to any non-PSP emulator (N64, PS1, NDS, SNES, etc.).
 
+## Critical Rules — VIOLATIONS = P1
+
+These rules override everything. If any is violated, STOP and report as P1.
+
+1. **Zero upstream deletion** — `git diff` shows NO `-` lines in Core/GPU/HLE/MIPS
+2. **Feature flag required** — every new code wrapped in `#ifdef PPSSPP_*`
+3. **Markers present** — every fork addition tagged `// [PPSSPP-FORK]`
+4. **Build must pass** — compile error = STOP, do not review further
+5. **Single source of truth** — no duplicate config objects for same feature
+6. **Platform parity** — every platform-specific API needs a fallback
+7. **No `#else`/`#endif` injection** — never alter upstream control flow with `#else`/`#endif` outside custom blocks
+8. **No upstream refactoring** — never refactor upstream code to accommodate custom code
+
 ## What to do
 
 0. **Build Gate — compile first**
@@ -355,6 +368,24 @@ When the user types `/codereview`, perform a complete code review of the latest 
 15. **Cleanup — remove temp build dirs:** After the review is fully complete (report written, fixes applied, learning loop done), remove any temporary build directories created during this review session. Check for directories matching `build_cr*` or `build_review*` pattern. Do NOT delete pre-existing project build dirs (`build/`, `build-*/` that existed before this session). Command: `rm -rf build_cr* build_review* 2>/dev/null`. Report: "🧹 Temp build cleaned."
 
 16. **Commit prompt:** After the review is fully complete (report written, fixes applied, learning loop done, temp build cleaned), ask the user: *"Review complete. Commit?"* Do NOT commit without explicit user confirmation (AGENTS.md rule). If user declines, stop here.
+
+## Anti-patterns — Common Mistakes to Avoid
+
+- **Assuming global state affects rendering** — always verify by reading the API implementation
+- **Flagging without grep verification** — never call deprecated/wrong API without `grep -n` or `git log --all -S`
+- **Fixing without tracing callers** — every fix can break dependent code; trace all callers first
+- **Comparing "similar structure" in PSP parity** — compare every parameter (color, opacity, scale), not just shape
+- **Ignoring `.size()` on C arrays** — always verify type before calling `.size()`; C arrays have no `.size()` member
+- **Double-free SSL_CTX** — after `SSL_set_fd`, ctx can be freed immediately; do NOT free in destructor
+- **Missing mutex on shared state** — if background thread reads/writes a variable, lock is mandatory
+- **Config drift** — two config objects for same feature will silently diverge; always pick one source of truth
+
+## If You Get Stuck
+
+- If a code path is unclear or you cannot determine intent from the diff → **stop and ask the human reviewer** for clarification
+- Do not guess or make assumptions about what the code is supposed to do
+- If you cannot verify a claim (e.g., "this function is deprecated") with grep/git log → **do not include it in the report**
+- If the diff is too large to review thoroughly → report what you found, note the limitation, and suggest splitting the commit
 
 - Be thorough. Check every changed line, not just the diff overview.
 - Trace full code paths, not just isolated changes.
