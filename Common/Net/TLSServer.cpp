@@ -341,6 +341,22 @@ void TLSServerContext::CloseTLS(int fd) {
 
 #endif  // HAS_OPENSSL
 
+// ==================== TLS-aware I/O Wrappers ====================
+
+int TLS_send(void *sslHandle, int fd, const void *buf, int len) {
+#if HAS_OPENSSL
+	if (sslHandle) return SSL_write((SSL *)sslHandle, buf, len);
+#endif
+	return send(fd, (const char *)buf, len, 0);
+}
+
+int TLS_recv(void *sslHandle, int fd, void *buf, int len) {
+#if HAS_OPENSSL
+	if (sslHandle) return SSL_read((SSL *)sslHandle, buf, len);
+#endif
+	return recv(fd, (char *)buf, len, 0);
+}
+
 // ==================== Common Methods ====================
 
 std::string TLSServerContext::GetFingerprint() const {

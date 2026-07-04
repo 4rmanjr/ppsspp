@@ -3,7 +3,7 @@
 > **Last updated**: 2026-07-04
 > **Target**: PPSSPP 1.21+ with LAN Sync
 > **Fokus**: Android + Linux SDL only
-> **Progress**: 62/66 tasks (94%)
+> **Progress**: 65/66 tasks (98%)
 
 ---
 
@@ -127,7 +127,7 @@
 | # | Bug | Priority | Status |
 |---|-----|----------|--------|
 | 8 | GetPeers() returns empty | Low | Open |
-| 9 | TLS not wired to socket | Medium | Open — cert gen done, AcceptTLS() never called |
+| 9 | TLS not wired to socket | Medium | ✅ Fixed — TLSConnectToPeer() + TLS_send/TLS_recv on all client/server paths |
 
 ### Open — Code Quality (from code review 2026-07-03)
 | # | Issue | Priority | File:Line |
@@ -212,7 +212,7 @@ karena di-include oleh `Core/Config.h` (struct dibutuhkan).
 - [ ] E2E test — compiled, requires x86_64 PC for full test
 
 ### ⬜ Not Done
-- [ ] TLS wired to actual socket I/O (currently cert exchange only)
+- [x] TLS wired to actual socket I/O (TLSConnectToPeer + TLS_send/TLS_recv on all paths)
 - [ ] `UDPDiscovery::GetPeers()` (always returns empty)
 - [ ] Multi-peer sync (mesh topology)
 - [ ] Delta sync (only changed bytes)
@@ -321,7 +321,7 @@ StartServer()
 | C2 | ~~Android Java Layer~~ | — | ✅ Done |
 | C3 | Fix CMakeLists.txt duplicate entries | 10 min | ✅ |
 | C4 | Add `PPSSPP_LANSYNC` guards to HLC + LANSyncConfig | 30 min | ✅ |
-| C5 | Wire TLS to socket (`AcceptTLS()`) | 1 week | ⬜ |
+| C5 | Wire TLS to socket (`AcceptTLS()`) | 1 week | ✅ Done |
 | C6 | Fix dual config state (`g_LANSyncConfig` vs `g_Config.lanSync`) | 1 day | ✅ |
 | C7 | End-to-End Integration Test (2 devices on LAN) | 2 days | ⬜ |
 
@@ -335,8 +335,8 @@ StartServer()
 | I4 | ~~Android QR Scan~~ | — | ✅ Done |
 | I5 | ~~Error Handling Polish~~ | — | ✅ Done |
 | I6 | ~~Large Save Warning~~ | — | ✅ Done |
-| I7 | Fix `pairingPin_` race condition | 2 hrs | ⬜ |
-| I8 | Fix `syncStatus_` timing issue | 1 hr | ⬜ |
+| I7 | Fix `pairingPin_` race condition | 2 hrs | ✅ |
+| I8 | Fix `syncStatus_` timing issue | 1 hr | ✅ |
 | I9 | Add `[PPSSPP-FORK]` markers to upstream hooks | 30 min | ✅ |
 
 ### 🟢 Nice-to-Have — Post-Launch

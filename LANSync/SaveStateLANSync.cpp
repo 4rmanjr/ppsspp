@@ -137,7 +137,7 @@ static bool IsValidSaveFilename(const std::string &name) {
 	return true;
 }
 
-static void WriteHTTPResponse(int fd, int status, const std::string &body,
+static void WriteHTTPResponse(void *sslHandle, int fd, int status, const std::string &body,
                                const char *contentType = "application/json") {
 	std::string header = StringFromFormat(
 		"HTTP/1.1 %d %s\r\n"
@@ -145,9 +145,9 @@ static void WriteHTTPResponse(int fd, int status, const std::string &body,
 		"Content-Length: %d\r\n"
 		"Connection: close\r\n"
 		"\r\n", status, HttpStatusText(status), contentType, (int)body.size());
-	int sent = send(fd, header.c_str(), header.size(), 0);
+	int sent = tls::TLS_send(sslHandle, fd, header.c_str(), header.size());
 	if (sent <= 0) return;  // Client disconnected
-	sent = send(fd, body.c_str(), body.size(), 0);
+	sent = tls::TLS_send(sslHandle, fd, body.c_str(), body.size());
 	(void)sent;  // Best effort
 }
 
@@ -163,6 +163,87 @@ static std::string ExtractBearerToken(const std::string &request) {
 	if (end == std::string::npos)
 		end = request.size();
 	return request.substr(pos, end - pos);
+}
+
+// [PPSSPP-FORK] LANSync: TLS-aware client connection helper.
+// TCP connect + optional TLS handshake + fingerprint verification (TOFU).
+// Returns socket fd and sets sslHandle (nullptr if plain TCP).
+// Caller must call closesocket(fd) and tlsCtx->CloseTLS(fd) when done.
+static int TLSConnectToPeer(const std::string &host, int port,
+                             const std::string &expectedFingerprint,
+                             void *&sslHandle) {
+	sslHandle = nullptr;
+	int sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+	if (sock < 0) return -1;
+
+	struct sockaddr_in addr;
+	memset(&addr, 0, sizeof(addr));
+	addr.sin_family = AF_INET;
+	addr.sin_port = htons(port);
+	inet_pton(AF_INET, host.c_str(), &addr.sin_addr);
+
+	if (connect(sock, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
+		closesocket(sock);
+		return -1;
+	}
+
+#if HAS_OPENSSL
+	// Attempt TLS handshake
+	SSL_CTX *ctx = SSL_CTX_new(TLS_client_method());
+	if (ctx) {
+		SSL_CTX_set_min_proto_version(ctx, TLS1_2_VERSION);
+		SSL_CTX_set_verify(ctx, SSL_VERIFY_NONE, nullptr);
+
+		SSL *ssl = SSL_new(ctx);
+		if (ssl) {
+			SSL_set_fd(ssl, sock);
+			if (SSL_connect(ssl) > 0) {
+				// Verify server certificate fingerprint (TOFU)
+				X509 *serverCert = SSL_get_peer_certificate(ssl);
+				if (serverCert) {
+					unsigned char *der = nullptr;
+					int derLen = i2d_X509(serverCert, &der);
+					if (derLen > 0) {
+						sha256_context shaCtx;
+						uint8_t hash[32];
+						sha256_starts(&shaCtx);
+						sha256_update(&shaCtx, der, derLen);
+						sha256_finish(&shaCtx, hash);
+						std::ostringstream oss;
+						for (int i = 0; i < 32; i++)
+							oss << std::hex << std::setfill('0') << std::setw(2) << (int)hash[i];
+						std::string actualFp = oss.str();
+						OPENSSL_free(der);
+
+						if (!expectedFingerprint.empty() && actualFp != expectedFingerprint) {
+							ERROR_LOG(Log::System, "TLS: fingerprint mismatch with %s:%d", host.c_str(), port);
+							SSL_free(ssl);
+							SSL_CTX_free(ctx);
+							closesocket(sock);
+							return -1;
+						}
+						// Store for future TOFU
+						tls::TLSClientVerifier::TrustFingerprint(
+							host + ":" + std::to_string(port), actualFp);
+					}
+					X509_free(serverCert);
+				}
+				sslHandle = ssl;
+				INFO_LOG(Log::System, "TLS: connected to %s:%d, cipher=%s",
+				         host.c_str(), port, SSL_get_cipher_name(ssl));
+				return sock;  // Caller owns ctx via CloseTLS
+			}
+			// TLS handshake failed — fall back to plain TCP
+			SSL_free(ssl);
+		}
+		SSL_CTX_free(ctx);
+	}
+	// Plain TCP fallback (no OpenSSL or TLS failed)
+	INFO_LOG(Log::System, "TLS: plain TCP to %s:%d (no TLS)", host.c_str(), port);
+#else
+	INFO_LOG(Log::System, "TLS: plain TCP to %s:%d (no OpenSSL)", host.c_str(), port);
+#endif
+	return sock;
 }
 
 // ==================== SaveStateLANSync ====================
@@ -469,9 +550,6 @@ bool SaveStateLANSync::StartServer() {
 				}
 #endif
 				// Wrap socket in TLS if available
-				// TODO: Replace recv/send with SSL_read/SSL_write when sslHandle is set.
-				// Current implementation calls AcceptTLS for cert exchange but data
-				// still flows over plain TCP until WriteHTTPResponse is refactored.
 				int ioFd = clientFd;
 				void *sslHandle = nullptr;
 				if (tlsCtx_ && tlsCtx_->AcceptTLS(clientFd, ioFd)) {
@@ -484,7 +562,7 @@ bool SaveStateLANSync::StartServer() {
 				size_t contentLength = 0;
 				size_t headerEnd = std::string::npos;
 				for (int i = 0; i < 200; i++) {
-					int n = recv(clientFd, tempBuf, sizeof(tempBuf) - 1, 0);
+					int n = tls::TLS_recv(sslHandle, clientFd, tempBuf, sizeof(tempBuf) - 1);
 					if (n <= 0) break;
 					tempBuf[n] = '\0';
 					request.append(tempBuf, n);
@@ -549,7 +627,7 @@ bool SaveStateLANSync::StartServer() {
 							WARN_LOG(Log::System, "LANSync: unauthorized %s %s (token=%s...)",
 							         method.c_str(), path.c_str(),
 							         authToken.empty() ? "none" : authToken.substr(0, 8).c_str());
-							WriteHTTPResponse(clientFd, 401,
+							WriteHTTPResponse(sslHandle, clientFd, 401,
 							                  "{\"error\":\"unauthorized\"}");
 							closesocket(clientFd);
 							if (sslHandle && tlsCtx_) tlsCtx_->CloseTLS(clientFd);
@@ -562,15 +640,15 @@ bool SaveStateLANSync::StartServer() {
 				if (path == "/api/v1/pair" && method == "POST") {
 					std::string response;
 					HandlePairRequest(body, response);
-					WriteHTTPResponse(clientFd, 200, response);
+					WriteHTTPResponse(sslHandle, clientFd, 200, response);
 				} else if (path == "/api/v1/pair-request" && method == "POST") {
 					std::string response;
 					HandleAutoPairRequest(body, clientHost, response);
-					WriteHTTPResponse(clientFd, 200, response);
+					WriteHTTPResponse(sslHandle, clientFd, 200, response);
 				} else if (path == "/api/v1/pair-respond" && method == "POST") {
 					std::string response;
 					HandlePairRespond(body, response);
-					WriteHTTPResponse(clientFd, 200, response);
+					WriteHTTPResponse(sslHandle, clientFd, 200, response);
 				} else if (path.find("/api/v1/pair-status") == 0) {
 					std::string query;
 					size_t qPos = path.find('?');
@@ -578,11 +656,11 @@ bool SaveStateLANSync::StartServer() {
 					else query = "";
 					std::string response;
 					HandlePairStatus(query, response);
-					WriteHTTPResponse(clientFd, 200, response);
+					WriteHTTPResponse(sslHandle, clientFd, 200, response);
 				} else if (path == "/api/v1/pair-verify" && method == "POST") {
 					std::string response;
 					HandlePairVerify(body, response);
-					WriteHTTPResponse(clientFd, 200, response);
+					WriteHTTPResponse(sslHandle, clientFd, 200, response);
 				} else if (path == "/api/v1/saves/list") {
 					std::string game;
 					size_t gamePos = request.find("game=");
@@ -593,17 +671,17 @@ bool SaveStateLANSync::StartServer() {
 					}
 					std::string response;
 					HandleSaveList(game, response);
-					WriteHTTPResponse(clientFd, 200, response);
+					WriteHTTPResponse(sslHandle, clientFd, 200, response);
 				} else if (path == "/api/v1/status") {
 					std::string response = StringFromFormat(
 						"{\"deviceId\":\"%s\",\"name\":\"%s\",\"version\":\"1.0\",\"port\":%d}",
 						deviceId_.c_str(), deviceName_.c_str(), serverPort_);
-					WriteHTTPResponse(clientFd, 200, response);
+					WriteHTTPResponse(sslHandle, clientFd, 200, response);
 				} else if (path.find("/api/v1/saves/") == 0 && path.size() > 14) {
 					std::string filename = path.substr(14);  // after /api/v1/saves/
 					
 					if (!IsValidSaveFilename(filename)) {
-						WriteHTTPResponse(clientFd, 400, "{\"error\":\"invalid_filename\"}");
+						WriteHTTPResponse(sslHandle, clientFd, 400, "{\"error\":\"invalid_filename\"}");
 						closesocket(clientFd);
 						if (sslHandle && tlsCtx_) tlsCtx_->CloseTLS(clientFd);
 						return;
@@ -619,12 +697,12 @@ bool SaveStateLANSync::StartServer() {
 								"Content-Length: %d\r\n"
 								"Connection: close\r\n"
 								"\r\n", (int)fileData.size());
-							int sent = send(clientFd, header.c_str(), header.size(), 0);
+							int sent = tls::TLS_send(sslHandle, clientFd, header.c_str(), header.size());
 							if (sent > 0) {
-								send(clientFd, fileData.c_str(), fileData.size(), 0);
+								tls::TLS_send(sslHandle, clientFd, fileData.c_str(), fileData.size());
 							}
 						} else {
-							WriteHTTPResponse(clientFd, 404, "{\"error\":\"not_found\"}");
+							WriteHTTPResponse(sslHandle, clientFd, 404, "{\"error\":\"not_found\"}");
 						}
 					} else if (method == "POST") {
 						// Parse Content-Length header
@@ -637,7 +715,7 @@ bool SaveStateLANSync::StartServer() {
 						}
 						
 						if (contentLength > MAX_UPLOAD_SIZE) {
-							WriteHTTPResponse(clientFd, 413, "{\"error\":\"payload_too_large\"}");
+							WriteHTTPResponse(sslHandle, clientFd, 413, "{\"error\":\"payload_too_large\"}");
 							closesocket(clientFd);
 							if (sslHandle && tlsCtx_) tlsCtx_->CloseTLS(clientFd);
 							return;
@@ -653,8 +731,8 @@ bool SaveStateLANSync::StartServer() {
 						if (contentLength > 0 && bytesRead < contentLength) {
 							allBody.resize(contentLength);
 							while (bytesRead < contentLength) {
-								int n = recv(clientFd, (char *)allBody.data() + bytesRead,
-								             contentLength - bytesRead, 0);
+								int n = tls::TLS_recv(sslHandle, clientFd, (char *)allBody.data() + bytesRead,
+								             contentLength - bytesRead);
 								if (n <= 0) break;
 								bytesRead += n;
 							}
@@ -666,10 +744,10 @@ bool SaveStateLANSync::StartServer() {
 							Path tmp = filePath.WithExtraExtension(".tmp");
 							if (File::WriteDataToFile(false, allBody.data(), allBody.size(), tmp)) {
 								File::Rename(tmp, filePath);
-								WriteHTTPResponse(clientFd, 201, "{\"ok\":true}");
+								WriteHTTPResponse(sslHandle, clientFd, 201, "{\"ok\":true}");
 							} else {
 								File::Delete(tmp);
-								WriteHTTPResponse(clientFd, 500, "{\"error\":\"write_failed\"}");
+								WriteHTTPResponse(sslHandle, clientFd, 500, "{\"error\":\"write_failed\"}");
 							}
 						} else {
 							size_t lastUnderscore = filename.rfind('_');
@@ -680,7 +758,7 @@ bool SaveStateLANSync::StartServer() {
 								atoi(filename.substr(lastUnderscore + 1, dot - lastUnderscore - 1).c_str()) : -1;
 
 							if (slot < 0 || slot > 99) {
-								WriteHTTPResponse(clientFd, 400, "{\"error\":\"invalid_slot\"}");
+								WriteHTTPResponse(sslHandle, clientFd, 400, "{\"error\":\"invalid_slot\"}");
 								closesocket(clientFd);
 								if (sslHandle && tlsCtx_) tlsCtx_->CloseTLS(clientFd);
 								return;
@@ -688,13 +766,13 @@ bool SaveStateLANSync::StartServer() {
 
 							std::string response;
 							HandleSaveUpload(gameId, slot, allBody, "", response);
-							WriteHTTPResponse(clientFd, 201, response);
+							WriteHTTPResponse(sslHandle, clientFd, 201, response);
 						}
 					} else {
-						WriteHTTPResponse(clientFd, 405, "{\"error\":\"method_not_allowed\"}");
+						WriteHTTPResponse(sslHandle, clientFd, 405, "{\"error\":\"method_not_allowed\"}");
 					}
 				} else {
-					WriteHTTPResponse(clientFd, 404, "{\"error\":\"not_found\"}");
+					WriteHTTPResponse(sslHandle, clientFd, 404, "{\"error\":\"not_found\"}");
 				}
 				closesocket(clientFd);
 				if (sslHandle && tlsCtx_) {
@@ -760,30 +838,17 @@ void SaveStateLANSync::PairWithPeer(const std::string &peerId, const std::string
 			"{\"pin\":\"%s\",\"name\":\"%s\",\"id\":\"%s\"}",
 			pin.c_str(), deviceName_.c_str(), deviceId_.c_str());
 
-		// TCP connect + send HTTP request
-		int sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+		// TLS-aware connect
+		void *sslHandle = nullptr;
+		int sock = TLSConnectToPeer(host, port, "", sslHandle);
 		if (sock < 0) {
-			if (callback) callback(false, "Socket error");
+			if (callback) callback(false, "Connection refused");
 			return;
 		}
 		struct timeval tv;
 		tv.tv_sec = 30; tv.tv_usec = 0;
 		setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char *)&tv, sizeof(tv));
 		setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, (const char *)&tv, sizeof(tv));
-
-		struct sockaddr_in addr;
-		memset(&addr, 0, sizeof(addr));
-		addr.sin_family = AF_INET;
-		addr.sin_port = htons(port);
-		inet_pton(AF_INET, host.c_str(), &addr.sin_addr);
-
-		if (connect(sock, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
-			WARN_LOG(Log::System, "LANSync: PairWithPeer connect failed %s:%d: %s",
-			         host.c_str(), port, strerror(errno));
-			closesocket(sock);
-			if (callback) callback(false, "Connection refused");
-			return;
-		}
 
 		std::string request = StringFromFormat(
 			"POST /api/v1/pair HTTP/1.1\r\n"
@@ -793,13 +858,13 @@ void SaveStateLANSync::PairWithPeer(const std::string &peerId, const std::string
 			"Connection: close\r\n"
 			"\r\n%s", host.c_str(), port, (int)body.size(), body.c_str());
 
-		send(sock, request.c_str(), request.size(), 0);
+		tls::TLS_send(sslHandle, sock, request.c_str(), request.size());
 
 		// Read response with loop to handle partial TCP reads
 		std::string response;
 		char buf[4096];
 		int n;
-		while ((n = recv(sock, buf, sizeof(buf) - 1, 0)) > 0) {
+		while ((n = tls::TLS_recv(sslHandle, sock, buf, sizeof(buf) - 1)) > 0) {
 			buf[n] = '\0';
 			response.append(buf, n);
 			size_t hdrEnd = response.find("\r\n\r\n");
@@ -814,6 +879,7 @@ void SaveStateLANSync::PairWithPeer(const std::string &peerId, const std::string
 			size_t bodySize = response.size() - hdrEnd - 4;
 			if (contentLength == 0 || bodySize >= contentLength) break;
 		}
+		if (sslHandle && tlsCtx_) tlsCtx_->CloseTLS(sock);
 		closesocket(sock);
 
 		if (!response.empty()) {
@@ -879,27 +945,14 @@ void SaveStateLANSync::AutoPairWithPeer(const std::string &host, int port,
 			"{\"id\":\"%s\",\"name\":\"%s\",\"device\":\"%s\",\"port\":%d}",
 			deviceId_.c_str(), deviceName_.c_str(), deviceType_.c_str(), serverPort_);
 
-		// POST /api/v1/pair-request
-		int sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-		if (sock < 0) { if (callback) callback(false, "Socket error"); return; }
+		// TLS-aware connect
+		void *sslHandle = nullptr;
+		int sock = TLSConnectToPeer(host, port, "", sslHandle);
+		if (sock < 0) { if (callback) callback(false, "Connection refused"); return; }
 		struct timeval tv;
 		tv.tv_sec = 15; tv.tv_usec = 0;
 		setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char *)&tv, sizeof(tv));
 		setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, (const char *)&tv, sizeof(tv));
-
-		struct sockaddr_in addr;
-		memset(&addr, 0, sizeof(addr));
-		addr.sin_family = AF_INET;
-		addr.sin_port = htons(port);
-		inet_pton(AF_INET, host.c_str(), &addr.sin_addr);
-
-		if (connect(sock, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
-			WARN_LOG(Log::System, "LANSync: AutoPairWithPeer connect failed %s:%d: %s",
-			         host.c_str(), port, strerror(errno));
-			closesocket(sock);
-			if (callback) callback(false, "Connection refused");
-			return;
-		}
 
 		std::string req = StringFromFormat(
 			"POST /api/v1/pair-request HTTP/1.1\r\n"
@@ -908,13 +961,13 @@ void SaveStateLANSync::AutoPairWithPeer(const std::string &host, int port,
 			"Content-Length: %d\r\n"
 			"Connection: close\r\n\r\n%s",
 			host.c_str(), port, (int)body.size(), body.c_str());
-		send(sock, req.c_str(), req.size(), 0);
+		tls::TLS_send(sslHandle, sock, req.c_str(), req.size());
 
 		char buf[4096];
 		// Read response with loop to handle partial TCP reads
 		std::string resp;
 		int n;
-		while ((n = recv(sock, buf, sizeof(buf) - 1, 0)) > 0) {
+		while ((n = tls::TLS_recv(sslHandle, sock, buf, sizeof(buf) - 1)) > 0) {
 			buf[n] = '\0';
 			resp.append(buf, n);
 			size_t hdrEnd = resp.find("\r\n\r\n");
@@ -929,6 +982,7 @@ void SaveStateLANSync::AutoPairWithPeer(const std::string &host, int port,
 			size_t bodySize = resp.size() - hdrEnd - 4;
 			if (contentLength == 0 || bodySize >= contentLength) break;
 		}
+		if (sslHandle && tlsCtx_) tlsCtx_->CloseTLS(sock);
 		closesocket(sock);
 		if (resp.empty()) { if (callback) callback(false, "No response"); return; }
 
@@ -969,33 +1023,24 @@ void SaveStateLANSync::AutoPairWithPeer(const std::string &host, int port,
 		for (int i = 0; i < 30; i++) {
 			sleep_ms(1000, "auto-pair-poll");
 
-			int pollSock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+			void *pollSslHandle = nullptr;
+			int pollSock = TLSConnectToPeer(host, port, "", pollSslHandle);
 			if (pollSock < 0) continue;
 			struct timeval pollTv;
 			pollTv.tv_sec = 5; pollTv.tv_usec = 0;
 			setsockopt(pollSock, SOL_SOCKET, SO_RCVTIMEO, (const char *)&pollTv, sizeof(pollTv));
-
-			memset(&addr, 0, sizeof(addr));
-			addr.sin_family = AF_INET;
-			addr.sin_port = htons(port);
-			inet_pton(AF_INET, host.c_str(), &addr.sin_addr);
-
-			if (connect(pollSock, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
-				closesocket(pollSock);
-				continue;
-			}
 
 			std::string pollReq = StringFromFormat(
 				"GET /api/v1/pair-status?requestId=%s HTTP/1.1\r\n"
 				"Host: %s:%d\r\n"
 				"Connection: close\r\n\r\n",
 				requestId.c_str(), host.c_str(), port);
-			send(pollSock, pollReq.c_str(), pollReq.size(), 0);
+			tls::TLS_send(pollSslHandle, pollSock, pollReq.c_str(), pollReq.size());
 
 			char pollBuf[1024];
 			std::string pollResp;
 			int pollN;
-			while ((pollN = recv(pollSock, pollBuf, sizeof(pollBuf) - 1, 0)) > 0) {
+			while ((pollN = tls::TLS_recv(pollSslHandle, pollSock, pollBuf, sizeof(pollBuf) - 1)) > 0) {
 				pollBuf[pollN] = '\0';
 				pollResp.append(pollBuf, pollN);
 				size_t hdrEnd = pollResp.find("\r\n\r\n");
@@ -1010,6 +1055,7 @@ void SaveStateLANSync::AutoPairWithPeer(const std::string &host, int port,
 				size_t bodySize = pollResp.size() - hdrEnd - 4;
 				if (contentLength == 0 || bodySize >= contentLength) break;
 			}
+			if (pollSslHandle && tlsCtx_) tlsCtx_->CloseTLS(pollSock);
 			closesocket(pollSock);
 			if (pollN <= 0) continue;
 
@@ -1039,30 +1085,26 @@ void SaveStateLANSync::AutoPairWithPeer(const std::string &host, int port,
 				// Server user hasn't confirmed yet — send our confirmation (auto-confirm)
 				// The codes were already verified locally, so we can auto-confirm
 				clientConfirmed = true;
-				// Send pair-verify to server
-				int verifySock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+				// Send pair-verify to server (TLS-aware)
+				void *verifySslHandle = nullptr;
+				int verifySock = TLSConnectToPeer(host, port, "", verifySslHandle);
 				if (verifySock >= 0) {
-					memset(&addr, 0, sizeof(addr));
-					addr.sin_family = AF_INET;
-					addr.sin_port = htons(port);
-					inet_pton(AF_INET, host.c_str(), &addr.sin_addr);
-					if (connect(verifySock, (struct sockaddr *)&addr, sizeof(addr)) >= 0) {
-						std::string verifyBody = StringFromFormat(
-							"{\"requestId\":\"%s\"}", requestId.c_str());
-						std::string verifyReq = StringFromFormat(
-							"POST /api/v1/pair-verify HTTP/1.1\r\n"
-							"Host: %s:%d\r\n"
-							"Content-Type: application/json\r\n"
-							"Content-Length: %d\r\n"
-							"Connection: close\r\n\r\n%s",
-							host.c_str(), port, (int)verifyBody.size(), verifyBody.c_str());
-						send(verifySock, verifyReq.c_str(), verifyReq.size(), 0);
-						// Read response (don't block — fire and forget)
-						char vbuf[256];
-						recv(verifySock, vbuf, sizeof(vbuf) - 1, 0);
-					}
-					closesocket(verifySock);
+					std::string verifyBody = StringFromFormat(
+						"{\"requestId\":\"%s\"}", requestId.c_str());
+					std::string verifyReq = StringFromFormat(
+						"POST /api/v1/pair-verify HTTP/1.1\r\n"
+						"Host: %s:%d\r\n"
+						"Content-Type: application/json\r\n"
+						"Content-Length: %d\r\n"
+						"Connection: close\r\n\r\n%s",
+						host.c_str(), port, (int)verifyBody.size(), verifyBody.c_str());
+					tls::TLS_send(verifySslHandle, verifySock, verifyReq.c_str(), verifyReq.size());
+					// Read response (don't block — fire and forget)
+					char vbuf[256];
+					tls::TLS_recv(verifySslHandle, verifySock, vbuf, sizeof(vbuf) - 1);
 				}
+				if (verifySslHandle && tlsCtx_) tlsCtx_->CloseTLS(verifySock);
+				closesocket(verifySock);
 			} else if (status == "rejected" || status == "expired") {
 				if (callback) callback(false, status);
 				return;
@@ -1106,51 +1148,43 @@ bool SaveStateLANSync::DownloadSave(const PeerInfo &peer, const Path &localPath,
 		"Connection: close\r\n\r\n",
 		gameId.c_str(), slot, ext.c_str(),
 		peer.host.c_str(), peer.port, peer.token.c_str());
-	int sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+	void *sslHandle = nullptr;
+	int sock = TLSConnectToPeer(peer.host, peer.port, peer.certFingerprint, sslHandle);
 	if (sock < 0) return false;
 	struct timeval tv;
 	tv.tv_sec = 30; tv.tv_usec = 0;
 	setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
-	struct sockaddr_in addr;
-	memset(&addr, 0, sizeof(addr));
-	addr.sin_family = AF_INET;
-	addr.sin_port = htons(peer.port);
-	inet_pton(AF_INET, peer.host.c_str(), &addr.sin_addr);
 	bool ok = false;
-	if (connect(sock, (struct sockaddr *)&addr, sizeof(addr)) >= 0) {
-		send(sock, dlReq.c_str(), dlReq.size(), 0);
-		std::vector<uint8_t> buf(65536);
-		int total = 0, n;
-		while ((n = recv(sock, (char *)buf.data() + total, buf.size() - total - 1, 0)) > 0) {
-			total += n;
-			if (total >= (int)buf.size() - 1024) {
-				if (buf.size() > (size_t)MAX_UPLOAD_SIZE) {
-					closesocket(sock);
-					return false;
-				}
-				buf.resize(buf.size() * 2);
+	tls::TLS_send(sslHandle, sock, dlReq.c_str(), dlReq.size());
+	std::vector<uint8_t> buf(65536);
+	int total = 0, n;
+	while ((n = tls::TLS_recv(sslHandle, sock, (char *)buf.data() + total, buf.size() - total - 1)) > 0) {
+		total += n;
+		if (total >= (int)buf.size() - 1024) {
+			if (buf.size() > (size_t)MAX_UPLOAD_SIZE) {
+				if (sslHandle && tlsCtx_) tlsCtx_->CloseTLS(sock);
+				closesocket(sock);
+				return false;
 			}
+			buf.resize(buf.size() * 2);
 		}
-		if (total > 0) {
-			std::string resp((char *)buf.data(), total);
-			if (resp.find("200 OK") != std::string::npos) {
-				size_t bStart = resp.find("\r\n\r\n");
-				if (bStart != std::string::npos) {
-					bStart += 4;
-					std::vector<uint8_t> fd(buf.begin() + bStart, buf.begin() + total);
-					Path tmp = localPath.WithExtraExtension(".tmp");
-					if (File::WriteDataToFile(false, fd.data(), fd.size(), tmp)) {
-						File::Rename(tmp, localPath);
-						ok = true;
-					} else { File::Delete(tmp); }
-				}
-			}
-		}
-	} else {
-		WARN_LOG(Log::System, "LANSync: DownloadSave connect failed %s_%d.%s -> %s:%d: %s",
-		         gameId.c_str(), slot, ext.c_str(),
-		         peer.host.c_str(), peer.port, strerror(errno));
 	}
+	if (total > 0) {
+		std::string resp((char *)buf.data(), total);
+		if (resp.find("200 OK") != std::string::npos) {
+			size_t bStart = resp.find("\r\n\r\n");
+			if (bStart != std::string::npos) {
+				bStart += 4;
+				std::vector<uint8_t> fd(buf.begin() + bStart, buf.begin() + total);
+				Path tmp = localPath.WithExtraExtension(".tmp");
+				if (File::WriteDataToFile(false, fd.data(), fd.size(), tmp)) {
+					File::Rename(tmp, localPath);
+					ok = true;
+				} else { File::Delete(tmp); }
+			}
+		}
+	}
+	if (sslHandle && tlsCtx_) tlsCtx_->CloseTLS(sock);
 	closesocket(sock);
 	return ok;
 }
@@ -1167,29 +1201,20 @@ bool SaveStateLANSync::UploadSave(const PeerInfo &peer, const std::string &gameI
 		gameId.c_str(), slot, ext.c_str(),
 		peer.host.c_str(), peer.port, peer.token.c_str(),
 		(int)data.size());
-	int sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+	void *sslHandle = nullptr;
+	int sock = TLSConnectToPeer(peer.host, peer.port, peer.certFingerprint, sslHandle);
 	if (sock < 0) return false;
 	struct timeval tv;
 	tv.tv_sec = 30; tv.tv_usec = 0;
 	setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char *)&tv, sizeof(tv));
 	setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, (const char *)&tv, sizeof(tv));
-	struct sockaddr_in addr;
-	memset(&addr, 0, sizeof(addr));
-	addr.sin_family = AF_INET;
-	addr.sin_port = htons(peer.port);
-	inet_pton(AF_INET, peer.host.c_str(), &addr.sin_addr);
+	tls::TLS_send(sslHandle, sock, header.c_str(), header.size());
+	tls::TLS_send(sslHandle, sock, data.data(), data.size());
+	char resp[256];
+	int n = tls::TLS_recv(sslHandle, sock, resp, sizeof(resp) - 1);
 	bool ok = false;
-	if (connect(sock, (struct sockaddr *)&addr, sizeof(addr)) >= 0) {
-		send(sock, header.c_str(), header.size(), 0);
-		send(sock, data.data(), data.size(), 0);
-		char resp[256];
-		int n = recv(sock, resp, sizeof(resp) - 1, 0);
-		if (n > 0) { resp[n] = '\0'; ok = (strstr(resp, "201") != nullptr); }
-	} else {
-		WARN_LOG(Log::System, "LANSync: UploadSave connect failed %s_%d.%s -> %s:%d: %s",
-		         gameId.c_str(), slot, ext.c_str(),
-		         peer.host.c_str(), peer.port, strerror(errno));
-	}
+	if (n > 0) { resp[n] = '\0'; ok = (strstr(resp, "201") != nullptr); }
+	if (sslHandle && tlsCtx_) tlsCtx_->CloseTLS(sock);
 	closesocket(sock);
 	return ok;
 }
@@ -1256,26 +1281,16 @@ SaveStateLANSync::SyncResult SaveStateLANSync::DoSync(const PeerInfo &peer, Save
 	INFO_LOG(Log::System, "LANSync DoSync: START peer=%s:%d", peer.host.c_str(), peer.port);
 	SyncResult result;
 
-	// Connect to peer
-	int sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-	if (sock < 0) { INFO_LOG(Log::System, "LANSync DoSync: socket() failed"); result.success = false; return result; }
+	// TLS-aware connect
+	void *sslHandle = nullptr;
+	int sock = TLSConnectToPeer(peer.host, peer.port, peer.certFingerprint, sslHandle);
+	if (sock < 0) { INFO_LOG(Log::System, "LANSync DoSync: connect failed"); result.success = false; return result; }
 	struct timeval tv;
 	tv.tv_sec = 30; tv.tv_usec = 0;
 	setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char *)&tv, sizeof(tv));
 	setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, (const char *)&tv, sizeof(tv));
-
-	struct sockaddr_in addr;
-	memset(&addr, 0, sizeof(addr));
-	addr.sin_family = AF_INET;
-	addr.sin_port = htons(peer.port);
-	inet_pton(AF_INET, peer.host.c_str(), &addr.sin_addr);
-
-	if (connect(sock, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
-		WARN_LOG(Log::System, "LANSync: DoSync connect failed %s:%d: %s",
-		         peer.host.c_str(), peer.port, strerror(errno));
-		closesocket(sock); result.success = false; return result;
-	}
-	INFO_LOG(Log::System, "LANSync DoSync: connected OK, scanning local dir...");
+	INFO_LOG(Log::System, "LANSync DoSync: connected OK (TLS=%s), scanning local dir...",
+	         sslHandle ? "yes" : "no");
 
 	// Scan local savestate directory for all games
 	Path saveDir = GetSysDirectory(DIRECTORY_SAVESTATE);
@@ -1330,7 +1345,7 @@ SaveStateLANSync::SyncResult SaveStateLANSync::DoSync(const PeerInfo &peer, Save
 		"Authorization: Bearer %s\r\n"
 		"Connection: close\r\n\r\n",
 		peer.host.c_str(), peer.port, peer.token.c_str());
-	send(sock, request.c_str(), request.size(), 0);
+	tls::TLS_send(sslHandle, sock, request.c_str(), request.size());
 
 	// Read response with loop to handle partial reads
 	std::string response;
@@ -1339,7 +1354,7 @@ SaveStateLANSync::SyncResult SaveStateLANSync::DoSync(const PeerInfo &peer, Save
 		size_t contentLength = 0;
 		bool headersParsed = false;
 		for (int i = 0; i < 200; i++) {
-			int n = recv(sock, buf, sizeof(buf) - 1, 0);
+			int n = tls::TLS_recv(sslHandle, sock, buf, sizeof(buf) - 1);
 			if (n <= 0) break;
 			buf[n] = '\0';
 			response.append(buf, n);
@@ -1362,6 +1377,7 @@ SaveStateLANSync::SyncResult SaveStateLANSync::DoSync(const PeerInfo &peer, Save
 			}
 		}
 	}
+	if (sslHandle && tlsCtx_) tlsCtx_->CloseTLS(sock);
 	closesocket(sock);
 
 	if (response.empty()) { INFO_LOG(Log::System, "LANSync DoSync: empty response from peer"); result.success = false; return result; }

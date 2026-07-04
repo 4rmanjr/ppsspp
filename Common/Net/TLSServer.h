@@ -25,6 +25,12 @@ class NewThreadExecutor;
 
 namespace tls {
 
+// [PPSSPP-FORK] LANSync: TLS-aware I/O wrappers.
+// If sslHandle is non-null, uses SSL_read/SSL_write; otherwise falls back to raw recv/send.
+// These are used by SaveStateLANSync to transparently support TLS on both server and client sides.
+int TLS_send(void *sslHandle, int fd, const void *buf, int len);
+int TLS_recv(void *sslHandle, int fd, void *buf, int len);
+
 // Server-side TLS context with self-signed certificate
 class TLSServerContext {
 public:
