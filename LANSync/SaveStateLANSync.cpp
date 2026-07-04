@@ -197,6 +197,8 @@ static int TLSConnectToPeer(const std::string &host, int port,
 		SSL *ssl = SSL_new(ctx);
 		if (ssl) {
 			SSL_set_fd(ssl, sock);
+			SSL_CTX_free(ctx);  // SSL object holds its own reference
+			ctx = nullptr;
 			if (SSL_connect(ssl) > 0) {
 				// Verify server certificate fingerprint (TOFU)
 				X509 *serverCert = SSL_get_peer_certificate(ssl);
@@ -218,7 +220,6 @@ static int TLSConnectToPeer(const std::string &host, int port,
 						if (!expectedFingerprint.empty() && actualFp != expectedFingerprint) {
 							ERROR_LOG(Log::System, "TLS: fingerprint mismatch with %s:%d", host.c_str(), port);
 							SSL_free(ssl);
-							SSL_CTX_free(ctx);
 							closesocket(sock);
 							return -1;
 						}
@@ -231,7 +232,7 @@ static int TLSConnectToPeer(const std::string &host, int port,
 				sslHandle = ssl;
 				INFO_LOG(Log::System, "TLS: connected to %s:%d, cipher=%s",
 				         host.c_str(), port, SSL_get_cipher_name(ssl));
-				return sock;  // Caller owns ctx via CloseTLS
+				return sock;  // ctx already freed after SSL_set_fd
 			}
 			// TLS handshake failed — fall back to plain TCP
 			SSL_free(ssl);
