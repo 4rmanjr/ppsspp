@@ -1241,13 +1241,13 @@ void SaveStateLANSync::SyncWithPeer(const std::string &peerId, SyncDirection dir
 		}
 #endif
 		SaveStateLANSync::SyncResult result = DoSync(target, onProgress);
-		syncStatus_ = result.success ? SyncStatus::DONE : SyncStatus::ERROR;
-		// Finalize syncProgress_ for GetProgress() callers
+		// Finalize syncProgress_ BEFORE setting status (matches start-up order)
 		{
 			std::lock_guard<std::mutex> lock(syncMutex_);
 			syncProgress_.status = result.success ? SyncStatus::DONE : SyncStatus::ERROR;
 			if (!result.success) syncProgress_.error = "Sync failed";
 		}
+		syncStatus_ = result.success ? SyncStatus::DONE : SyncStatus::ERROR;
 		if (onDone) onDone(result);
 	}));
 }
@@ -1865,7 +1865,10 @@ void SaveStateLANSync::HandlePairRequest(const std::string &body, std::string &r
 	}
 
 	// Clear PIN after successful pairing
-	pairingPin_.clear();
+	{
+		std::lock_guard<std::mutex> lock(pinMutex_);
+		pairingPin_.clear();
+	}
 }
 
 void SaveStateLANSync::HandleAutoPairRequest(const std::string &body, const std::string &clientHost, std::string &response) {
