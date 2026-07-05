@@ -28,8 +28,9 @@ public class LANSyncActivity {
     // ==================== JNI bridge methods ====================
 
     public static void registerService(String name, int port, Map<String, String> txt) {
-        Log.d(TAG, "registerService: " + name + " on port " + port);
-        LANSyncManager.startSyncService(name, port);
+        String deviceId = (txt != null) ? txt.get("id") : "";
+        Log.d(TAG, "registerService: " + name + " on port " + port + " id=" + deviceId);
+        LANSyncManager.startSyncService(name, port, deviceId);
     }
 
     public static void unregisterService() {

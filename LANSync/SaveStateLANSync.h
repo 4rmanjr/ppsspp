@@ -201,6 +201,7 @@ public:
 	SyncStatus GetStatus() const;
 	SyncProgress GetProgress() const;
 	std::string GetCurrentPin() const;
+	std::string GetTlsFingerprint() const;
 
 	// === Pairing server handlers (API endpoints) ===
 	void HandlePairRequest(const std::string &body, std::string &response);

@@ -1,6 +1,6 @@
 # LAN Save State Sync — Implementation Progress
 
-> **Last updated**: 2026-07-04
+> **Last updated**: 2026-07-05
 > **Target**: PPSSPP 1.21+ with LAN Sync
 > **Scope**: Android + Linux SDL only
 > **Progress**: 65/66 tasks (98%)
@@ -123,11 +123,13 @@
 | 24 | Android JNI peers not in SaveStateLANSync | Critical | 2025-06-09 |
 | 25 | DoSync crash: background thread no JNI | Critical | 2025-06-09 |
 
-### Open — Functional (2)
+### Open — Functional (4)
 | # | Bug | Priority | Status |
 |---|-----|----------|--------|
 | 8 | GetPeers() returns empty | Low | Open |
 | 9 | TLS not wired to socket | Medium | ✅ Fixed — TLSConnectToPeer() + TLS_send/TLS_recv on all client/server paths |
+| 35 | Asymmetric mDNS discovery (PC ← X → Android) | Critical | Investigating |
+| 36 | Android `fp` TXT record lost in JNI bridge | Medium | 🔧 Fix applied, pending test |
 
 ### Open — Code Quality (from code review 2026-07-03)
 | # | Issue | Priority | File:Line |
@@ -160,6 +162,66 @@ but `AcceptTLS()` is never called. All data flows over plain TCP.
 This bug affects **both platforms**.
 
 ### 4. ~~Feature Flag Missing (P2)~~ ✅ Fixed
+`HLC.h/cpp` and `LANSyncConfig.cpp` now have
+`#ifdef PPSSPP_LANSYNC` guards. `LANSyncConfig.h` is not guarded
+because it is included by `Core/Config.h` (struct is required).
+**FIXED** (2026-07-04).
+
+### 5. Asymmetric Discovery — Android detect PC, PC tidak detect Android
+
+**Symptoms:**
+- Android detects PC ✅ (muncul di Pair New Device)
+- PC does NOT detect Android ❌ (tidak muncul sama sekali)
+
+**Architecture — Dual discovery path:**
+
+| Path | PC → Android | Android → PC |
+|------|-------------|-------------|
+| **mDNS** (Avahi ↔ NsdManager) | ✅ Avahi announce → NsdManager resolve OK | ❓ NsdManager announce → Avahi resolve? |
+| **UDP** (broadcast 27313-27320) | ? | ? |
+
+**Root cause candidates (ordered by likelihood):**
+
+| # | Candidate | Evidence | Fix |
+|---|-----------|----------|-----|
+| A | **Avahi cannot resolve NsdManager mDNS** — Android NsdManager mDNS packets might not include TXT records in a format Avahi can parse | Asymmetry is consistent with mDNS interop issue | Add Avahi resolve logging; if confirmed, enhance UDP broadcast as primary path |
+| B | **`id` TXT record empty on Android** — despite F1 fix, `deviceId` might still not reach `NsdServiceInfo.setAttribute("id", ...)` | Need to verify by adding TXT record logging on discovery | Trace `deviceId` through JNI bridge |
+| C | **UDP broadcast blocked** — if mDNS fails AND UDP broadcast is blocked by network/firewall, no discovery possible | PC might not receive Android's UDP broadcast | Test with `nc -u -l 27313` on PC |
+
+**Key code paths:**
+- PC discover: `MDNS_Unix.cpp:ResolveCallback` → `SaveStateLANSync::StartDiscovery()` lambda
+- PC announce: `MDNS_Unix.cpp:AvahiAnnouncer::Update` — TXT: 5 keys (version, device, name, id, fp)
+- Android announce: `LANSyncService.java:registerService()` → `NsdManager.registerService()` — TXT: 4 keys (version, device, name, id) — **`fp` missing**
+- Android discover: `LANSyncService.java:onServiceResolved()` → `LANSyncManager.onPeerFoundFromNsd()` → `nativeOnPeerFound()` → `AddDiscoveredPeer()`
+- Android mDNS stubs: `MDNS_Android.cpp` — Browser dan Announcer adalah NO-OP (delegasi ke NsdManager via JNI)
+
+**Filter gates:**
+- `SaveStateLANSync::AddDiscoveredPeer()` drops peers with `id.empty()` (line 399)
+- mDNS Browser callback (`StartDiscovery()` lambda) only drops self-discovery (`peer.id == deviceId_`), NOT empty id
+- Android `LANSyncService.onServiceFound()` filters out own service name (self-check via `deviceId`)
+
+**Data loss in Java bridge (Bug #36):**
+```
+C++ txt map: {version, device, name, id, fp}  ← 5 keys
+     │
+     ▼ (JNI CallJavaRegisterService)
+HashMap<String, String>  ← all 5 keys preserved
+     │
+     ▼ (LANSyncActivity.registerService)
+txt.get("id")  ← ONLY id extracted, rest discarded
+     │
+     ▼ (LANSyncManager.startSyncService → startService → intent)
+deviceId only (name, port already params)
+     │
+     ▼ (LANSyncService.registerService)
+setAttribute("id", deviceId)  ← sets id
+setAttribute("fp", ...) NEVER CALLED
+```
+
+**Next steps:**
+1. Add logging in `MDNS_Unix.cpp:ResolveCallback` to capture whether Avahi resolves Android's service and what TXT records it reads
+2. Fix `LANSyncActivity.registerService()` to pass full txt map (not just id) so `fp` reaches NsdManager
+3. Test mDNS interop: run `avahi-browse -a -t` on PC while Android is announcing
 `HLC.h/cpp` and `LANSyncConfig.cpp` now have
 `#ifdef PPSSPP_LANSYNC` guards. `LANSyncConfig.h` is not guarded
 because it is included by `Core/Config.h` (struct is required).
@@ -367,6 +429,12 @@ StartServer()
 ---
 
 ## Changelog
+
+### 2026-07-05
+- Documented asymmetric discovery bug (#35): Android detect PC, PC tidak detect Android
+- Added architecture analysis: dual path (mDNS + UDP), data loss in Java bridge
+- Added Bug #35 (asymmetric discovery, Critical) and Bug #36 (fp TXT lost, Medium) to tracker
+- Added Known Issue #5: full analysis with root cause candidates A/B/C
 
 ### 2026-07-04
 - Created `docs/agents/lansync-progress.md`

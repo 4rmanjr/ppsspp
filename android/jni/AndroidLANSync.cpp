@@ -466,6 +466,7 @@ bool AndroidLANSync::Enable(const std::string &deviceName) {
 	txt["device"] = "Android";
 	txt["name"] = deviceName;
 	txt["id"] = core.GetDeviceId();
+	txt["fp"] = core.GetTlsFingerprint();
 	CallJavaRegisterService(deviceName, core.GetServerPort(), txt);
 
 	// Start foreground service (Android 8+ requirement for long-running service)

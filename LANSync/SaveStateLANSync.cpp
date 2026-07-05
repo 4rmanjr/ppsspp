@@ -455,48 +455,52 @@ bool SaveStateLANSync::StartServer() {
 		tlsCtx_->SaveToKeystore();
 	}
 
-	// Start HTTP server FIRST to get port
+	// [PPSSPP-FORK] LANSync: synchronous socket/bind/listen (no port race)
+	listenSock_ = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+	if (listenSock_ < 0) {
+		ERROR_LOG(Log::System, "LANSync: failed to create server socket");
+		return false;
+	}
+
+	int reuse = 1;
+	setsockopt(listenSock_, SOL_SOCKET, SO_REUSEADDR, (const char *)&reuse, sizeof(reuse));
+
+	struct sockaddr_in addr;
+	memset(&addr, 0, sizeof(addr));
+	addr.sin_family = AF_INET;
+	addr.sin_addr.s_addr = htonl(INADDR_ANY);
+	addr.sin_port = 0;  // Auto-assign
+
+	if (bind(listenSock_, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
+		ERROR_LOG(Log::System, "LANSync: failed to bind server socket: %s", strerror(errno));
+		closesocket(listenSock_);
+		listenSock_ = -1;
+		return false;
+	}
+
+	// Get assigned port (no race — synchronous)
+	socklen_t addrLen = sizeof(addr);
+	if (getsockname(listenSock_, (struct sockaddr *)&addr, &addrLen) == 0) {
+		serverPort_ = ntohs(addr.sin_port);
+	}
+
+	// Set recv timeout (10 seconds) for bug #2
+	struct timeval tv;
+	tv.tv_sec = 10;
+	tv.tv_usec = 0;
+	setsockopt(listenSock_, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+
+	if (listen(listenSock_, 5) < 0) {
+		ERROR_LOG(Log::System, "LANSync: listen failed: %s", strerror(errno));
+		closesocket(listenSock_);
+		listenSock_ = -1;
+		return false;
+	}
+
 	serverRunning_ = true;
-	AddBackgroundThread(std::thread([this]() {
-		listenSock_ = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-		if (listenSock_ < 0) {
-			serverRunning_ = false;
-			return;
-		}
 
-		int reuse = 1;
-		setsockopt(listenSock_, SOL_SOCKET, SO_REUSEADDR, (const char *)&reuse, sizeof(reuse));
-
-		struct sockaddr_in addr;
-		memset(&addr, 0, sizeof(addr));
-		addr.sin_family = AF_INET;
-		addr.sin_addr.s_addr = htonl(INADDR_ANY);
-		addr.sin_port = 0;  // Auto-assign
-
-		if (bind(listenSock_, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
-			closesocket(listenSock_);
-			listenSock_ = -1;
-			serverRunning_ = false;
-			return;
-		}
-
-		// Get assigned port
-		socklen_t addrLen = sizeof(addr);
-		getsockname(listenSock_, (struct sockaddr *)&addr, &addrLen);
-		{
-			std::lock_guard<std::mutex> lock(serverMutex_);
-			serverPort_ = ntohs(addr.sin_port);
-		}
-
-		// Set recv timeout (10 seconds) for bug #2
-		struct timeval tv;
-		tv.tv_sec = 10;
-		tv.tv_usec = 0;
-		setsockopt(listenSock_, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
-
-		listen(listenSock_, 5);
-
-		// NOW announce via mDNS + UDP (port is known)
+	AddBackgroundThread(std::thread([this, tv]() {
+		// Port is already known — announce via mDNS + UDP
 		mdnsAnnouncer_.reset(mDNS::Announcer::Create());
 		mDNS::ServiceInfo svc;
 		svc.id = deviceId_; svc.name = deviceName_; svc.device = deviceType_;
@@ -1748,6 +1752,9 @@ SaveStateLANSync::SyncProgress SaveStateLANSync::GetProgress() const { std::lock
 std::string SaveStateLANSync::GetCurrentPin() const {
 	std::lock_guard<std::mutex> lock(pinMutex_);
 	return pairingPin_;
+}
+std::string SaveStateLANSync::GetTlsFingerprint() const {
+	return tlsCtx_ ? tlsCtx_->GetFingerprint() : "";
 }
 
 std::string SaveStateLANSync::GetDeviceId() const { return deviceId_; }

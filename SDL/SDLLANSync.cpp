@@ -415,22 +415,27 @@ void SDLLANSyncUI::DrawServerPairingScreen(bool *open) {
 		return;
 	}
 
+	auto &core = SaveStateLANSync::Instance();
+
 	// PIN display
 	ImGui::Text("PIN:");
 	ImGui::Text("  %s", pairingPin_.c_str());
+
+	ImGui::Text("TLS Fingerprint:");
+	ImGui::Text("  %s", core.GetTlsFingerprint().c_str());
 
 	ImGui::Separator();
 
 	// QR Code (generated via libqrencode)
 	ImGui::Text("QR Code:");
-	auto &core = SaveStateLANSync::Instance();
 	auto &lanSync2 = GetLinuxLANSync();
 	auto ips = lanSync2.GetLocalIPs();
 	std::string host = ips.empty() ? "0.0.0.0" : ips[0];
+	std::string fingerprint = core.GetTlsFingerprint();
 	std::string qrPayload = StringFromFormat(
 		"ppsspp-sync://pair?host=%s&port=%d&fp=%s&pin=%s&name=%s",
 		host.c_str(), core.GetServerPort(),
-		core.GetCurrentPin().c_str(), pairingPin_.c_str(), "PPSSPP");
+		fingerprint.c_str(), pairingPin_.c_str(), "PPSSPP");
 	
 	std::vector<uint8_t> qrData = lanSync2.GenerateQRCode(qrPayload);
 	if (!qrData.empty()) {

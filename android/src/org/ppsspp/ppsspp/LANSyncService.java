@@ -174,10 +174,11 @@ public class LANSyncService extends Service {
 
     // ==================== NsdManager Registration ====================
 
-    public void registerService(String name, int port, PeerDiscoveryCallback callback) {
+    public void registerService(String name, int port, PeerDiscoveryCallback callback, String deviceId) {
         this.deviceName = name;
         this.serverPort = port;
         this.peerCallback = callback;
+        this.deviceId = deviceId;
         this.nsdManager = (NsdManager) getSystemService(Context.NSD_SERVICE);
 
         if (nsdManager == null) {
@@ -194,7 +195,7 @@ public class LANSyncService extends Service {
         serviceInfo.setAttribute("version", "1");
         serviceInfo.setAttribute("device", "Android");
         serviceInfo.setAttribute("name", name);
-        serviceInfo.setAttribute("id", deviceId != null ? deviceId : "");
+        serviceInfo.setAttribute("id", deviceId);
 
         registrationListener = new NsdManager.RegistrationListener() {
             @Override
@@ -202,7 +203,7 @@ public class LANSyncService extends Service {
                 Log.i(TAG, "Service registered: " + info.getServiceName());
                 isRegistered = true;
                 // Service name may be modified by NsdManager
-                deviceId = info.getServiceName();
+                LANSyncService.this.deviceId = info.getServiceName();
             }
 
             @Override

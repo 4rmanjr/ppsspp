@@ -34,6 +34,7 @@ public class LANSyncManager {
     // [PPSSPP-FORK] LANSync: track pending registration state
     private String pendingDeviceName;
     private int pendingPort;
+    private String pendingDeviceId;
     private boolean pendingDiscovery = false;
 
     public LANSyncManager(Context context) {
@@ -70,7 +71,7 @@ public class LANSyncManager {
 
             // [PPSSPP-FORK] LANSync: register NsdManager service + set callback
             if (pendingDeviceName != null) {
-                syncService.registerService(pendingDeviceName, pendingPort, discoveryCallback);
+                syncService.registerService(pendingDeviceName, pendingPort, discoveryCallback, pendingDeviceId != null ? pendingDeviceId : "");
             }
 
             // [PPSSPP-FORK] LANSync: start pending discovery if requested before service was ready
@@ -88,13 +89,15 @@ public class LANSyncManager {
         }
     };
 
-    public void startService(String deviceName, int port) {
+    public void startService(String deviceName, int port, String deviceId) {
         pendingDeviceName = deviceName;
         pendingPort = port;
+        pendingDeviceId = deviceId;
 
         Intent intent = new Intent(context, LANSyncService.class);
         intent.putExtra("deviceName", deviceName);
         intent.putExtra("port", port);
+        intent.putExtra("deviceId", deviceId);
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             context.startForegroundService(intent);
@@ -108,6 +111,7 @@ public class LANSyncManager {
     public void stopService() {
         pendingDeviceName = null;
         pendingPort = 0;
+        pendingDeviceId = null;
         if (serviceBound) {
             context.unbindService(serviceConnection);
             serviceBound = false;
@@ -190,9 +194,9 @@ public class LANSyncManager {
     public static native void nativeOnQRScanned(String payload);
 
     // Called from C++ to control service
-    public static void startSyncService(String deviceName, int port) {
+    public static void startSyncService(String deviceName, int port, String deviceId) {
         if (instance != null) {
-            instance.startService(deviceName, port);
+            instance.startService(deviceName, port, deviceId);
         }
     }
 
