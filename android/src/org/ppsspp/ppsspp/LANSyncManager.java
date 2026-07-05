@@ -31,6 +31,11 @@ public class LANSyncManager {
 
     private PeerCallback peerCallback;
 
+    // [PPSSPP-FORK] LANSync: track pending registration state
+    private String pendingDeviceName;
+    private int pendingPort;
+    private boolean pendingDiscovery = false;
+
     public LANSyncManager(Context context) {
         this.context = context.getApplicationContext();
         instance = this;
@@ -42,6 +47,19 @@ public class LANSyncManager {
 
     // ==================== Service Lifecycle ====================
 
+    // [PPSSPP-FORK] LANSync: NsdManager callback that bridges resolved peers to JNI
+    private LANSyncService.PeerDiscoveryCallback discoveryCallback = new LANSyncService.PeerDiscoveryCallback() {
+        @Override
+        public void onPeerFound(String id, String name, String host, int port, String fingerprint, String device) {
+            onPeerFoundFromNsd(id, name, host, port, fingerprint, device);
+        }
+
+        @Override
+        public void onPeerLost(String id) {
+            onPeerLostFromNsd(id);
+        }
+    };
+
     private ServiceConnection serviceConnection = new ServiceConnection() {
         @Override
         public void onServiceConnected(ComponentName name, IBinder service) {
@@ -49,6 +67,17 @@ public class LANSyncManager {
             syncService = binder.getService();
             serviceBound = true;
             Log.i(TAG, "LAN Sync service connected");
+
+            // [PPSSPP-FORK] LANSync: register NsdManager service + set callback
+            if (pendingDeviceName != null) {
+                syncService.registerService(pendingDeviceName, pendingPort, discoveryCallback);
+            }
+
+            // [PPSSPP-FORK] LANSync: start pending discovery if requested before service was ready
+            if (pendingDiscovery) {
+                syncService.startDiscovery();
+                pendingDiscovery = false;
+            }
         }
 
         @Override
@@ -60,6 +89,9 @@ public class LANSyncManager {
     };
 
     public void startService(String deviceName, int port) {
+        pendingDeviceName = deviceName;
+        pendingPort = port;
+
         Intent intent = new Intent(context, LANSyncService.class);
         intent.putExtra("deviceName", deviceName);
         intent.putExtra("port", port);
@@ -74,6 +106,8 @@ public class LANSyncManager {
     }
 
     public void stopService() {
+        pendingDeviceName = null;
+        pendingPort = 0;
         if (serviceBound) {
             context.unbindService(serviceConnection);
             serviceBound = false;
@@ -89,17 +123,20 @@ public class LANSyncManager {
         this.peerCallback = callback;
         if (syncService != null) {
             syncService.startDiscovery();
+        } else {
+            pendingDiscovery = true;
         }
     }
 
     public void stopDiscovery() {
+        pendingDiscovery = false;
         if (syncService != null) {
             syncService.stopDiscovery();
         }
     }
 
     // Called from NsdManager callbacks via LANSyncService
-    public void onPeerFound(String id, String name, String host, int port, String fingerprint, String device) {
+    public void onPeerFoundFromNsd(String id, String name, String host, int port, String fingerprint, String device) {
         if (peerCallback != null) {
             peerCallback.onPeerDiscovered(id, name, host, port, fingerprint, device);
         }
@@ -107,7 +144,7 @@ public class LANSyncManager {
         nativeOnPeerFound(id, name, host, port, fingerprint, device);
     }
 
-    public void onPeerLost(String id) {
+    public void onPeerLostFromNsd(String id) {
         if (peerCallback != null) {
             peerCallback.onPeerLost(id);
         }

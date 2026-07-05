@@ -41,29 +41,26 @@
 
 // ==================== JNI Helpers ====================
 
-static JavaVM *g_javaVM = nullptr;
+// Use gJvm from app-android.cpp (set in JNI_OnLoad)
+extern JavaVM *gJvm;
 static jclass g_lanSyncClass = nullptr;
-
-// Must be called from JNI_OnLoad to cache the JVM and class references
-extern "C" JNIEXPORT jint JNICALL
-Java_org_ppsspp_ppsspp_LANSyncActivity_registerNatives(JNIEnv *env, jclass clz);
 
 struct JNIScope {
 	JNIEnv *env = nullptr;
 	bool attached = false;
 
 	JNIScope() {
-		if (!g_javaVM) return;
-		jint ret = g_javaVM->GetEnv((void **)&env, JNI_VERSION_1_6);
+		if (!gJvm) return;
+		jint ret = gJvm->GetEnv((void **)&env, JNI_VERSION_1_6);
 		if (ret == JNI_EDETACHED) {
-			ret = g_javaVM->AttachCurrentThread(&env, nullptr);
+			ret = gJvm->AttachCurrentThread(&env, nullptr);
 			attached = (ret == JNI_OK);
 		}
 	}
 
 	~JNIScope() {
-		if (attached && g_javaVM) {
-			g_javaVM->DetachCurrentThread();
+		if (attached && gJvm) {
+			gJvm->DetachCurrentThread();
 		}
 	}
 
@@ -267,6 +264,93 @@ Java_org_ppsspp_ppsspp_LANSyncService_onPeerLost(JNIEnv *env, jclass clz, jstrin
 	);
 }
 
+// [PPSSPP-FORK] LANSync: JNI implementations for LANSyncManager.nativeOnPeerFound/nativeOnPeerLost
+
+extern "C" JNIEXPORT void JNICALL
+Java_org_ppsspp_ppsspp_LANSyncManager_nativeOnPeerFound(JNIEnv *env, jclass clz,
+                                                         jstring jId, jstring jName,
+                                                         jstring jHost, jint jPort,
+                                                         jstring jFingerprint, jstring jDevice) {
+	SaveStateLANSync::PeerInfo peer;
+	if (jId) {
+		const char *s = env->GetStringUTFChars(jId, nullptr);
+		peer.id = s ? s : "";
+		if (s) env->ReleaseStringUTFChars(jId, s);
+	}
+	if (jName) {
+		const char *s = env->GetStringUTFChars(jName, nullptr);
+		peer.name = s ? s : "";
+		if (s) env->ReleaseStringUTFChars(jName, s);
+	}
+	if (jHost) {
+		const char *s = env->GetStringUTFChars(jHost, nullptr);
+		peer.host = s ? s : "";
+		if (s) env->ReleaseStringUTFChars(jHost, s);
+	}
+	peer.port = jPort;
+	if (jFingerprint) {
+		const char *s = env->GetStringUTFChars(jFingerprint, nullptr);
+		peer.certFingerprint = s ? s : "";
+		if (s) env->ReleaseStringUTFChars(jFingerprint, s);
+	}
+	if (jDevice) {
+		const char *s = env->GetStringUTFChars(jDevice, nullptr);
+		peer.device = s ? s : "";
+		if (s) env->ReleaseStringUTFChars(jDevice, s);
+	}
+	peer.online = true;
+	peer.lastSeen = time(nullptr);
+
+	SaveStateLANSync::Instance().AddDiscoveredPeer(peer);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_org_ppsspp_ppsspp_LANSyncManager_nativeOnPeerLost(JNIEnv *env, jclass clz, jstring jId) {
+	std::string id;
+	if (jId) {
+		const char *s = env->GetStringUTFChars(jId, nullptr);
+		if (s) { id = s; env->ReleaseStringUTFChars(jId, s); }
+	}
+
+	SaveStateLANSync::Instance().RemoveDiscoveredPeer(id);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_org_ppsspp_ppsspp_LANSyncManager_nativeOnQRScanned(JNIEnv *env, jclass clz, jstring jPayload) {
+	std::string payload;
+	if (jPayload) {
+		const char *s = env->GetStringUTFChars(jPayload, nullptr);
+		if (s) { payload = s; env->ReleaseStringUTFChars(jPayload, s); }
+	}
+
+	// Parse QR payload: ppsspp-sync://pair?host=...&port=...&fp=...&pin=...&name=...
+	auto &core = SaveStateLANSync::Instance();
+
+	std::string host, pin, name;
+	int port = 0;
+
+	size_t pos = payload.find("host=");
+	if (pos != std::string::npos) {
+		size_t end = payload.find('&', pos);
+		host = payload.substr(pos + 5, end - pos - 5);
+	}
+	pos = payload.find("port=");
+	if (pos != std::string::npos) {
+		size_t end = payload.find('&', pos);
+		port = atoi(payload.substr(pos + 5, end - pos - 5).c_str());
+	}
+	pos = payload.find("pin=");
+	if (pos != std::string::npos) {
+		size_t end = payload.find('&', pos);
+		pin = payload.substr(pos + 4, end - pos - 4);
+	}
+
+	if (!host.empty() && !pin.empty() && port > 0) {
+		std::string peerId = host + ":" + std::to_string(port);
+		core.PairWithPeer(peerId, pin, nullptr);
+	}
+}
+
 extern "C" JNIEXPORT void JNICALL
 Java_org_ppsspp_ppsspp_LANSyncService_onQRScanned(JNIEnv *env, jclass clz, jstring jPayload) {
 	std::string payload = jPayload ? env->GetStringUTFChars(jPayload, nullptr) : "";
@@ -306,9 +390,7 @@ Java_org_ppsspp_ppsspp_LANSyncService_onQRScanned(JNIEnv *env, jclass clz, jstri
 
 extern "C" JNIEXPORT jint JNICALL
 Java_org_ppsspp_ppsspp_LANSyncActivity_registerNatives(JNIEnv *env, jclass clz) {
-	g_javaVM = nullptr;
-	env->GetJavaVM(&g_javaVM);
-
+	// gJvm already set by JNI_OnLoad in app-android.cpp
 	g_lanSyncClass = (jclass)env->NewGlobalRef(clz);
 
 	// Cache method IDs

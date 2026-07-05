@@ -758,6 +758,9 @@ public class PpssppActivity extends AppCompatActivity implements SensorEventList
 
 		lifeCycle.onCreate();
 
+		// [PPSSPP-FORK] LANSync: init JNI bridge with app context
+		LANSyncActivity.init(this);
+
 		mSensorManager = (SensorManager)getSystemService(Activity.SENSOR_SERVICE);
 		mAccelerometer = mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
 

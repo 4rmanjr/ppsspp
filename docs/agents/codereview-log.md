@@ -24,3 +24,5 @@ Track bug patterns found during code reviews for continuous improvement.
 | 2026-07-03 | [SKILL UPDATE] Added atoi()/strtol() validation rule | Learning Loop | P1-SEC | SKILL.md:80 | yes (Step 3) |
 | 2026-07-03 | [SKILL UPDATE] Added fprintf vs INFO_LOG rule | Learning Loop | P5 | SKILL.md:143 | yes (Step 5) |
 | 2026-07-04 | SSL_CTX leaked on successful TLS client connection | Memory Safety | P4 | SaveStateLANSync.cpp:192-234 | no (existing rule: memory leak) |
+| 2026-07-05 | JNI ReleaseStringUTFChars called with std::string::c_str() instead of original pointer (3 instances) | Android/JNI | P4 | AndroidLANSync.cpp:275-285,294-295,302-303 | no (too specific)
+| 2026-07-05 | TLS fingerprint not propagated from C++ cert to mDNS TXT records via Java bridge | Missing Feature | P4 | LANSyncActivity.java:30-33, AndroidLANSync.cpp:443-448 | no (too specific)

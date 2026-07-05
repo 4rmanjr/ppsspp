@@ -245,6 +245,11 @@ void Android_DetachThreadFromJNI() {
 	}
 }
 
+#ifdef PPSSPP_LANSYNC
+	// [PPSSPP-FORK] LANSync: registerNatives declaration
+extern "C" jint Java_org_ppsspp_ppsspp_LANSyncActivity_registerNatives(JNIEnv*, jclass);
+#endif
+
 JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *pjvm, void *reserved) {
 	INFO_LOG(Log::System, "JNI_OnLoad");
 	gJvm = pjvm;  // cache the JavaVM pointer
@@ -262,6 +267,20 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *pjvm, void *reserved) {
 	RegisterAttachDetach(&Android_AttachThreadToJNI, &Android_DetachThreadFromJNI);
 
 	TimeInit();
+
+#ifdef PPSSPP_LANSYNC
+	// [PPSSPP-FORK] LANSync: register JNI bridge for LAN sync
+	{
+		jclass lanSyncClass = findClass("org/ppsspp/ppsspp/LANSyncActivity");
+		if (lanSyncClass) {
+			Java_org_ppsspp_ppsspp_LANSyncActivity_registerNatives(env, lanSyncClass);
+			NOTICE_LOG(Log::System, "[BOOT] LANSync JNI bridge registered");
+		} else {
+			ERROR_LOG(Log::System, "[BOOT] LANSync: Could not find LANSyncActivity class");
+		}
+	}
+#endif
+
 	return JNI_VERSION_1_6;
 }
 

@@ -351,7 +351,9 @@ void SaveStateLANSync::StartDiscovery() {
 			discoveredPeers_.erase(std::remove_if(discoveredPeers_.begin(), discoveredPeers_.end(),
 				[&id](const PeerInfo &p) { return p.id == id; }), discoveredPeers_.end());
 		},
-		nullptr);
+		[](const std::string &err) {
+			WARN_LOG(Log::System, "LANSync mDNS discovery error: %s", err.c_str());
+		});
 
 	udpListener_.reset(new UDPDiscovery::Listener());
 	udpListener_->Start(
@@ -366,7 +368,10 @@ void SaveStateLANSync::StartDiscovery() {
 			for (auto &p : pairedPeers_) { if (p.id == info.id) { p.online = true; p.lastSeen = info.lastSeen; p.host = info.host; p.port = info.port; return; } }
 			for (auto &p : discoveredPeers_) { if (p.id == info.id) return; }
 			discoveredPeers_.push_back(info);
-		}, nullptr, nullptr);
+		}, nullptr,
+		[](const std::string &err) {
+			WARN_LOG(Log::System, "LANSync UDP discovery error: %s", err.c_str());
+		});
 }
 
 void SaveStateLANSync::StopDiscovery() {
@@ -497,14 +502,18 @@ bool SaveStateLANSync::StartServer() {
 		svc.id = deviceId_; svc.name = deviceName_; svc.device = deviceType_;
 		svc.port = serverPort_;
 		svc.certFingerprint = tlsCtx_->GetFingerprint();
-		mdnsAnnouncer_->Register(svc, nullptr);
+		mdnsAnnouncer_->Register(svc, [](const std::string &err) {
+			WARN_LOG(Log::System, "LANSync mDNS announce error: %s", err.c_str());
+		});
 
 		UDPDiscovery::PeerInfo udpInfo;
 		udpInfo.id = deviceId_; udpInfo.name = deviceName_; udpInfo.device = deviceType_;
 		udpInfo.port = serverPort_;
 		udpInfo.certFingerprint = tlsCtx_->GetFingerprint();
 		udpAnnouncer_.reset(new UDPDiscovery::Announcer());
-		udpAnnouncer_->Start(udpInfo, nullptr);
+		udpAnnouncer_->Start(udpInfo, [](const std::string &err) {
+			WARN_LOG(Log::System, "LANSync UDP announce error: %s", err.c_str());
+		});
 
 		INFO_LOG(Log::System, "LANSync: server listening on port %d", serverPort_);
 
