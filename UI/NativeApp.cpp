@@ -38,6 +38,12 @@
 #include <mutex>
 #include <thread>
 
+#ifdef PPSSPP_LANSYNC
+// [PPSSPP-FORK] LANSync
+#include "LANSync/SaveStateLANSync.h"
+LANSync::SaveStateLANSync g_LANSync;
+#endif
+
 #if defined(_WIN32)
 #include "Windows/WindowsAudio.h"
 #include "Windows/MainWindow.h"
@@ -775,6 +781,11 @@ void NativeInit(int argc, const char *argv[], const char *savegame_dir, const ch
 	g_DownloadManager.SetCacheDir(GetSysDirectory(DIRECTORY_APP_CACHE));
 
 	ApplyAchievementsHostOverride();
+
+#ifdef PPSSPP_LANSYNC
+	// [PPSSPP-FORK] LANSync: initialize LAN sync subsystem
+	g_LANSync.Initialize();
+#endif
 
 	DEBUG_LOG(Log::System, "ScreenManager!");
 	g_screenManager = new ScreenManager();
@@ -1707,6 +1718,11 @@ void NativeShutdown() {
 		delete g_screenManager;
 		g_screenManager = nullptr;
 	}
+
+#ifdef PPSSPP_LANSYNC
+	// [PPSSPP-FORK] LANSync: shutdown LAN sync subsystem
+	g_LANSync.Shutdown();
+#endif
 
 	g_Config.Save("NativeShutdown");
 

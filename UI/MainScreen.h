@@ -32,6 +32,10 @@
 
 class RemoteISOBrowseScreen;
 
+#ifdef PPSSPP_LANSYNC
+class LANSyncScreen;  // [PPSSPP-FORK] LANSync
+#endif
+
 struct HighlightedBackground {
 	Path gamePath;
 	double startTime;

@@ -73,6 +73,10 @@
 #include "UI/MiscViews.h"
 #include "UI/AdhocServerScreen.h"
 
+#ifdef PPSSPP_LANSYNC
+#include "LANSync/LANSyncScreen.h"  // [PPSSPP-FORK] LANSync
+#endif
+
 // This is in an objective-C file.
 #if PPSSPP_PLATFORM(IOS)
 void copyDeepLinkForPath(std::string_view filePath);
@@ -699,6 +703,13 @@ void GamePauseScreen::CreateViews() {
 			screenManager()->push(new CwCheatScreen(gamePath_));
 		});
 	}
+
+#ifdef PPSSPP_LANSYNC
+	// [PPSSPP-FORK] LANSync: save state sync from pause menu
+	rightColumnItems->Add(new Choice(nw->T("LAN Sync"), ImageID("I_NETWORK")))->OnClick.Add([this](UI::EventParams &) {
+		screenManager()->push(new LANSyncScreen());
+	});
+#endif
 
 	// TODO, also might be nice to show overall compat rating here?
 	// Based on their platform or even cpu/gpu/config.  Would add an API for it.

@@ -1125,6 +1125,13 @@ void GameSettingsScreen::CreateToolsSettings(UI::ViewGroup *tools) {
 		retro->SetIconRight(ImageID("I_RETROACHIEVEMENTS_LOGO"));
 	}
 
+#ifdef PPSSPP_LANSYNC
+	// [PPSSPP-FORK] LANSync: LAN save state sync settings
+	tools->Add(new Choice(ri->T("LAN Sync")))->OnClick.Add([=](UI::EventParams &) {
+		screenManager()->push(new LANSyncScreen());
+	});
+#endif
+
 	// These were moved here so use the wrong translation objects, to avoid having to change all inis... This isn't a sustainable situation :P
 	tools->Add(new Choice(sa->T("Savedata Manager")))->OnClick.Add([=](UI::EventParams &) {
 		screenManager()->push(new SavedataScreen(gamePath_));

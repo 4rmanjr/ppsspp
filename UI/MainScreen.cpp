@@ -299,6 +299,13 @@ void MainScreen::CreateMainButtons(UI::ViewGroup *parent, bool portrait) {
 		gold->SetShine(true);
 	}
 
+#ifdef PPSSPP_LANSYNC
+	// [PPSSPP-FORK] LANSync: LAN save state sync button
+	parent->Add(portrait ? new Choice(ImageID("I_NETWORK"), portrait ? new LinearLayoutParams() : nullptr) : new Choice(mm->T("LAN Sync")))->OnClick.Add([this](UI::EventParams &) {
+		screenManager()->push(new LANSyncScreen());
+	});
+#endif
+
 	if (!portrait) {
 		parent->Add(new Spacer(16.0));
 	}

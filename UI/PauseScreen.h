@@ -29,6 +29,10 @@
 #include "UI/Screen.h"
 #include "UI/GameInfoCache.h"
 
+#ifdef PPSSPP_LANSYNC
+class LANSyncScreen;  // [PPSSPP-FORK] LANSync
+#endif
+
 class GamePauseScreen : public UIBaseDialogScreen, protected ControlListener {
 public:
 	GamePauseScreen(const Path &filename, bool bootPending);

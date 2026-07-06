@@ -31,6 +31,10 @@
 
 class Path;
 
+#ifdef PPSSPP_LANSYNC
+class LANSyncScreen;  // [PPSSPP-FORK] LANSync
+#endif
+
 // Per-game settings screen - enables you to configure graphic options, control options, etc
 // per game.
 class GameSettingsScreen : public UITabbedBaseDialogScreen {
