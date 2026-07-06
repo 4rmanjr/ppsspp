@@ -800,7 +800,8 @@ EXEC_AND_LIB_FILES := \
   $(SRC)/LANSync/LANSyncDiscovery.cpp \
   $(SRC)/LANSync/LANSyncPairing.cpp \
   $(SRC)/LANSync/SaveStateLANSync.cpp \
-  $(SRC)/LANSync/LANSyncScreen.cpp
+  $(SRC)/LANSync/LANSyncScreen.cpp \
+  $(SRC)/LANSync/PlatformKeyStore_Android.cpp
 
 LOCAL_MODULE := ppsspp_core
 LOCAL_SRC_FILES := $(EXEC_AND_LIB_FILES)
