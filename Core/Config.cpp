@@ -1171,6 +1171,17 @@ static const ConfigSetting vrSettings[] = {
 	ConfigSetting("VRHeadUpDisplayScale", SETTING(g_Config, fHeadUpDisplayScale), 0.3f, CfgFlag::PER_GAME),
 };
 
+#ifdef PPSSPP_LANSYNC
+// [PPSSPP-FORK] LANSync
+static const ConfigSetting lansyncSettings[] = {
+	ConfigSetting("LANSyncEnabled", SETTING(g_Config, bLANSyncEnabled), false, CfgFlag::DEFAULT),
+	ConfigSetting("LANSyncAutoSync", SETTING(g_Config, bLANSyncAutoSync), false, CfgFlag::DEFAULT),
+	ConfigSetting("LANSyncDeviceName", SETTING(g_Config, sLANSyncDeviceName), "", CfgFlag::DEFAULT),
+	ConfigSetting("LANSyncPort", SETTING(g_Config, iLANSyncPort), 27314, CfgFlag::DEFAULT),
+	ConfigSetting("LANSyncPairedPeers", SETTING(g_Config, vLANSyncPairedPeers), "", CfgFlag::DEFAULT),
+};
+#endif
+
 // The first column says what structure the parameters are relative to.
 static const ConfigSectionMeta g_sectionMeta[] = {
 	{ &g_Config, generalSettings, ARRAY_SIZE(generalSettings), "General" },
@@ -1180,6 +1191,9 @@ static const ConfigSectionMeta g_sectionMeta[] = {
 	{ &g_Config, controlSettings, ARRAY_SIZE(controlSettings), "Control" },
 	{ &g_Config, systemParamSettings, ARRAY_SIZE(systemParamSettings), "SystemParam" },
 	{ &g_Config, networkSettings, ARRAY_SIZE(networkSettings), "Network" },
+#ifdef PPSSPP_LANSYNC
+	{ &g_Config, lansyncSettings, ARRAY_SIZE(lansyncSettings), "LANSync" },
+#endif
 	{ &g_Config, debuggerSettings, ARRAY_SIZE(debuggerSettings), "Debugger" },
 	{ &g_Config, jitSettings, ARRAY_SIZE(jitSettings), "JIT" },
 	{ &g_Config, themeSettings, ARRAY_SIZE(themeSettings), "Theme" },

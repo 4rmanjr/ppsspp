@@ -357,6 +357,17 @@ endif()
 
 include(FindThreads)
 
+# [PPSSPP-FORK] LANSync: save state sync over LAN
+if(NOT PPSSPP_LANSYNC)
+	option(PPSSPP_LANSYNC "Enable LAN Save State Sync" OFF)
+endif()
+if(PPSSPP_LANSYNC)
+	find_package(OpenSSL REQUIRED)
+	if(OPENSSL_FOUND)
+		message(STATUS "LANSync: OpenSSL ${OPENSSL_VERSION} found")
+	endif()
+endif()
+
 if(APPLE)
 	find_library(COCOA_LIBRARY Cocoa)
 	find_library(IOKIT_LIBRARY IOKit)
@@ -2137,6 +2148,46 @@ if((MACOSX OR IOS) AND NOT LIBRETRO)
 		Core/Util/DarwinFileSystemServices.h)
 endif()
 
+# [PPSSPP-FORK] LANSync: source files
+if(PPSSPP_LANSYNC)
+	list(APPEND CoreExtra
+		LANSync/HLC.h
+		LANSync/LANSyncProtocol.h
+		LANSync/LANSyncConfig.h
+		LANSync/LANSyncConfig.cpp
+		LANSync/LANSyncMetadata.h
+		LANSync/LANSyncMetadata.cpp
+		LANSync/PlatformKeyStore.h
+		LANSync/TLSTransport.h
+		LANSync/TLSTransport.cpp
+		LANSync/LANSyncServer.h
+		LANSync/LANSyncServer.cpp
+		LANSync/LANSyncClient.h
+		LANSync/LANSyncClient.cpp
+		LANSync/MDNS.h
+		LANSync/MDNS.cpp
+		LANSync/LANSyncDiscovery.h
+		LANSync/LANSyncDiscovery.cpp
+		LANSync/LANSyncPairing.h
+		LANSync/LANSyncPairing.cpp
+		LANSync/SaveStateLANSync.h
+		LANSync/SaveStateLANSync.cpp
+		LANSync/LANSyncScreen.h
+		LANSync/LANSyncScreen.cpp
+	)
+	if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+		list(APPEND CoreExtra
+			LANSync/PlatformKeyStore_Linux.cpp
+			LANSync/MDNS_Linux.cpp
+		)
+	elseif(ANDROID)
+		list(APPEND CoreExtra
+			LANSync/PlatformKeyStore_Android.cpp
+			LANSync/MDNS_Android.cpp
+		)
+	endif()
+endif()
+
 # 'ppsspp_jni' on ANDROID, 'Core' everywhere else
 # SHARED on ANDROID, STATIC everywhere else
 add_library(${CoreLibName} ${CoreLinkType}
@@ -2648,6 +2699,12 @@ endif()
 
 target_compile_features(${CoreLibName} PUBLIC cxx_std_17)
 
+# [PPSSPP-FORK] LANSync
+if(PPSSPP_LANSYNC)
+	target_compile_definitions(${CoreLibName} PRIVATE PPSSPP_LANSYNC)
+	target_include_directories(${CoreLibName} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/LANSync)
+endif()
+
 if(FFmpeg_FOUND)
 	target_compile_definitions(${CoreLibName} PRIVATE USE_FFMPEG=1)
 	if (HAVE_LIBAVCODEC_CONST_AVCODEC)
@@ -2674,6 +2731,12 @@ elseif(BUILD_BUNDLED_FFMPEG)
 		swscale
 		${ZLIB_LIBRARY}
 	)
+endif()
+
+# [PPSSPP-FORK] LANSync: OpenSSL for TLS
+if(PPSSPP_LANSYNC AND OPENSSL_FOUND)
+	target_include_directories(${CoreLibName} PRIVATE ${OPENSSL_INCLUDE_DIR})
+	target_link_libraries(${CoreLibName} OpenSSL::SSL OpenSSL::Crypto)
 endif()
 
 # Discord integration

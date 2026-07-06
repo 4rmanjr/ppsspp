@@ -598,6 +598,15 @@ public:
 	bool bEnableQuickChat;
 	std::string sQuickChat[5];
 
+#ifdef PPSSPP_LANSYNC
+	// [PPSSPP-FORK] LANSync
+	bool bLANSyncEnabled = false;
+	bool bLANSyncAutoSync = false;
+	std::string sLANSyncDeviceName;
+	int iLANSyncPort = 27314;
+	std::vector<std::string> vLANSyncPairedPeers;
+#endif
+
 	int iPSPModel;
 	int iFirmwareVersion;
 	bool bBypassOSKWithKeyboard;

@@ -790,7 +790,17 @@ EXEC_AND_LIB_FILES := \
   $(SRC)/Core/Util/PPGeDraw.cpp \
   $(SRC)/Core/Util/RecentFiles.cpp \
   $(SRC)/Core/Util/VideoPlayer.cpp \
-  $(SRC)/git-version.cpp
+  $(SRC)/git-version.cpp \
+  $(SRC)/LANSync/LANSyncConfig.cpp \
+  $(SRC)/LANSync/LANSyncMetadata.cpp \
+  $(SRC)/LANSync/TLSTransport.cpp \
+  $(SRC)/LANSync/LANSyncServer.cpp \
+  $(SRC)/LANSync/LANSyncClient.cpp \
+  $(SRC)/LANSync/MDNS.cpp \
+  $(SRC)/LANSync/LANSyncDiscovery.cpp \
+  $(SRC)/LANSync/LANSyncPairing.cpp \
+  $(SRC)/LANSync/SaveStateLANSync.cpp \
+  $(SRC)/LANSync/LANSyncScreen.cpp
 
 LOCAL_MODULE := ppsspp_core
 LOCAL_SRC_FILES := $(EXEC_AND_LIB_FILES)
