@@ -60,6 +60,9 @@
 #include "UI/RetroAchievementScreens.h"
 #include "UI/OnScreenDisplay.h"
 #include "UI/DiscordIntegration.h"
+#ifdef PPSSPP_LANSYNC
+#include "LANSyncScreen.h"
+#endif
 #include "UI/Background.h"
 #include "UI/BackgroundAudio.h"
 #include "UI/MiscViews.h"

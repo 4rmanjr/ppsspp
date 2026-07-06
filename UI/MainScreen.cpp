@@ -58,6 +58,10 @@
 
 #include "Core/HLE/sceUmd.h"
 
+#ifdef PPSSPP_LANSYNC
+#include "LANSync/LANSyncScreen.h"  // [PPSSPP-FORK] LANSync
+#endif
+
 bool MainScreen::showHomebrewTab = false;
 
 static void LaunchFile(ScreenManager *screenManager, Screen *currentScreen, const Path &path) {

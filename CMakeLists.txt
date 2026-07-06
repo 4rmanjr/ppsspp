@@ -2701,8 +2701,10 @@ target_compile_features(${CoreLibName} PUBLIC cxx_std_17)
 
 # [PPSSPP-FORK] LANSync
 if(PPSSPP_LANSYNC)
-	target_compile_definitions(${CoreLibName} PRIVATE PPSSPP_LANSYNC)
-	target_include_directories(${CoreLibName} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/LANSync)
+	# PUBLIC so that targets linking Core (e.g., PPSSPPSDL) also get the define,
+	# preventing ODR violation (Config struct must have same layout everywhere).
+	target_compile_definitions(${CoreLibName} PUBLIC PPSSPP_LANSYNC)
+	target_include_directories(${CoreLibName} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/LANSync)
 endif()
 
 # [PPSSPP-FORK] LANSync: Avahi mDNS for Linux

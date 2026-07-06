@@ -66,7 +66,7 @@ private:
 
   std::unique_ptr<TLSContext> tlsCtx_;
   std::unique_ptr<LANSyncServer> server_;
-  std::unique_ptr<LANSyncDiscovery> discovery_;
+  std::shared_ptr<LANSyncDiscovery> discovery_;
   std::unique_ptr<PairingManager> pairing_;
 
   std::atomic<bool> initialized_{false};

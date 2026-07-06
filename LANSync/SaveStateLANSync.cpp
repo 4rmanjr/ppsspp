@@ -23,7 +23,6 @@
 namespace LANSync {
 
 SaveStateLANSync::SaveStateLANSync() {
-  stateDir_ = GetSysDirectory(DIRECTORY_SAVESTATE);
 }
 
 SaveStateLANSync::~SaveStateLANSync() {
@@ -33,13 +32,20 @@ SaveStateLANSync::~SaveStateLANSync() {
 bool SaveStateLANSync::Initialize() {
   if (initialized_.exchange(true)) return true;
 
+  stateDir_ = GetSysDirectory(DIRECTORY_SAVESTATE);
+
   tlsCtx_ = std::make_unique<TLSContext>();
   tlsCtx_->InitClient();
   tlsCtx_->InitServer();
 
   server_ = std::make_unique<LANSyncServer>();
-  discovery_ = std::make_unique<LANSyncDiscovery>();
+  discovery_ = std::make_shared<LANSyncDiscovery>();
   pairing_ = std::make_unique<PairingManager>(tlsCtx_.get());
+
+  if (g_Config.bLANSyncEnabled) {
+    StartServer();
+    StartDiscovery();
+  }
 
   return true;
 }
