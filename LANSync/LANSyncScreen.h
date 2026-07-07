@@ -46,6 +46,7 @@ private:
   void OnProgress(const LANSync::SyncProgress &progress);
 
   void OnToggleDiscovery(UI::EventParams &e);
+  void OnToggleAutoSync(UI::EventParams &e);
   void OnSyncAll(UI::EventParams &e);
   void OnBack(UI::EventParams &e);
   void OnPairingConfirm(const std::string &pin);
@@ -53,6 +54,7 @@ private:
 
   UI::TextView *serverStatus_ = nullptr;
   UI::Choice *toggleDiscoveryBtn_ = nullptr;
+  UI::Choice *autoSyncToggle_ = nullptr;
   UI::TextView *peerCountText_ = nullptr;
   UI::LinearLayout *peerListContainer_ = nullptr;
   UI::Choice *syncAllBtn_ = nullptr;

@@ -602,6 +602,7 @@ public:
 	// [PPSSPP-FORK] LANSync
 	bool bLANSyncEnabled = false;
 	bool bLANSyncAutoSync = false;
+	int iLANSyncAutoSyncInterval = 60;
 	std::string sLANSyncDeviceName;
 	int iLANSyncPort = 27314;
 	int iLANSyncRetryCount = 3;

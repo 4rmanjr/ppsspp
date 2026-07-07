@@ -48,6 +48,23 @@
 - `CancelSync()` cleans up orphan `.tmp` files
 - INI settings: `LANSyncRetryCount`, `LANSyncRetryDelayMs`
 
+### Discovery Callbacks (Task 3)
+- `SaveStateLANSync` forwards `DiscoveryEvent` from `LANSyncDiscovery` to registered callback
+- `LANSyncScreen::update()` now triggered immediately on `PEER_FOUND`/`PEER_LOST` via `peersDirty_` flag
+- 60-frame poll still runs as fallback when no events fire
+
+### PIN Pairing Dialog (Task 4)
+- New files: `LANSyncPairingDialog.h/.cpp` — dialog screen with PIN display (initiator) and PIN entry (receiver)
+- `PairWithPeer()` now shows dialog instead of auto-confirm; background thread waits on condition variable
+- `LANSyncScreen::update()` polls `HasPendingDialog()` and pushes dialog on main thread
+- Added `SetScreenManager()` forwarding from `SaveStateLANSync` → `PairingManager`
+
+### Conflict Viewer Screen (Task 5)
+- New files: `LANSyncConflictScreen.h/.cpp` — scans for `.ppst.conflict` files in save state directory
+- Each conflict shown with game ID and slot, sorted by name then slot
+- Actions: "Keep Local" (delete .conflict), "Keep Remote" (rename .conflict → .ppst)
+- "View Conflicts" button on `LANSyncScreen` launches the screen
+
 ---
 
 ## 🚧 In Progress — Phase 2

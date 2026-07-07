@@ -85,6 +85,10 @@ private:
   mutable std::mutex cbMutex_;
 
   Path stateDir_;
+
+  std::thread autoSyncThread_;
+  std::atomic<bool> autoSyncRunning_{false};
+  void AutoSyncLoop();
 };
 
 }  // namespace LANSync

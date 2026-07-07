@@ -7,6 +7,7 @@ namespace LANSync {
 struct LANSyncConfigInfo {
     bool bEnabled = false;
     bool bAutoSync = false;
+    int iAutoSyncInterval = 60;
     std::string sDeviceName;
     int iPort = 27314;
     int iSyncRetryCount = 3;

@@ -1176,6 +1176,7 @@ static const ConfigSetting vrSettings[] = {
 static const ConfigSetting lansyncSettings[] = {
 	ConfigSetting("LANSyncEnabled", SETTING(g_Config, bLANSyncEnabled), false, CfgFlag::DEFAULT),
 	ConfigSetting("LANSyncAutoSync", SETTING(g_Config, bLANSyncAutoSync), false, CfgFlag::DEFAULT),
+	ConfigSetting("LANSyncAutoSyncInterval", SETTING(g_Config, iLANSyncAutoSyncInterval), 60, CfgFlag::DEFAULT),
 	ConfigSetting("LANSyncDeviceName", SETTING(g_Config, sLANSyncDeviceName), "", CfgFlag::DEFAULT),
 	ConfigSetting("LANSyncPort", SETTING(g_Config, iLANSyncPort), 27314, CfgFlag::DEFAULT),
 	ConfigSetting("LANSyncRetryCount", SETTING(g_Config, iLANSyncRetryCount), 3, CfgFlag::DEFAULT),

@@ -21,6 +21,7 @@
 #include "LANSync/LANSyncPairingDialog.h"
 #include "LANSync/LANSyncPairing.h"
 #include "LANSync/LANSyncConflictScreen.h"
+#include "Core/Config.h"
 #include "Common/Render/DrawBuffer.h"
 #include "Common/Data/Text/I18n.h"
 #include "Common/UI/View.h"
@@ -54,6 +55,10 @@ void LANSyncScreen::CreateViews() {
   toggleDiscoveryBtn_ = new Choice(n->T("Start Discovery"));
   toggleDiscoveryBtn_->OnClick.Handle(this, &LANSyncScreen::OnToggleDiscovery);
   contents->Add(toggleDiscoveryBtn_);
+
+  autoSyncToggle_ = new Choice("");
+  autoSyncToggle_->OnClick.Handle(this, &LANSyncScreen::OnToggleAutoSync);
+  contents->Add(autoSyncToggle_);
 
   peerCountText_ = contents->Add(new TextView("", ALIGN_LEFT, false,
     new LinearLayoutParams(Margins(12, 0, 0, 0))));
@@ -122,7 +127,17 @@ void LANSyncScreen::update() {
     } else {
       statusText = "Server ready on port 27314";
     }
+    if (g_Config.bLANSyncAutoSync && discoveryActive_) {
+      statusText += "\nAuto-sync enabled (every ";
+      statusText += std::to_string(g_Config.iLANSyncAutoSyncInterval) + "s)";
+    }
     serverStatus_->SetText(statusText);
+  }
+
+  if (g_Config.bLANSyncAutoSync) {
+    autoSyncToggle_->SetText("Disable Auto-Sync");
+  } else {
+    autoSyncToggle_->SetText("Enable Auto-Sync");
   }
 
   std::vector<LANSync::DiscoveredPeer> peers;
@@ -236,6 +251,11 @@ void LANSyncScreen::OnToggleDiscovery(UI::EventParams &e) {
   } else {
     g_LANSync.StartDiscovery();
   }
+}
+
+void LANSyncScreen::OnToggleAutoSync(UI::EventParams &e) {
+  g_Config.bLANSyncAutoSync = !g_Config.bLANSyncAutoSync;
+  g_Config.Save("LANSyncConfig");
 }
 
 void LANSyncScreen::OnSyncAll(UI::EventParams &e) {

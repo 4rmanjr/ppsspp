@@ -8,6 +8,7 @@ void LANSyncConfigInfo::Load() {
 #ifdef PPSSPP_LANSYNC
     bEnabled = g_Config.bLANSyncEnabled;
     bAutoSync = g_Config.bLANSyncAutoSync;
+    iAutoSyncInterval = g_Config.iLANSyncAutoSyncInterval;
     sDeviceName = g_Config.sLANSyncDeviceName;
     iPort = g_Config.iLANSyncPort;
     iSyncRetryCount = g_Config.iLANSyncRetryCount;
@@ -19,6 +20,7 @@ void LANSyncConfigInfo::Save() {
 #ifdef PPSSPP_LANSYNC
     g_Config.bLANSyncEnabled = bEnabled;
     g_Config.bLANSyncAutoSync = bAutoSync;
+    g_Config.iLANSyncAutoSyncInterval = iAutoSyncInterval;
     g_Config.sLANSyncDeviceName = sDeviceName;
     g_Config.iLANSyncPort = iPort;
     g_Config.iLANSyncRetryCount = iSyncRetryCount;

@@ -47,10 +47,16 @@ bool SaveStateLANSync::Initialize() {
     StartDiscovery();
   }
 
+  autoSyncRunning_ = true;
+  autoSyncThread_ = std::thread([this]() { AutoSyncLoop(); });
+
   return true;
 }
 
 void SaveStateLANSync::Shutdown() {
+  autoSyncRunning_ = false;
+  if (autoSyncThread_.joinable()) autoSyncThread_.join();
+
   StopServer();
   StopDiscovery();
   CancelSync();
@@ -354,6 +360,31 @@ void SaveStateLANSync::CancelSync() {
   }
 
   UpdateProgress(SyncProgress::IDLE, "", 0, 0);
+}
+
+void SaveStateLANSync::AutoSyncLoop() {
+  while (autoSyncRunning_) {
+    LANSyncConfigInfo config;
+    config.Load();
+
+    if (config.bAutoSync && discovery_ && discovery_->IsRunning()) {
+      std::vector<DiscoveredPeer> peers = discovery_->GetPeers();
+      for (const auto &peer : peers) {
+        if (!autoSyncRunning_) break;
+        if (!syncing_) {
+          SyncWithPeer(peer);
+          while (syncing_ && autoSyncRunning_) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+          }
+        }
+      }
+    }
+
+    int interval = config.iAutoSyncInterval > 0 ? config.iAutoSyncInterval : 60;
+    for (int i = 0; i < interval * 10 && autoSyncRunning_; i++) {
+      std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+  }
 }
 
 void SaveStateLANSync::DoSyncWithPeer(const DiscoveredPeer &peer) {
