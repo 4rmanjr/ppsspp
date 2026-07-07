@@ -1525,6 +1525,11 @@ extern "C" void JNICALL Java_org_ppsspp_ppsspp_NativeApp_sendMessageFromJava(JNI
 			INFO_LOG(Log::IO, "Decoding '%s' to '%s'", param.c_str(), prm.c_str());
 		}
 		System_PostUIMessage(UIMessage::REQUEST_GAME_BOOT, StripQuotes(prm));
+	// [PPSSPP-FORK] LANSync: pause/resume lifecycle
+	} else if (msg == "lansync_pause") {
+		System_PostUIMessage(UIMessage::LANSYNC_PAUSE);
+	} else if (msg == "lansync_resume") {
+		System_PostUIMessage(UIMessage::LANSYNC_RESUME);
 	} else {
 		ERROR_LOG(Log::System, "Got unexpected message from Java, ignoring: %s / %s", msg.c_str(), prm.c_str());
 	}

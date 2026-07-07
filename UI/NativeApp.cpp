@@ -1333,6 +1333,13 @@ bool HandleGlobalMessage(UIMessage message, const std::string &value) {
 	} else if (message == UIMessage::SAVE_FRAME_DUMP) {
 		SaveFrameDump();
 		return true;
+	// [PPSSPP-FORK] LANSync: lifecycle hooks
+	} else if (message == UIMessage::LANSYNC_PAUSE) {
+		g_LANSync.Pause();
+		return true;
+	} else if (message == UIMessage::LANSYNC_RESUME) {
+		g_LANSync.Resume();
+		return true;
 	} else {
 		return false;
 	}

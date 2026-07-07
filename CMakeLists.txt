@@ -362,9 +362,42 @@ if(NOT PPSSPP_LANSYNC)
 	option(PPSSPP_LANSYNC "Enable LAN Save State Sync" OFF)
 endif()
 if(PPSSPP_LANSYNC)
-	find_package(OpenSSL REQUIRED)
-	if(OPENSSL_FOUND)
-		message(STATUS "LANSync: OpenSSL ${OPENSSL_VERSION} found")
+	if(ANDROID)
+		# [PPSSPP-FORK] Prebuilt OpenSSL for Android — set variables per ABI
+		if(ANDROID_ABI STREQUAL "arm64-v8a")
+			set(_OPENSSL_DIR "${CMAKE_SOURCE_DIR}/ext/openssl/android/arm64-v8a")
+		elseif(ANDROID_ABI STREQUAL "armeabi-v7a")
+			set(_OPENSSL_DIR "${CMAKE_SOURCE_DIR}/ext/openssl/android/armeabi-v7a")
+		elseif(ANDROID_ABI STREQUAL "x86_64")
+			set(_OPENSSL_DIR "${CMAKE_SOURCE_DIR}/ext/openssl/android/x86_64")
+		elseif(ANDROID_ABI STREQUAL "x86")
+			set(_OPENSSL_DIR "${CMAKE_SOURCE_DIR}/ext/openssl/android/x86")
+		else()
+			message(FATAL_ERROR "LANSync: Unsupported ANDROID_ABI: ${ANDROID_ABI}")
+		endif()
+		set(OPENSSL_FOUND TRUE)
+		set(OPENSSL_INCLUDE_DIR "${_OPENSSL_DIR}/include")
+		set(OPENSSL_SSL_LIBRARY "${_OPENSSL_DIR}/lib/libssl.a")
+		set(OPENSSL_CRYPTO_LIBRARY "${_OPENSSL_DIR}/lib/libcrypto.a")
+		set(OPENSSL_LIBRARIES "${OPENSSL_SSL_LIBRARY}" "${OPENSSL_CRYPTO_LIBRARY}")
+		# Create IMPORTED targets that match what find_package(OpenSSL) produces
+		add_library(OpenSSL::SSL STATIC IMPORTED GLOBAL)
+		set_target_properties(OpenSSL::SSL PROPERTIES
+			IMPORTED_LOCATION "${OPENSSL_SSL_LIBRARY}"
+			INTERFACE_INCLUDE_DIRECTORIES "${OPENSSL_INCLUDE_DIR}"
+		)
+		add_library(OpenSSL::Crypto STATIC IMPORTED GLOBAL)
+		set_target_properties(OpenSSL::Crypto PROPERTIES
+			IMPORTED_LOCATION "${OPENSSL_CRYPTO_LIBRARY}"
+			INTERFACE_INCLUDE_DIRECTORIES "${OPENSSL_INCLUDE_DIR}"
+		)
+		message(STATUS "LANSync: Android OpenSSL for ${ANDROID_ABI} at ${_OPENSSL_DIR}")
+		unset(_OPENSSL_DIR)
+	else()
+		find_package(OpenSSL REQUIRED)
+		if(OPENSSL_FOUND)
+			message(STATUS "LANSync: OpenSSL ${OPENSSL_VERSION} found")
+		endif()
 	endif()
 endif()
 
@@ -2709,6 +2742,10 @@ if(PPSSPP_LANSYNC)
 	# preventing ODR violation (Config struct must have same layout everywhere).
 	target_compile_definitions(${CoreLibName} PUBLIC PPSSPP_LANSYNC)
 	target_include_directories(${CoreLibName} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/LANSync)
+	if(ANDROID)
+		target_compile_definitions(native PUBLIC PPSSPP_LANSYNC)
+		target_include_directories(native PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/LANSync)
+	endif()
 endif()
 
 # [PPSSPP-FORK] LANSync: Avahi mDNS for Linux
@@ -2756,6 +2793,11 @@ endif()
 if(PPSSPP_LANSYNC AND OPENSSL_FOUND)
 	target_include_directories(${CoreLibName} PRIVATE ${OPENSSL_INCLUDE_DIR})
 	target_link_libraries(${CoreLibName} OpenSSL::SSL OpenSSL::Crypto)
+	if(ANDROID)
+		# [PPSSPP-FORK] libkirk defines bn_sub, AES_encrypt, AES_decrypt
+		# that collide with OpenSSL's libcrypto internal symbols.
+		target_link_options(${CoreLibName} PRIVATE -Wl,--allow-multiple-definition)
+	endif()
 endif()
 
 # Discord integration

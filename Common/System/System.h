@@ -311,6 +311,9 @@ enum class UIMessage {
 	RECENT_FILES_CHANGED,
 	SAVE_FRAME_DUMP,
 	ADHOC_SERVER_LIST_CHANGED,
+	// [PPSSPP-FORK] LANSync
+	LANSYNC_PAUSE,
+	LANSYNC_RESUME,
 };
 
 std::string System_GetProperty(SystemProperty prop);

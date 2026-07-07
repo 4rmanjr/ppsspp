@@ -1,4 +1,5 @@
 #include "LANSync/LANSyncClient.h"
+#include "Common/File/FileDescriptor.h"
 #include "Common/Net/SocketCompat.h"
 #include "Common/StringUtils.h"
 #include <cstdio>
@@ -20,36 +21,15 @@ bool LANSyncClient::Connect(const std::string &host, int port, int timeoutSec) {
     host_ = host;
     port_ = port;
 
-    // Create socket
-    fd_ = (int)socket(AF_INET, SOCK_STREAM, 0);
+    fd_ = fd_util::ConnectWithTimeout(host.c_str(), port, timeoutSec);
     if (fd_ < 0) return false;
 
-    // Set timeout
+    // Set I/O timeouts for subsequent send/recv
     struct timeval tv;
     tv.tv_sec = timeoutSec;
     tv.tv_usec = 0;
     setsockopt(fd_, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
     setsockopt(fd_, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
-
-    // Resolve hostname
-    struct hostent *server = gethostbyname(host.c_str());
-    if (!server) {
-        closesocket(fd_);
-        fd_ = -1;
-        return false;
-    }
-
-    struct sockaddr_in addr;
-    memset(&addr, 0, sizeof(addr));
-    addr.sin_family = AF_INET;
-    addr.sin_port = htons(port);
-    memcpy(&addr.sin_addr.s_addr, server->h_addr, server->h_length);
-
-    if (connect(fd_, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
-        closesocket(fd_);
-        fd_ = -1;
-        return false;
-    }
 
     // Wrap in TLS
     if (tlsCtx_ && tlsCtx_->GetSSLContext()) {

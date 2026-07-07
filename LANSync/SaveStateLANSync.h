@@ -26,6 +26,8 @@ public:
 
   bool Initialize();
   void Shutdown();
+  void Pause();
+  void Resume();
 
   bool StartServer();
   void StopServer();

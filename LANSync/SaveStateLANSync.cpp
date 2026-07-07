@@ -127,6 +127,18 @@ void SaveStateLANSync::StopDiscovery() {
   }
 }
 
+void SaveStateLANSync::Pause() {
+  StopDiscovery();
+  StopServer();
+}
+
+void SaveStateLANSync::Resume() {
+  if (g_Config.bLANSyncEnabled) {
+    StartServer();
+    StartDiscovery();
+  }
+}
+
 bool SaveStateLANSync::IsSyncing() const {
   return syncing_.load();
 }

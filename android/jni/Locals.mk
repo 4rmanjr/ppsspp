@@ -43,7 +43,10 @@ ifeq ($(findstring armeabi-v7a,$(TARGET_ARCH_ABI)),armeabi-v7a)
   LOCAL_LDLIBS += $(LOCAL_PATH)/../../ffmpeg/android/armv7/lib/libswresample.a
   LOCAL_LDLIBS += $(LOCAL_PATH)/../../ffmpeg/android/armv7/lib/libswscale.a
   LOCAL_LDLIBS += $(LOCAL_PATH)/../../ffmpeg/android/armv7/lib/libavutil.a
+  LOCAL_LDLIBS += $(LOCAL_PATH)/../../ext/openssl/android/armeabi-v7a/lib/libssl.a
+  LOCAL_LDLIBS += $(LOCAL_PATH)/../../ext/openssl/android/armeabi-v7a/lib/libcrypto.a
   LOCAL_C_INCLUDES += $(LOCAL_PATH)/../../ffmpeg/android/armv7/include
+  LOCAL_C_INCLUDES += $(LOCAL_PATH)/../../ext/openssl/android/armeabi-v7a/include
 
   LOCAL_CFLAGS := $(LOCAL_CFLAGS) -D_ARCH_32
 endif
@@ -54,7 +57,10 @@ ifeq ($(TARGET_ARCH_ABI),x86_64)
   LOCAL_LDLIBS += $(LOCAL_PATH)/../../ffmpeg/android/x86_64/lib/libswresample.a
   LOCAL_LDLIBS += $(LOCAL_PATH)/../../ffmpeg/android/x86_64/lib/libswscale.a
   LOCAL_LDLIBS += $(LOCAL_PATH)/../../ffmpeg/android/x86_64/lib/libavutil.a
+  LOCAL_LDLIBS += $(LOCAL_PATH)/../../ext/openssl/android/x86_64/lib/libssl.a
+  LOCAL_LDLIBS += $(LOCAL_PATH)/../../ext/openssl/android/x86_64/lib/libcrypto.a
   LOCAL_C_INCLUDES += $(LOCAL_PATH)/../../ffmpeg/android/x86_64/include
+  LOCAL_C_INCLUDES += $(LOCAL_PATH)/../../ext/openssl/android/x86_64/include
 
   LOCAL_CFLAGS := $(LOCAL_CFLAGS) -D_M_X64 -fomit-frame-pointer -mtune=atom -mfpmath=sse -mssse3 -mstackrealign
 endif
@@ -65,9 +71,20 @@ ifeq ($(TARGET_ARCH_ABI),arm64-v8a)
   LOCAL_LDLIBS += $(LOCAL_PATH)/../../ffmpeg/android/arm64/lib/libswresample.a
   LOCAL_LDLIBS += $(LOCAL_PATH)/../../ffmpeg/android/arm64/lib/libswscale.a
   LOCAL_LDLIBS += $(LOCAL_PATH)/../../ffmpeg/android/arm64/lib/libavutil.a
+  LOCAL_LDLIBS += $(LOCAL_PATH)/../../ext/openssl/android/arm64-v8a/lib/libssl.a
+  LOCAL_LDLIBS += $(LOCAL_PATH)/../../ext/openssl/android/arm64-v8a/lib/libcrypto.a
   LOCAL_C_INCLUDES += $(LOCAL_PATH)/../../ffmpeg/android/arm64/include
+  LOCAL_C_INCLUDES += $(LOCAL_PATH)/../../ext/openssl/android/arm64-v8a/include
   LOCAL_C_INCLUDES += $(LOCAL_PATH)/../../ext/libadrenotools/include
   LOCAL_C_INCLUDES += $(LOCAL_PATH)/../../ext/libadrenotools/lib/linkernsbypass
 
   LOCAL_LDFLAGS += "-Wl,-z,max-page-size=16384"
+endif
+
+ifeq ($(TARGET_ARCH_ABI),x86)
+  LOCAL_LDLIBS += $(LOCAL_PATH)/../../ext/openssl/android/x86/lib/libssl.a
+  LOCAL_LDLIBS += $(LOCAL_PATH)/../../ext/openssl/android/x86/lib/libcrypto.a
+  LOCAL_C_INCLUDES += $(LOCAL_PATH)/../../ext/openssl/android/x86/include
+
+  LOCAL_CFLAGS := $(LOCAL_CFLAGS) -D_ARCH_32
 endif

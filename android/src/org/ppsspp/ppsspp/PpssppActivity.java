@@ -1122,6 +1122,7 @@ public class PpssppActivity extends AppCompatActivity implements SensorEventList
 		loseAudioFocus(this.audioManager, this.audioFocusChangeListener);
 		sizeManager.onPause();
 		NativeApp.pause();
+		NativeApp.sendMessageFromJava("lansync_pause", "");
 		if (mCameraHelper != null) {
 			mCameraHelper.pause();
 		}
@@ -1146,6 +1147,7 @@ public class PpssppActivity extends AppCompatActivity implements SensorEventList
 
 		updateAudioFocus(this.audioManager, this.audioFocusChangeListener);
 		NativeApp.resume();
+		NativeApp.sendMessageFromJava("lansync_resume", "");
 		mSensorManager.registerListener(this, mAccelerometer, SensorManager.SENSOR_DELAY_GAME);
 
 		InputManager inputManager =

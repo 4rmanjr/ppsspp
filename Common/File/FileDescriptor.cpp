@@ -3,6 +3,7 @@
 #include <errno.h>
 #include <cmath>
 #include <cstdio>
+#include <cstring>
 
 #include "Common/CommonTypes.h"
 #include "Common/Net/SocketCompat.h"
@@ -63,6 +64,87 @@ void SetNonBlocking(int sock, bool non_blocking) {
 		ERROR_LOG(Log::IO, "Error setting socket nonblocking status");
 	}
 #endif
+}
+
+int ConnectWithTimeout(const char *host, int port, int timeoutSec) {
+	if (!host || port <= 0 || timeoutSec <= 0)
+		return -1;
+
+	std::string portStr = std::to_string(port);
+
+	struct addrinfo hints;
+	memset(&hints, 0, sizeof(hints));
+	hints.ai_family = AF_UNSPEC;
+	hints.ai_socktype = SOCK_STREAM;
+
+	struct addrinfo *res = nullptr;
+	int err = getaddrinfo(host, portStr.c_str(), &hints, &res);
+	if (err != 0 || !res) {
+		return -1;
+	}
+
+	int fd = -1;
+	for (struct addrinfo *rp = res; rp != nullptr; rp = rp->ai_next) {
+		fd = (int)socket(rp->ai_family, rp->ai_socktype, rp->ai_protocol);
+		if (fd < 0)
+			continue;
+
+		SetNonBlocking(fd, true);
+
+		int connResult = connect(fd, rp->ai_addr, (int)rp->ai_addrlen);
+		if (connResult == 0) {
+			break;
+		}
+
+		if (!connectInProgress(socket_errno)) {
+			closesocket(fd);
+			fd = -1;
+			continue;
+		}
+
+		// Wait for connection with select()
+		fd_set writefds;
+		FD_ZERO(&writefds);
+		FD_SET(fd, &writefds);
+
+		struct timeval tv;
+		tv.tv_sec = timeoutSec;
+		tv.tv_usec = 0;
+
+		int selResult;
+		do {
+			FD_ZERO(&writefds);
+			FD_SET(fd, &writefds);
+			tv.tv_sec = timeoutSec;
+			tv.tv_usec = 0;
+			selResult = select(fd + 1, nullptr, &writefds, nullptr, &tv);
+		} while (selResult < 0 && socket_errno == EINTR);
+
+		if (selResult <= 0) {
+			closesocket(fd);
+			fd = -1;
+			continue;
+		}
+
+		// Verify connection succeeded
+		int soError = 0;
+		socklen_t soLen = sizeof(soError);
+		if (getsockopt(fd, SOL_SOCKET, SO_ERROR, &soError, &soLen) < 0 || soError != 0) {
+			closesocket(fd);
+			fd = -1;
+			continue;
+		}
+
+		break;
+	}
+
+	freeaddrinfo(res);
+
+	if (fd >= 0) {
+		SetNonBlocking(fd, false);
+	}
+
+	return fd;
 }
 
 std::string GetLocalIP(int sock) {

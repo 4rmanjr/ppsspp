@@ -4,7 +4,7 @@
 #if PPSSPP_PLATFORM(ANDROID)
 #include <jni.h>
 #include <mutex>
-#include "app-android.h"
+#include "android/jni/app-android.h"
 
 extern JavaVM *gJvm;
 
@@ -33,28 +33,30 @@ struct JNICache {
 	jmethodID stopAnnounce;
 
 	static JNICache& Get() {
-		static JNICache c;
+		static JNICache *c = nullptr;
 		static std::once_flag initFlag;
-		std::call_once(initFlag, [&c]() {
+		std::call_once(initFlag, [&]() {
 			JNIEnv *env = EnsureAttached();
 			jclass local = findClass("org/ppsspp/ppsspp/LANSyncMDNSHelper");
 			if (!local) {
 				ERROR_LOG(Log::System, "mDNS: Failed to find LANSyncMDNSHelper class");
 				return;
 			}
-			c.clazz = (jclass)env->NewGlobalRef(local);
+			static JNICache cache;
+			cache.clazz = (jclass)env->NewGlobalRef(local);
 			env->DeleteLocalRef(local);
 
-			c.startDiscovery = env->GetStaticMethodID(c.clazz, "startDiscovery", "(Ljava/lang/String;)V");
-			c.stopDiscovery = env->GetStaticMethodID(c.clazz, "stopDiscovery", "()V");
-			c.startAnnounce = env->GetStaticMethodID(c.clazz, "startAnnounce", "(Ljava/lang/String;ILjava/lang/String;)V");
-			c.stopAnnounce = env->GetStaticMethodID(c.clazz, "stopAnnounce", "()V");
+			cache.startDiscovery = env->GetStaticMethodID(cache.clazz, "startDiscovery", "(Ljava/lang/String;)V");
+			cache.stopDiscovery = env->GetStaticMethodID(cache.clazz, "stopDiscovery", "()V");
+			cache.startAnnounce = env->GetStaticMethodID(cache.clazz, "startAnnounce", "(Ljava/lang/String;ILjava/lang/String;)V");
+			cache.stopAnnounce = env->GetStaticMethodID(cache.clazz, "stopAnnounce", "()V");
 
-			if (!c.startDiscovery || !c.stopDiscovery || !c.startAnnounce || !c.stopAnnounce) {
+			if (!cache.startDiscovery || !cache.stopDiscovery || !cache.startAnnounce || !cache.stopAnnounce) {
 				ERROR_LOG(Log::System, "mDNS: Failed to find JNI methods");
 			}
+			c = &cache;
 		});
-		return c;
+		return *c;
 	}
 };
 
@@ -149,6 +151,8 @@ MDNSBrowser *CreateMDNSBrowserAndroid() {
 }  // namespace LANSync
 
 // JNI native callbacks from Java LANSyncMDNSHelper
+// Wrapped in LANSync namespace to access anonymous-namespace globals.
+namespace LANSync {
 extern "C" void JNICALL
 Java_org_ppsspp_ppsspp_LANSyncMDNSHelper_nativeOnPeerFound(
 	JNIEnv *env, jclass, jstring jName, jstring jHost, jint jPort, jstring jServiceType)
@@ -157,7 +161,7 @@ Java_org_ppsspp_ppsspp_LANSyncMDNSHelper_nativeOnPeerFound(
 	const char *host = env->GetStringUTFChars(jHost, nullptr);
 	const char *serviceType = env->GetStringUTFChars(jServiceType, nullptr);
 
-	LANSync::DiscoveredPeer peer;
+	DiscoveredPeer peer;
 	peer.deviceName = name;
 	peer.host = host;
 	peer.port = (int)jPort;
@@ -184,7 +188,7 @@ Java_org_ppsspp_ppsspp_LANSyncMDNSHelper_nativeOnPeerLost(
 	const char *host = env->GetStringUTFChars(jHost, nullptr);
 	const char *serviceType = env->GetStringUTFChars(jServiceType, nullptr);
 
-	LANSync::DiscoveredPeer peer;
+	DiscoveredPeer peer;
 	peer.deviceName = name;
 	peer.host = host;
 	peer.port = (int)jPort;
@@ -211,5 +215,6 @@ Java_org_ppsspp_ppsspp_LANSyncMDNSHelper_nativeOnAnnounceResult(
 	INFO_LOG(Log::System, "mDNS: Announce result: %s - %s", jSuccess ? "success" : "fail", msg);
 	env->ReleaseStringUTFChars(jMsg, msg);
 }
+}  // namespace LANSync
 
 #endif  // PPSSPP_PLATFORM(ANDROID)

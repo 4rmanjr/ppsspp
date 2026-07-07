@@ -1,5 +1,6 @@
 #include "LANSync/LANSyncDiscovery.h"
 #include "LANSync/MDNS.h"
+#include "Common/File/FileDescriptor.h"
 #include "Common/Net/SocketCompat.h"
 #include <cstring>
 #include <chrono>
@@ -195,30 +196,13 @@ void LANSyncDiscovery::OnPeerLost(const DiscoveredPeer &peer) {
 }
 
 void LANSyncDiscovery::TryConnectManual(const std::string &host, int port) {
-	int fd = (int)socket(AF_INET, SOCK_STREAM, 0);
+	int fd = fd_util::ConnectWithTimeout(host.c_str(), port, 2);
 	if (fd < 0)
 		return;
 
-	struct timeval tv;
-	tv.tv_sec = 2;
-	tv.tv_usec = 0;
-	setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
-	setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
-
-	struct sockaddr_in addr;
-	memset(&addr, 0, sizeof(addr));
-	addr.sin_family = AF_INET;
-	addr.sin_port = htons(port);
-	addr.sin_addr.s_addr = inet_addr(host.c_str());
-
-	bool reachable = false;
-	if (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) == 0) {
-		reachable = true;
-	}
-
 	closesocket(fd);
 
-	if (reachable) {
+	{
 		DiscoveredPeer peer;
 		peer.host = host;
 		peer.port = port;
