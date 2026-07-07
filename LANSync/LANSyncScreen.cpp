@@ -20,6 +20,7 @@
 #include "LANSync/LANSyncDiscovery.h"
 #include "LANSync/LANSyncPairingDialog.h"
 #include "LANSync/LANSyncPairing.h"
+#include "LANSync/LANSyncConflictScreen.h"
 #include "Common/Render/DrawBuffer.h"
 #include "Common/Data/Text/I18n.h"
 #include "Common/UI/View.h"
@@ -66,6 +67,10 @@ void LANSyncScreen::CreateViews() {
   syncAllBtn_->OnClick.Handle(this, &LANSyncScreen::OnSyncAll);
   syncAllBtn_->SetEnabled(false);
   contents->Add(syncAllBtn_);
+
+  Choice *conflictsBtn = new Choice(n->T("View Conflicts"));
+  conflictsBtn->OnClick.Handle(this, &LANSyncScreen::OnViewConflicts);
+  contents->Add(conflictsBtn);
 
   contents->Add(new ItemHeader(n->T("Progress")));
   progressText_ = contents->Add(new TextView("", ALIGN_LEFT | FLAG_WRAP_TEXT, false,
@@ -253,4 +258,8 @@ void LANSyncScreen::OnPairingConfirm(const std::string &pin) {
       g_LANSync.Pairing()->ConfirmPin(pin);
     }
   }
+}
+
+void LANSyncScreen::OnViewConflicts(UI::EventParams &e) {
+  screenManager()->push(new LANSyncConflictScreen());
 }

@@ -49,6 +49,7 @@ private:
   void OnSyncAll(UI::EventParams &e);
   void OnBack(UI::EventParams &e);
   void OnPairingConfirm(const std::string &pin);
+  void OnViewConflicts(UI::EventParams &e);
 
   UI::TextView *serverStatus_ = nullptr;
   UI::Choice *toggleDiscoveryBtn_ = nullptr;
