@@ -2170,6 +2170,8 @@ if(PPSSPP_LANSYNC)
 		LANSync/LANSyncDiscovery.cpp
 		LANSync/LANSyncPairing.h
 		LANSync/LANSyncPairing.cpp
+		LANSync/LANSyncPairingDialog.h
+		LANSync/LANSyncPairingDialog.cpp
 		LANSync/SaveStateLANSync.h
 		LANSync/SaveStateLANSync.cpp
 		LANSync/LANSyncScreen.h

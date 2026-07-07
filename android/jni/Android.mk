@@ -799,6 +799,7 @@ EXEC_AND_LIB_FILES := \
   $(SRC)/LANSync/MDNS.cpp \
   $(SRC)/LANSync/LANSyncDiscovery.cpp \
   $(SRC)/LANSync/LANSyncPairing.cpp \
+  $(SRC)/LANSync/LANSyncPairingDialog.cpp \
   $(SRC)/LANSync/SaveStateLANSync.cpp \
   $(SRC)/LANSync/LANSyncScreen.cpp \
   $(SRC)/LANSync/PlatformKeyStore_Android.cpp

@@ -8,6 +8,7 @@
 #include <atomic>
 #include "LANSync/LANSyncProtocol.h"
 #include "LANSync/LANSyncDiscovery.h"
+#include "Common/UI/Screen.h"
 #include "Common/File/Path.h"
 
 namespace LANSync {
@@ -40,6 +41,8 @@ public:
 
   using DiscoveryCallback = std::function<void(const LANSync::DiscoveryEvent &event)>;
   void SetDiscoveryCallback(DiscoveryCallback cb);
+
+  void SetScreenManager(ScreenManager *sm);
 
   bool IsInitialized() const { return initialized_; }
   bool IsSyncing() const;

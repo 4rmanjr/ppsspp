@@ -130,6 +130,12 @@ void SaveStateLANSync::SetProgressCallback(ProgressCallback cb) {
   progressCb_ = std::move(cb);
 }
 
+void SaveStateLANSync::SetScreenManager(ScreenManager *sm) {
+  if (pairing_) {
+    pairing_->SetScreenManager(sm);
+  }
+}
+
 void SaveStateLANSync::SetDiscoveryCallback(DiscoveryCallback cb) {
   std::lock_guard<std::mutex> lock(cbMutex_);
   discoveryCb_ = std::move(cb);

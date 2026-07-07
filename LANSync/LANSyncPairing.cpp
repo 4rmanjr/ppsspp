@@ -1,3 +1,5 @@
+#include <openssl/evp.h>
+
 #include "LANSync/LANSyncPairing.h"
 #include "LANSync/LANSyncServer.h"
 #include "LANSync/LANSyncClient.h"
@@ -5,12 +7,11 @@
 #include "LANSync/PlatformKeyStore.h"
 #include "Core/Config.h"
 #include "Core/System.h"
-
-#include <openssl/evp.h>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <chrono>
+#include <condition_variable>
 #include <iomanip>
 #include <sstream>
 #include <thread>
@@ -235,11 +236,41 @@ bool PairingManager::PairWithPeer(const std::string &host, int port, PairingComp
             }
         }
 
-        // Auto-confirm (in production this would show UI and wait for user)
-        ConfirmPin(pin);
-
         std::string localPeerId = GetLocalPeerId();
-        std::string verifyBody = "{\"nonce\":\"" + nonce + "\",\"pin\":\"" + pin + "\",\"peerId\":\"" + localPeerId + "\"}";
+        {
+            std::lock_guard<std::mutex> l(mutex_);
+            if (pending_) {
+                pending_->nonce = nonce;
+                pending_->expectedPin = pin;
+                pending_->localPeerId = localPeerId;
+            }
+        }
+
+        // Wait for user to confirm/cancel via dialog
+        {
+            std::unique_lock<std::mutex> lk(dialogMutex_);
+            pendingDialog_ = std::make_unique<PendingDialogInfo>();
+            pendingDialog_->isInitiator = true;
+            pendingDialog_->pin = pin;
+            pendingDialog_->peerName = host + ":" + std::to_string(port);
+            dialogCv_.wait(lk, [this] { return !pendingDialog_; });
+        }
+
+        std::string enteredPin;
+        {
+            std::lock_guard<std::mutex> l(mutex_);
+            enteredPin = pending_ ? confirmPin_ : "";
+        }
+        if (enteredPin.empty()) {
+            std::lock_guard<std::mutex> l(mutex_);
+            if (pending_ && pending_->callback) {
+                pending_->callback(false, "");
+            }
+            pending_.reset();
+            return;
+        }
+
+        std::string verifyBody = "{\"nonce\":\"" + nonce + "\",\"pin\":\"" + enteredPin + "\",\"peerId\":\"" + localPeerId + "\"}";
         resp = client.Post("/pair/verify", "application/json", verifyBody);
 
         bool success = (resp.statusCode == 200 && resp.body.find("\"success\":true") != std::string::npos);
@@ -267,18 +298,41 @@ bool PairingManager::PairWithPeer(const std::string &host, int port, PairingComp
 }
 
 void PairingManager::CancelPairing() {
-    std::lock_guard<std::mutex> lock(mutex_);
-    if (pending_ && pending_->callback) {
-        pending_->callback(false, "");
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (pending_ && pending_->callback) {
+            pending_->callback(false, "");
+        }
+        pending_.reset();
     }
-    pending_.reset();
+    {
+        std::lock_guard<std::mutex> lk(dialogMutex_);
+        pendingDialog_.reset();
+    }
+    dialogCv_.notify_one();
 }
 
 void PairingManager::ConfirmPin(const std::string &pin) {
-    std::lock_guard<std::mutex> lock(mutex_);
-    if (pending_) {
-        (void)pin;
+    {
+        std::lock_guard<std::mutex> lk(dialogMutex_);
+        confirmPin_ = pin;
+        pendingDialog_.reset();
     }
+    dialogCv_.notify_one();
+}
+
+void PairingManager::SetScreenManager(ScreenManager *sm) {
+    screenManager_ = sm;
+}
+
+bool PairingManager::HasPendingDialog() const {
+    std::lock_guard<std::mutex> lock(dialogMutex_);
+    return pendingDialog_ != nullptr;
+}
+
+PendingDialogInfo *PairingManager::GetPendingDialog() const {
+    std::lock_guard<std::mutex> lock(dialogMutex_);
+    return pendingDialog_.get();
 }
 
 bool PairingManager::IsPairingInProgress() const {

@@ -48,6 +48,7 @@ private:
   void OnToggleDiscovery(UI::EventParams &e);
   void OnSyncAll(UI::EventParams &e);
   void OnBack(UI::EventParams &e);
+  void OnPairingConfirm(const std::string &pin);
 
   UI::TextView *serverStatus_ = nullptr;
   UI::Choice *toggleDiscoveryBtn_ = nullptr;

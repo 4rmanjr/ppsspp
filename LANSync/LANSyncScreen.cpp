@@ -18,6 +18,8 @@
 #include "LANSync/LANSyncScreen.h"
 #include "LANSync/SaveStateLANSync.h"
 #include "LANSync/LANSyncDiscovery.h"
+#include "LANSync/LANSyncPairingDialog.h"
+#include "LANSync/LANSyncPairing.h"
 #include "Common/Render/DrawBuffer.h"
 #include "Common/Data/Text/I18n.h"
 #include "Common/UI/View.h"
@@ -84,6 +86,8 @@ void LANSyncScreen::CreateViews() {
   g_LANSync.SetDiscoveryCallback([this](const LANSync::DiscoveryEvent &event) {
     peersDirty_ = true;
   });
+
+  g_LANSync.SetScreenManager(screenManager());
 }
 
 void LANSyncScreen::update() {
@@ -127,6 +131,17 @@ void LANSyncScreen::update() {
   syncAllBtn_->SetEnabled(!peers.empty() && !g_LANSync.IsSyncing());
 
   RebuildPeerList();
+
+  if (g_LANSync.Pairing() && g_LANSync.Pairing()->HasPendingDialog()) {
+    auto info = g_LANSync.Pairing()->GetPendingDialog();
+    if (info) {
+      screenManager()->push(new LANSyncPairingDialog(
+          info->isInitiator, info->pin, info->peerName,
+          [this](const std::string &enteredPin) {
+            OnPairingConfirm(enteredPin);
+          }));
+    }
+  }
 
   {
     std::lock_guard<std::mutex> lock(progressMutex_);
@@ -228,4 +243,14 @@ void LANSyncScreen::OnSyncAll(UI::EventParams &e) {
 void LANSyncScreen::OnBack(UI::EventParams &e) {
   g_LANSync.SetProgressCallback(nullptr);
   screenManager()->finishDialog(this, DR_OK);
+}
+
+void LANSyncScreen::OnPairingConfirm(const std::string &pin) {
+  if (g_LANSync.Pairing()) {
+    if (pin.empty()) {
+      g_LANSync.Pairing()->CancelPairing();
+    } else {
+      g_LANSync.Pairing()->ConfirmPin(pin);
+    }
+  }
 }

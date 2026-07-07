@@ -1,12 +1,21 @@
 #pragma once
 
+#include <condition_variable>
 #include <functional>
 #include <memory>
 #include <mutex>
 #include <string>
 #include <vector>
 
+class ScreenManager;
+
 namespace LANSync {
+
+struct PendingDialogInfo {
+  bool isInitiator;
+  std::string pin;
+  std::string peerName;
+};
 
 class LANSyncServer;
 class LANSyncClient;
@@ -21,11 +30,15 @@ public:
 
     void RegisterHandlers(LANSyncServer *server);
 
-    bool PairWithPeer(const std::string &host, int port, PairingCompleteCallback callback);
+  bool PairWithPeer(const std::string &host, int port, PairingCompleteCallback callback);
 
-    void CancelPairing();
-    void ConfirmPin(const std::string &pin);
-    bool IsPairingInProgress() const;
+  void CancelPairing();
+  void ConfirmPin(const std::string &pin);
+  bool IsPairingInProgress() const;
+
+  void SetScreenManager(ScreenManager *sm);
+  bool HasPendingDialog() const;
+  PendingDialogInfo *GetPendingDialog() const;
 
 private:
     std::string HandlePairBegin(const std::string &method, const std::string &path, const std::string &body);
@@ -41,12 +54,19 @@ private:
         std::string nonce;
         std::string peerFingerprint;
         std::string expectedPin;
+        std::string localPeerId;
         PairingCompleteCallback callback;
     };
 
     TLSContext *tlsCtx_ = nullptr;
     std::unique_ptr<PendingPairing> pending_;
     mutable std::mutex mutex_;
+
+    ScreenManager *screenManager_ = nullptr;
+    std::unique_ptr<PendingDialogInfo> pendingDialog_;
+    mutable std::mutex dialogMutex_;
+    std::condition_variable dialogCv_;
+    std::string confirmPin_;
 
     struct PendingNonce {
         std::string nonce;
