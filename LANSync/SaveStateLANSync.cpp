@@ -172,7 +172,7 @@ std::string SaveStateLANSync::HandleListSaveStates(const std::string &method, co
   }
 
   std::vector<File::FileInfo> files;
-  if (!File::GetFilesInDir(stateDir_, &files, ".ppst")) {
+  if (!File::GetFilesInDir(stateDir_, &files, "ppst")) {
     return "[]";
   }
 
@@ -533,7 +533,7 @@ std::vector<SaveFileEntry> SaveStateLANSync::GetLocalSaveFiles() const {
   std::vector<SaveFileEntry> result;
 
   std::vector<File::FileInfo> files;
-  if (!File::GetFilesInDir(stateDir_, &files, ".ppst")) {
+  if (!File::GetFilesInDir(stateDir_, &files, "ppst")) {
     return result;
   }
 
