@@ -324,92 +324,118 @@ void SaveStateLANSync::CancelSync() {
   {
     std::lock_guard<std::mutex> lock(syncMutex_);
   }
+
+  std::vector<File::FileInfo> files;
+  if (File::GetFilesInDir(stateDir_, &files)) {
+    for (const auto &f : files) {
+      if (f.name.size() > 4 &&
+          f.name.substr(f.name.size() - 4) == ".tmp") {
+        File::Delete(stateDir_ / f.name);
+      }
+    }
+  }
+
   UpdateProgress(SyncProgress::IDLE, "", 0, 0);
 }
 
 void SaveStateLANSync::DoSyncWithPeer(const DiscoveredPeer &peer) {
-  LANSyncClient client(tlsCtx_.get());
-  if (!client.Connect(peer.host, peer.port)) {
-    UpdateProgress(SyncProgress::ERROR, peer.deviceName, 0, 0, "Failed to connect");
-    return;
-  }
+  LANSyncConfigInfo config;
+  config.Load();
 
-  HTTPResponse resp = client.Get("/states");
-  if (resp.statusCode != 200) {
-    UpdateProgress(SyncProgress::ERROR, peer.deviceName, 0, 0,
-        "Failed to list remote states (HTTP " + std::to_string(resp.statusCode) + ")");
-    return;
-  }
+  for (int attempt = 0; attempt <= config.iSyncRetryCount; attempt++) {
+    if (!syncing_) return;
 
-  std::vector<SaveFileEntry> remoteFiles = ParseSaveFileList(resp.body);
-  std::vector<SaveFileEntry> localFiles = GetLocalSaveFiles();
-
-  std::map<std::string, SaveFileEntry> remoteMap;
-  for (auto &f : remoteFiles) {
-    remoteMap[f.gameId + "_" + std::to_string(f.slot)] = f;
-  }
-
-  std::map<std::string, SaveFileEntry> localMap;
-  for (auto &f : localFiles) {
-    localMap[f.gameId + "_" + std::to_string(f.slot)] = f;
-  }
-
-  std::set<std::string> allKeys;
-  for (auto &[k, v] : remoteMap) allKeys.insert(k);
-  for (auto &[k, v] : localMap) allKeys.insert(k);
-
-  int total = (int)allKeys.size();
-  int completed = 0;
-  UpdateProgress(SyncProgress::SYNCING, peer.deviceName, total, completed);
-
-  for (const auto &key : allKeys) {
-    if (!syncing_) break;
-
-    bool hasRemote = remoteMap.find(key) != remoteMap.end();
-    bool hasLocal = localMap.find(key) != localMap.end();
-
-    UpdateProgress(SyncProgress::SYNCING, key, total, completed);
-
-    if (hasRemote && !hasLocal) {
-      Path localPath = stateDir_ / (key + ".ppst");
-      if (client.DownloadFile("/states/" + remoteMap[key].gameId + "/" + std::to_string(remoteMap[key].slot),
-                              localPath)) {
-        time_t now;
-        time(&now);
-        HLC hlc;
-        hlc.Tick((uint64_t)now);
-        LANSyncMetadata::Save(localPath, hlc, remoteMap[key].mtime, peer.peerId);
+    LANSyncClient client(tlsCtx_.get());
+    if (!client.Connect(peer.host, peer.port)) {
+      if (attempt < config.iSyncRetryCount) {
+        std::this_thread::sleep_for(
+            std::chrono::milliseconds(config.iSyncRetryDelayMs));
+        continue;
       }
-    } else if (!hasRemote && hasLocal) {
-      Path localPath = stateDir_ / (key + ".ppst");
-      HLC hlc;
-      uint64_t mtime = 0;
-      std::string localPeerId;
-      if (LANSyncMetadata::Load(localPath, hlc, mtime, localPeerId)) {
-        time_t now;
-        time(&now);
-        hlc.Tick((uint64_t)now);
-      } else {
-        time_t now;
-        time(&now);
-        hlc.Tick((uint64_t)now);
-      }
-
-      std::string url = "/states/" + localMap[key].gameId + "/" + std::to_string(localMap[key].slot)
-          + "?hlc=" + hlc.ToString() + "&peerId=" + GetDeviceId();
-      client.UploadFile(url, localPath);
-    } else if (hasRemote && hasLocal) {
-      ResolveConflict(client, key, remoteMap[key], localMap[key], peer.peerId);
+      UpdateProgress(SyncProgress::ERROR, peer.deviceName, 0, 0,
+          "Failed after " + std::to_string(config.iSyncRetryCount + 1) + " attempts");
+      return;
     }
 
-    completed++;
-    UpdateProgress(SyncProgress::SYNCING, key, total, completed);
-  }
+    HTTPResponse resp = client.Get("/states");
+    if (resp.statusCode != 200) {
+      UpdateProgress(SyncProgress::ERROR, peer.deviceName, 0, 0,
+          "Failed to list remote states (HTTP " + std::to_string(resp.statusCode) + ")");
+      return;
+    }
 
-  if (!syncing_) {
-    UpdateProgress(SyncProgress::IDLE, "", 0, 0);
-  } else {
-    UpdateProgress(SyncProgress::COMPLETED, peer.deviceName, total, completed);
+    std::vector<SaveFileEntry> remoteFiles = ParseSaveFileList(resp.body);
+    std::vector<SaveFileEntry> localFiles = GetLocalSaveFiles();
+
+    std::map<std::string, SaveFileEntry> remoteMap;
+    for (auto &f : remoteFiles) {
+      remoteMap[f.gameId + "_" + std::to_string(f.slot)] = f;
+    }
+
+    std::map<std::string, SaveFileEntry> localMap;
+    for (auto &f : localFiles) {
+      localMap[f.gameId + "_" + std::to_string(f.slot)] = f;
+    }
+
+    std::set<std::string> allKeys;
+    for (auto &[k, v] : remoteMap) allKeys.insert(k);
+    for (auto &[k, v] : localMap) allKeys.insert(k);
+
+    int total = (int)allKeys.size();
+    int completed = 0;
+    UpdateProgress(SyncProgress::SYNCING, peer.deviceName, total, completed);
+
+    for (const auto &key : allKeys) {
+      if (!syncing_) break;
+
+      bool hasRemote = remoteMap.find(key) != remoteMap.end();
+      bool hasLocal = localMap.find(key) != localMap.end();
+
+      UpdateProgress(SyncProgress::SYNCING, key, total, completed);
+
+      if (hasRemote && !hasLocal) {
+        Path localPath = stateDir_ / (key + ".ppst");
+        if (client.DownloadFile("/states/" + remoteMap[key].gameId + "/" + std::to_string(remoteMap[key].slot),
+                                localPath)) {
+          time_t now;
+          time(&now);
+          HLC hlc;
+          hlc.Tick((uint64_t)now);
+          LANSyncMetadata::Save(localPath, hlc, remoteMap[key].mtime, peer.peerId);
+        }
+      } else if (!hasRemote && hasLocal) {
+        Path localPath = stateDir_ / (key + ".ppst");
+        HLC hlc;
+        uint64_t mtime = 0;
+        std::string localPeerId;
+        if (LANSyncMetadata::Load(localPath, hlc, mtime, localPeerId)) {
+          time_t now;
+          time(&now);
+          hlc.Tick((uint64_t)now);
+        } else {
+          time_t now;
+          time(&now);
+          hlc.Tick((uint64_t)now);
+        }
+
+        std::string url = "/states/" + localMap[key].gameId + "/" + std::to_string(localMap[key].slot)
+            + "?hlc=" + hlc.ToString() + "&peerId=" + GetDeviceId();
+        client.UploadFile(url, localPath);
+      } else if (hasRemote && hasLocal) {
+        ResolveConflict(client, key, remoteMap[key], localMap[key], peer.peerId);
+      }
+
+      completed++;
+      UpdateProgress(SyncProgress::SYNCING, key, total, completed);
+    }
+
+    if (!syncing_) {
+      UpdateProgress(SyncProgress::IDLE, "", 0, 0);
+    } else {
+      UpdateProgress(SyncProgress::COMPLETED, peer.deviceName, total, completed);
+    }
+
+    return;  // success
   }
 }
 

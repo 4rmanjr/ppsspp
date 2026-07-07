@@ -10,6 +10,8 @@ void LANSyncConfigInfo::Load() {
     bAutoSync = g_Config.bLANSyncAutoSync;
     sDeviceName = g_Config.sLANSyncDeviceName;
     iPort = g_Config.iLANSyncPort;
+    iSyncRetryCount = g_Config.iLANSyncRetryCount;
+    iSyncRetryDelayMs = g_Config.iLANSyncRetryDelayMs;
 #endif
 }
 
@@ -19,6 +21,8 @@ void LANSyncConfigInfo::Save() {
     g_Config.bLANSyncAutoSync = bAutoSync;
     g_Config.sLANSyncDeviceName = sDeviceName;
     g_Config.iLANSyncPort = iPort;
+    g_Config.iLANSyncRetryCount = iSyncRetryCount;
+    g_Config.iLANSyncRetryDelayMs = iSyncRetryDelayMs;
     g_Config.Save("LANSyncConfig");
 #endif
 }

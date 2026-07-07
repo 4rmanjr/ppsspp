@@ -1178,6 +1178,8 @@ static const ConfigSetting lansyncSettings[] = {
 	ConfigSetting("LANSyncAutoSync", SETTING(g_Config, bLANSyncAutoSync), false, CfgFlag::DEFAULT),
 	ConfigSetting("LANSyncDeviceName", SETTING(g_Config, sLANSyncDeviceName), "", CfgFlag::DEFAULT),
 	ConfigSetting("LANSyncPort", SETTING(g_Config, iLANSyncPort), 27314, CfgFlag::DEFAULT),
+	ConfigSetting("LANSyncRetryCount", SETTING(g_Config, iLANSyncRetryCount), 3, CfgFlag::DEFAULT),
+	ConfigSetting("LANSyncRetryDelayMs", SETTING(g_Config, iLANSyncRetryDelayMs), 2000, CfgFlag::DEFAULT),
 	// Removed: vLANSyncPairedPeers not used; peer storage via PlatformKeyStore
 };
 #endif

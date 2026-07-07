@@ -9,6 +9,8 @@ struct LANSyncConfigInfo {
     bool bAutoSync = false;
     std::string sDeviceName;
     int iPort = 27314;
+    int iSyncRetryCount = 3;
+    int iSyncRetryDelayMs = 2000;
 
     void Load();
     void Save();

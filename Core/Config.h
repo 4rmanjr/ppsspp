@@ -604,6 +604,8 @@ public:
 	bool bLANSyncAutoSync = false;
 	std::string sLANSyncDeviceName;
 	int iLANSyncPort = 27314;
+	int iLANSyncRetryCount = 3;
+	int iLANSyncRetryDelayMs = 2000;
 	std::vector<std::string> vLANSyncPairedPeers;
 #endif
 
