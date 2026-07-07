@@ -42,6 +42,12 @@
 - `Initialize()` auto-calls `StartServer()` + `StartDiscovery()` when `--lansync-enabled`
 - Missing `#include "LANSyncScreen.h"` in `MainScreen.cpp` and `GameSettingsScreen.cpp`
 
+### Sync Error Handling (Task 6)
+- Configurable retry count (default 3) and delay (default 2s)
+- Retry loop in `DoSyncWithPeer()` wraps connect + sync
+- `CancelSync()` cleans up orphan `.tmp` files
+- INI settings: `LANSyncRetryCount`, `LANSyncRetryDelayMs`
+
 ---
 
 ## 🚧 In Progress — Phase 2
@@ -77,13 +83,6 @@
 - "View Conflicts" button in `LANSyncScreen`
 - New files: `LANSync/LANSyncConflictScreen.h/.cpp`
 
-### Task 6: Sync Error Handling
-- Socket read/write timeouts via `setsockopt(SO_RCVTIMEO, SO_SNDTIMEO)`
-- Configurable retry count + delay (default 3 attempts, 2s apart)
-- Retry loop in `DoSyncWithPeer()`
-- `CancelSync()` cleanup orphan `.tmp` files
-- Files: `LANSyncClient`, `LANSyncConfig`, `SaveStateLANSync`, `Core/Config`
-
 ### Task 7: Android mDNS (NsdManager)
 - Full `MDNS_Android.cpp` implementation via JNI
 - Java helper: `android/jni/LANSyncMDNSHelper.java`
@@ -103,7 +102,7 @@
 1. **Android mDNS (Task 7)**: `MDNS_Android.cpp` masih stub — discovery cuma jalan via manual IP di Android
 2. **PIN dialog**: PairingManager masih auto-confirm — belum ada UI dialog untuk entry PIN
 3. **Conflict viewer**: `.ppst.conflict` rename sudah terjadi otomatis, tapi user gak bisa liat atau resolve
-4. **Error handling**: Gak ada timeout di socket, gak ada retry — koneksi failure langsung drop
+4. **Error handling**: Socket timeout udah ada (10s), retry 3x dengan 2s delay — tapi connect() masih blocking tanpa timeout (kernel default ~20-120s)
 5. **Auto-sync**: Belum ada background polling thread
 6. **Smoke test (Task 1)**: Test 3 (PUT/GET) gagal karena format save state file — perlu disamakan sama yang diharapkan server
 7. **Mixed build dirs:** Smoke test default ke `build/PPSSPPSDL`, build di `build-fresh/` — perlu update script atau konsisten
