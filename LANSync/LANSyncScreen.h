@@ -58,6 +58,7 @@ private:
 
   int frameCount_ = 0;
   bool discoveryActive_ = false;
+  bool peersDirty_ = false;
   LANSync::SyncProgress currentProgress_;
   mutable std::mutex progressMutex_;
 };

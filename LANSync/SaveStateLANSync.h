@@ -7,6 +7,7 @@
 #include <mutex>
 #include <atomic>
 #include "LANSync/LANSyncProtocol.h"
+#include "LANSync/LANSyncDiscovery.h"
 #include "Common/File/Path.h"
 
 namespace LANSync {
@@ -36,6 +37,9 @@ public:
 
   using ProgressCallback = std::function<void(const SyncProgress &progress)>;
   void SetProgressCallback(ProgressCallback cb);
+
+  using DiscoveryCallback = std::function<void(const LANSync::DiscoveryEvent &event)>;
+  void SetDiscoveryCallback(DiscoveryCallback cb);
 
   bool IsInitialized() const { return initialized_; }
   bool IsSyncing() const;
@@ -74,6 +78,7 @@ private:
   std::mutex syncMutex_;
 
   ProgressCallback progressCb_;
+  DiscoveryCallback discoveryCb_;
   mutable std::mutex cbMutex_;
 
   Path stateDir_;

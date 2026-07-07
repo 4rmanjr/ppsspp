@@ -105,7 +105,14 @@ bool SaveStateLANSync::StartDiscovery() {
 
   discovery_->SetDeviceName(config.GetDeviceName());
 
-  return discovery_->Start(nullptr);
+  return discovery_->Start(
+      [this](const DiscoveryEvent &event) {
+          std::lock_guard<std::mutex> lock(cbMutex_);
+          if (discoveryCb_) {
+              discoveryCb_(event);
+          }
+      }
+  );
 }
 
 void SaveStateLANSync::StopDiscovery() {
@@ -121,6 +128,11 @@ bool SaveStateLANSync::IsSyncing() const {
 void SaveStateLANSync::SetProgressCallback(ProgressCallback cb) {
   std::lock_guard<std::mutex> lock(cbMutex_);
   progressCb_ = std::move(cb);
+}
+
+void SaveStateLANSync::SetDiscoveryCallback(DiscoveryCallback cb) {
+  std::lock_guard<std::mutex> lock(cbMutex_);
+  discoveryCb_ = std::move(cb);
 }
 
 void SaveStateLANSync::UpdateProgress(SyncProgress::Status status, const std::string &currentFile,

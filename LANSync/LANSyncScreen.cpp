@@ -80,13 +80,18 @@ void LANSyncScreen::CreateViews() {
   g_LANSync.SetProgressCallback([this](const LANSync::SyncProgress &progress) {
     OnProgress(progress);
   });
+
+  g_LANSync.SetDiscoveryCallback([this](const LANSync::DiscoveryEvent &event) {
+    peersDirty_ = true;
+  });
 }
 
 void LANSyncScreen::update() {
   UIBaseScreen::update();
 
-  if (frameCount_++ % 60 != 0)
+  if (frameCount_++ % 60 != 0 && !peersDirty_)
     return;
+  peersDirty_ = false;
 
   if (!g_LANSync.IsInitialized())
     return;
