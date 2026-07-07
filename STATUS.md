@@ -93,29 +93,29 @@
 - Start/stop in `Initialize()` / `Shutdown()`
 
 ### Android Verification (Session 2026-07-07)
-- **OpenSSL 3.3.0 prebuilt**: Static libs for arm64-v8a, armeabi-v7a, x86_64, x86 at `ext/openssl/android/<abi>/`
 - **CMakeLists.txt**: Android OpenSSL path resolution per ABI + IMPORTED targets (OpenSSL::SSL, OpenSSL::Crypto)
 - **native target**: `PPSSPP_LANSYNC` compile definition + include path on Android
 - **Lifecycle hooks**: `SaveStateLANSync::Pause()/Resume()` wired to `onPause`/`onResume` via UIMessage
 - **MDNS_Android.cpp fix**: Include path `android/jni/app-android.h`, JNI callbacks in `LANSync` namespace, static lambda capture workaround
 - **Build verified**: `libppsspp_jni.so` links successfully for arm64-v8a and x86_64
+- **`ext/openssl/build_android.sh`**: Build OpenSSL 3.3.0 for all 4 Android ABIs; uses `-fvisibility=hidden` to fix libkirk symbol collision; output layout matches CMakeLists.txt expectations
+- **Prebuilt binaries removed from git**: `ext/openssl/android/` now gitignored — run `./ext/openssl/build_android.sh` before Android build
 
 ### Post-Phase 2 Fixes (Session 2026-07-07)
 - **`fd_util::ConnectWithTimeout()`**: Non-blocking `connect()` + `select()` with proper timeout; uses `getaddrinfo()` for DNS (IPv4+IPv6) and `getsockopt(SO_ERROR)` for connection verification
 - **`LANSyncClient::Connect()`**: Replaced blocking `socket()+gethostbyname()+connect()` with `fd_util::ConnectWithTimeout()` — connect timeout now actually respects user-specified timeout (was at mercy of kernel TCP retransmission ~20-120s)
 - **`LANSyncDiscovery::TryConnectManual()`**: Same migration; bonus: now supports hostname (was raw IP only via `inet_addr()`)
+- **Build artifact cleanup**: APK/idsig files removed from git; `*.apk`/`*.idsig` added to `.gitignore`; `.worktrees/` and `ext/libmgba` removed from branch
 
 ---
 
 ## ⚠️ Limitations & Known Issues
 
 1. **Runtime-untested on Android**: Build passes for arm64-v8a and x86_64 but never ran on device; `LANSyncMDNSHelper.java` untested with real NsdManager
-2. **libkirk symbol conflict**: `--allow-multiple-definition` needed for `bn_sub`/`AES_*` collision between OpenSSL's libcrypto and PPSSPP's libkirk; safe (libkirk impl used by existing code), but not ideal
-3. **Mixed build dirs**: Smoke test defaults to `build/PPSSPPSDL`, build may be in `build-fresh/` — script needs update or consistency
-4. **CLI flag only enable**: `--lansync-enabled` auto-starts server + discovery but no CLI disable
-5. **OpenSSL visibility**: Prebuilt with default visibility; rebuilding with `-fvisibility=hidden` would eliminate the linker workaround
-6. **ndk-build path stale**: Locals.mk updated but actual Android build uses CMake; ndk-build path untested
-7. **TLS handshake blocking**: `SSL_connect()` is still blocking (though `SO_RCVTIMEO`/`SO_SNDTIMEO` are respected for socket I/O, unlike `connect()`)
+2. **Mixed build dirs**: Smoke test defaults to `build/PPSSPPSDL`, build may be in `build-fresh/` — script needs update or consistency
+3. **CLI flag only enable**: `--lansync-enabled` auto-starts server + discovery but no CLI disable
+4. **TLS handshake blocking**: `SSL_connect()` is still blocking (though `SO_RCVTIMEO`/`SO_SNDTIMEO` are respected for socket I/O, unlike `connect()`)
+5. **OpenSSL required for Android**: `ext/openssl/build_android.sh` must be run (once) before Android build; requires NDK + internet
 
 ## 📐 Rules & Constraints
 
