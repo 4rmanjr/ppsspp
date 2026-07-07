@@ -570,6 +570,7 @@ public class PpssppActivity extends AppCompatActivity implements SensorEventList
 		}
 		// android.graphics.SurfaceTexture is not available before version 11.
 		mCameraHelper = new CameraHelper(this);
+		LANSyncMDNSHelper.init(this);
 	}
 
 	@NonNull
@@ -1078,6 +1079,8 @@ public class PpssppActivity extends AppCompatActivity implements SensorEventList
 			Log.i(TAG, "in onDestroy, but not shutting down.");
 		}
 		navigationCallbackView = null;
+
+		LANSyncMDNSHelper.destroy();
 
 		// Really ugly workaround for VR issues when PPSSPP restarts
 		if (isVRDevice()) {

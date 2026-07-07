@@ -797,6 +797,7 @@ EXEC_AND_LIB_FILES := \
   $(SRC)/LANSync/LANSyncServer.cpp \
   $(SRC)/LANSync/LANSyncClient.cpp \
   $(SRC)/LANSync/MDNS.cpp \
+  $(SRC)/LANSync/MDNS_Android.cpp \
   $(SRC)/LANSync/LANSyncDiscovery.cpp \
   $(SRC)/LANSync/LANSyncPairing.cpp \
   $(SRC)/LANSync/LANSyncPairingDialog.cpp \

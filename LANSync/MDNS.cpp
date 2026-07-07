@@ -7,7 +7,8 @@ MDNSAnnouncer *CreateMDNSAnnouncer() {
 	extern MDNSAnnouncer *CreateMDNSAnnouncerLinux();
 	return CreateMDNSAnnouncerLinux();
 #elif defined(ANDROID)
-	return nullptr;
+	extern MDNSAnnouncer *CreateMDNSAnnouncerAndroid();
+	return CreateMDNSAnnouncerAndroid();
 #else
 	return nullptr;
 #endif
@@ -18,7 +19,8 @@ MDNSBrowser *CreateMDNSBrowser() {
 	extern MDNSBrowser *CreateMDNSBrowserLinux();
 	return CreateMDNSBrowserLinux();
 #elif defined(ANDROID)
-	return nullptr;
+	extern MDNSBrowser *CreateMDNSBrowserAndroid();
+	return CreateMDNSBrowserAndroid();
 #else
 	return nullptr;
 #endif
