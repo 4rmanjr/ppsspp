@@ -61,10 +61,10 @@
 
 ## ⬜ Not Started — Phase 2 Tasks
 
-### Task 2: Manual Peer Input UI
-- Add `TextEdit` fields (IP, port) + "Add Peer" button to `LANSyncScreen`
-- Wire to `LANSyncDiscovery::AddManualPeer()`
-- Files: `LANSync/LANSyncScreen.h`, `LANSync/LANSyncScreen.cpp`
+### ~~Task 2: Manual Peer Input UI~~ (SKIPPED)
+- Kode backend (`LANSyncDiscovery::AddManualPeer()`) sudah ada
+- UI screen belum dibuat — tidak diprioritaskan karena mDNS auto-discovery lebih user-friendly
+- Bisa diimplementasikan nanti kalo ada kebutuhan fallback (cross-subnet, Android mDNS stub, debugging)
 
 ### Task 3: Discovery Event Callback Wiring
 - Add `DiscoveryCallback` to `SaveStateLANSync` — forward events to `LANSyncScreen`
