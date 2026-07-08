@@ -34,7 +34,7 @@
 - `MainScreen`: "LAN Sync" button in right column
 - `GameSettingsScreen`: "LAN Sync" option in Networking tab
 - `PauseScreen`: "Sync Saves Now" option
-- `NativeApp.cpp`: `g_LANSync` global, init/shutdown, `--lansync-enabled` / `--lansync-port` CLI flags
+- `NativeApp.cpp`: `g_LANSync` global, init/shutdown, `--lansync-enabled` / `--lansync-disabled` / `--lansync-port` CLI flags
 
 #### Build System
 - `CMakeLists.txt`: `option(PPSSPP_LANSYNC)`, `find_package(OpenSSL)`, Avahi linkage
@@ -106,16 +106,15 @@
 - **`LANSyncClient::Connect()`**: Replaced blocking `socket()+gethostbyname()+connect()` with `fd_util::ConnectWithTimeout()` — connect timeout now actually respects user-specified timeout (was at mercy of kernel TCP retransmission ~20-120s)
 - **`LANSyncDiscovery::TryConnectManual()`**: Same migration; bonus: now supports hostname (was raw IP only via `inet_addr()`)
 - **Build artifact cleanup**: APK/idsig files removed from git; `*.apk`/`*.idsig` added to `.gitignore`; `.worktrees/` and `ext/libmgba` removed from branch
+- **CLI disable flag**: Added `--lansync-disabled` (transient via `DoNotSaveSetting`, follows PPSSPP `--fullscreen`/`--windowed` pattern); `--lansync-enabled` also made transient + switched from `strncmp` (prefix) to `strcmp` (exact match)
+- **TLS non-blocking handshake**: Added `SSLHandshakeWithTimeout()` in `TLSTransport` — sets socket non-blocking, loops on `SSL_connect()`/`SSL_accept()` with `select()` + deadline, restores blocking mode on success. Migrated both `LANSyncClient::Connect()` and `LANSyncServer::HandleConnection()`. Verified with TLS 1.3 via openssl s_client (handshake + HTTP request/response ✅).
 
 ---
 
 ## ⚠️ Limitations & Known Issues
 
 1. **Runtime-untested on Android**: Build passes for arm64-v8a and x86_64 but never ran on device; `LANSyncMDNSHelper.java` untested with real NsdManager
-2. **Mixed build dirs**: Smoke test defaults to `build/PPSSPPSDL`, build may be in `build-fresh/` — script needs update or consistency
-3. **CLI flag only enable**: `--lansync-enabled` auto-starts server + discovery but no CLI disable
-4. **TLS handshake blocking**: `SSL_connect()` is still blocking (though `SO_RCVTIMEO`/`SO_SNDTIMEO` are respected for socket I/O, unlike `connect()`)
-5. **OpenSSL required for Android**: `ext/openssl/build_android.sh` must be run (once) before Android build; requires NDK + internet
+2. **OpenSSL required for Android**: `ext/openssl/build_android.sh` must be run (once) before Android build; needs NDK + internet
 
 ## 📐 Rules & Constraints
 

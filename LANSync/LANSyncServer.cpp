@@ -95,8 +95,7 @@ void LANSyncServer::HandleConnection(int fd, SSL *ssl) {
         ssl = SSL_new(tlsCtx_->GetSSLContext());
         if (ssl) {
             SSL_set_fd(ssl, fd);
-            int ret = SSL_accept(ssl);
-            if (ret != 1) {
+            if (!SSLHandshakeWithTimeout(ssl, fd, 10, true)) {
                 SSL_free(ssl);
                 closesocket(fd);
                 return;

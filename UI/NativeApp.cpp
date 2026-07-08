@@ -674,8 +674,14 @@ void NativeInit(int argc, const char *argv[], const char *savegame_dir, const ch
 				// [PPSSPP-FORK] LANSync: CLI flags for LAN sync
 				if (!strncmp(argv[i], "--lansync-port=", strlen("--lansync-port=")) && strlen(argv[i]) > strlen("--lansync-port="))
 					g_Config.iLANSyncPort = atoi(argv[i] + strlen("--lansync-port="));
-				if (!strncmp(argv[i], "--lansync-enabled", strlen("--lansync-enabled")))
+				if (!strcmp(argv[i], "--lansync-enabled")) {
+					g_Config.DoNotSaveSetting(&g_Config.bLANSyncEnabled);
 					g_Config.bLANSyncEnabled = true;
+				}
+				if (!strcmp(argv[i], "--lansync-disabled")) {
+					g_Config.DoNotSaveSetting(&g_Config.bLANSyncEnabled);
+					g_Config.bLANSyncEnabled = false;
+				}
 #endif
 				break;
 			}

@@ -51,4 +51,9 @@ private:
     int fd_ = -1;
 };
 
+// Non-blocking SSL/TLS handshake with select() timeout.
+// fd must already be connected. Restores blocking mode on success.
+// Returns true if handshake completes within timeoutSec (> 0).
+bool SSLHandshakeWithTimeout(SSL *ssl, int fd, int timeoutSec, bool asServer);
+
 }  // namespace LANSync

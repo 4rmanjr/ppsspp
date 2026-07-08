@@ -1,6 +1,7 @@
 #include "LANSync/TLSTransport.h"
 #include "Core/Util/PathUtil.h"
 #include "Common/File/FileUtil.h"
+#include "Common/File/FileDescriptor.h"
 #include "Common/Net/SocketCompat.h"
 
 #include <openssl/ssl.h>
@@ -10,6 +11,7 @@
 #include <openssl/x509v3.h>
 #include <openssl/pem.h>
 #include <openssl/bio.h>
+#include <chrono>
 #include <cstdio>
 #include <cstring>
 
@@ -145,6 +147,39 @@ std::string TLSContext::ComputeFingerprint(X509 *cert) {
         return std::string(hex);
     }
     return "";
+}
+
+bool SSLHandshakeWithTimeout(SSL *ssl, int fd, int timeoutSec, bool asServer) {
+    if (!ssl || fd < 0 || timeoutSec <= 0)
+        return false;
+
+    int flags = fcntl(fd, F_GETFL, 0);
+    bool wasBlocking = (flags != -1) && !(flags & O_NONBLOCK);
+    if (wasBlocking)
+        fd_util::SetNonBlocking(fd, true);
+
+    auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(timeoutSec);
+
+    while (true) {
+        int ret = asServer ? SSL_accept(ssl) : SSL_connect(ssl);
+        if (ret == 1) {
+            if (wasBlocking)
+                fd_util::SetNonBlocking(fd, false);
+            return true;
+        }
+
+        int err = SSL_get_error(ssl, ret);
+        if (err != SSL_ERROR_WANT_READ && err != SSL_ERROR_WANT_WRITE)
+            return false;
+
+        if (std::chrono::steady_clock::now() >= deadline)
+            return false;
+
+        double remaining = std::chrono::duration<double>(deadline - std::chrono::steady_clock::now()).count();
+        bool forWrite = (err == SSL_ERROR_WANT_WRITE);
+        if (!fd_util::WaitUntilReady(fd, remaining, forWrite))
+            return false;
+    }
 }
 
 bool TLSContext::InitServer() {

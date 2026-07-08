@@ -41,8 +41,7 @@ bool LANSyncClient::Connect(const std::string &host, int port, int timeoutSec) {
         }
         SSL_set_fd(ssl, fd_);
 
-        int ret = SSL_connect(ssl);
-        if (ret != 1) {
+        if (!SSLHandshakeWithTimeout(ssl, fd_, timeoutSec, false)) {
             SSL_free(ssl);
             closesocket(fd_);
             fd_ = -1;

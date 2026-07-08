@@ -143,6 +143,10 @@ compile_commands.json
 build
 libretro/obj/local
 
+# Build artifacts
+*.apk
+*.idsig
+
 ppsspp_retroachievements.dat
 RACache
 RAPrefs_PPSSPP.cfg
