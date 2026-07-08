@@ -4,6 +4,11 @@
 # Requires: Xvfb running on $DISPLAY, openssl
 
 PPSSPP_BIN="${1:-build/PPSSPPSDL}"
+if [ ! -f "$PPSSPP_BIN" ]; then
+    echo "Error: PPSSPPSDL binary not found at $PPSSPP_BIN"
+    echo "Build first: cmake -B build -DPPSSPP_LANSYNC=ON && cmake --build build"
+    exit 1
+fi
 PORT=${LANSYNC_PORT:-27314}
 TMP_HOME=$(mktemp -d)
 STATE_DIR="$TMP_HOME/.config/ppsspp/PSP/PPSSPP_STATE"
