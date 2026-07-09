@@ -210,6 +210,8 @@ void MDNSBrowserLinux::BrowseCallback(AvahiServiceBrowser *b, AvahiIfIndex inter
 		}
 		break;
 	case AVAHI_BROWSER_REMOVE:
+		if (flags & AVAHI_LOOKUP_RESULT_LOCAL)
+			break;
 		if (self->onLost_) {
 			DiscoveredPeer peer;
 			peer.deviceName = name;
@@ -263,6 +265,11 @@ void MDNSBrowserLinux::ResolveCallback(AvahiServiceResolver *r, AvahiIfIndex int
 		peer.deviceName = it->second;
 	else
 		peer.deviceName = name;
+
+	if (flags & AVAHI_LOOKUP_RESULT_LOCAL) {
+		avahi_service_resolver_free(r);
+		return;
+	}
 
 	if (self->onFound_)
 		self->onFound_(peer);

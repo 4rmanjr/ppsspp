@@ -235,7 +235,7 @@ bool LANSyncClient::UploadFile(const std::string &urlPath, const Path &filePath,
 
     if ((long)n != fileSize) return false;
 
-    HTTPResponse resp = Post(urlPath, contentType, data);
+    HTTPResponse resp = SendRequest("PUT", urlPath, contentType, data);
     return resp.statusCode == 200;
 }
 

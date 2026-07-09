@@ -2,6 +2,7 @@
 #include "LANSync/MDNS.h"
 #include "Common/File/FileDescriptor.h"
 #include "Common/Net/SocketCompat.h"
+#include "Common/Log.h"
 #include <cstring>
 #include <chrono>
 #include <thread>
@@ -128,6 +129,14 @@ std::string LANSyncDiscovery::GetDeviceName() const {
 }
 
 void LANSyncDiscovery::OnPeerFound(const DiscoveredPeer &peer) {
+	if (!deviceName_.empty() && peer.deviceName == deviceName_)
+		return;
+	if (peer.host == "127.0.0.1" || peer.host == "::1" ||
+		peer.host.compare(0, 4, "169.") == 0) {
+		WARN_LOG(Log::System, "Discovery: skipping loopback/APIPA %s", peer.host.c_str());
+		return;
+	}
+
 	bool isNew = false;
 	bool isUpdated = false;
 
@@ -167,6 +176,9 @@ void LANSyncDiscovery::OnPeerFound(const DiscoveredPeer &peer) {
 }
 
 void LANSyncDiscovery::OnPeerLost(const DiscoveredPeer &peer) {
+	if (!deviceName_.empty() && peer.deviceName == deviceName_)
+		return;
+
 	DiscoveredPeer removed = peer;
 	bool found = false;
 

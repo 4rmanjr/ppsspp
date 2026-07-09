@@ -44,13 +44,14 @@ bool TLSContext::LoadOrCreateCert() {
     Path keyPath = certDir_ / "sync_key.pem";
 
     if (File::Exists(certPath) && File::Exists(keyPath)) {
-        FILE *certFile = File::OpenCFile(certPath, "rb");
-        FILE *keyFile = File::OpenCFile(keyPath, "rb");
-        if (certFile && keyFile) {
-            X509 *cert = PEM_read_X509(certFile, nullptr, nullptr, nullptr);
-            EVP_PKEY *key = PEM_read_PrivateKey(keyFile, nullptr, nullptr, nullptr);
-            fclose(certFile);
-            fclose(keyFile);
+        std::string certData, keyData;
+        if (File::ReadBinaryFileToString(certPath, &certData) && File::ReadBinaryFileToString(keyPath, &keyData)) {
+            BIO *certBio = BIO_new_mem_buf(certData.data(), (int)certData.size());
+            BIO *keyBio = BIO_new_mem_buf(keyData.data(), (int)keyData.size());
+            X509 *cert = PEM_read_bio_X509(certBio, nullptr, nullptr, nullptr);
+            EVP_PKEY *key = PEM_read_bio_PrivateKey(keyBio, nullptr, nullptr, nullptr);
+            BIO_free(certBio);
+            BIO_free(keyBio);
 
             if (cert && key) {
                 EVP_PKEY_free(key);
@@ -61,9 +62,6 @@ bool TLSContext::LoadOrCreateCert() {
             }
             if (cert) X509_free(cert);
             if (key) EVP_PKEY_free(key);
-        } else {
-            if (certFile) fclose(certFile);
-            if (keyFile) fclose(keyFile);
         }
     }
 
@@ -105,17 +103,19 @@ bool TLSContext::GenerateSelfSignedCert() {
     Path certPath = certDir_ / "sync_cert.pem";
     Path keyPath = certDir_ / "sync_key.pem";
 
-    FILE *certFile = File::OpenCFile(certPath, "wb");
-    if (certFile) {
-        PEM_write_X509(certFile, cert);
-        fclose(certFile);
+    BIO *certOut = BIO_new(BIO_s_mem());
+    BIO *keyOut = BIO_new(BIO_s_mem());
+    if (certOut && keyOut) {
+        PEM_write_bio_X509(certOut, cert);
+        PEM_write_bio_PrivateKey(keyOut, pkey, nullptr, nullptr, 0, nullptr, nullptr);
+        char *certData, *keyData;
+        long certLen = BIO_get_mem_data(certOut, &certData);
+        long keyLen = BIO_get_mem_data(keyOut, &keyData);
+        if (certData && certLen > 0) File::WriteStringToFile(false, std::string(certData, certLen), certPath);
+        if (keyData && keyLen > 0) File::WriteStringToFile(false, std::string(keyData, keyLen), keyPath);
     }
-
-    FILE *keyFile = File::OpenCFile(keyPath, "wb");
-    if (keyFile) {
-        PEM_write_PrivateKey(keyFile, pkey, nullptr, nullptr, 0, nullptr, nullptr);
-        fclose(keyFile);
-    }
+    BIO_free(certOut);
+    BIO_free(keyOut);
 
     fingerprint_ = ComputeFingerprint(cert);
 

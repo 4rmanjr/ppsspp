@@ -32,6 +32,9 @@ if [ -z "${ANDROID_NDK_HOME:-}" ]; then
     exit 1
 fi
 
+# OpenSSL's Android config script (for 3.3.0) also checks ANDROID_NDK_ROOT
+export ANDROID_NDK_ROOT="${ANDROID_NDK_HOME}"
+
 TOOLCHAIN_DIR="${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64"
 if [ ! -d "$TOOLCHAIN_DIR" ]; then
     TOOLCHAIN_DIR="${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/darwin-x86_64"
@@ -93,10 +96,16 @@ for openssl_target in "${!TARGETS[@]}"; do
     perl Configure \
         "${openssl_target}" \
         "-D__ANDROID_API__=${API_LEVEL}" \
+        "-DOPENSSL_NO_STDIO" \
         "-fvisibility=hidden" \
+        "-fPIC" \
         no-shared \
         no-tests \
         no-docs \
+        no-apps \
+        no-ui-console \
+        no-engine \
+        no-cmp \
         --prefix="${prefix}" \
         --openssldir="${prefix}"
 
