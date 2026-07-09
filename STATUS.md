@@ -140,3 +140,13 @@
 8. **[2026-07-09] [SEDANG] Resolusi konflik murni mtime (LWW) + celah tie**: `ResolveConflict` (`SaveStateLANSync.cpp:508-539`) hanya bertindak bila satu mtime > lainnya. Jika mtime sama tapi isi beda, tidak ada branch jalan → konflik dibuang diam-diam, salinan divergen, tak ada `.conflict`. Tak ada tiebreak checksum. Status: BELUM DIFIX.
 9. **[2026-07-09] [RENDAH] Tidak ada batas ukuran PUT**: `HandlePutSaveState` tulis seluruh body ke disk tanpa cap → potensi disk-fill DoS. Status: BELUM DIFIX.
 10. **[2026-07-09] [RENDAH] Parse gameId/slot asumsi 1 underscore**: `base.rfind('_')` (`:200`,`:558`) rapuh bila disc ID mengandung underscore. Status: BELUM DIFIX.
+
+### Investigation 2026-07-09 — Discovery Peer Tidak Terdeteksi (Android & PC)
+
+Laporan: peer tidak muncul di daftar discovery baik di Android maupun PC. Hasil investigasi (read-only, belum di-fix):
+
+11. **[2026-07-09] [KRITIS] Silent discovery failure**: `LANSyncDiscovery::Start` (`LANSyncDiscovery.cpp:33-39`) mengabaikan return value `browser_->Start()` & `announcer_->Start()`. Bila `avahi-daemon` tidak jalan (PC), `avahi_client_new()` gagal → `MDNSBrowserLinux::Start` return false, tapi `running_` tetap true → UI tampil "Discovery active" padahal tidak ada yang di-browse → 0 peer tanpa error. Ini penyebab utama kasus PC. Status: BELUM DIFIX.
+12. **[2026-07-09] [TINGGI] Self-filter pakai `deviceName` rapuh**: `OnPeerFound`/`OnPeerLost` (`LANSyncDiscovery.cpp:132,179`) menyembunyikan peer bila `peer.deviceName == deviceName_`. `deviceName` = `"PPSSPP-" + 4 digit MAC`. Bila `sMACAddress` kosong/invalid di beberapa device → nama jadi `"PPSSPP-Unknown"` → semua device tersebut saling menyembunyikan. `peer.peerId` **tidak pernah diisi** di resolver Linux maupun JNI Android → identitas peer tidak stabil. Status: BELUM DIFIX.
+13. **[2026-07-09] [SEDANG] Android tidak punya guard LOCAL**: Avahi punya `AVAHI_LOOKUP_RESULT_LOCAL` (`MDNS_Linux.cpp:269`) untuk buang self, tapi `MDNS_Android.cpp` / `LANSyncMDNSHelper.java` tidak memfilternya → Android mendaftarkan dirinya sendiri sebagai peer. Status: BELUM DIFIX.
+14. **[2026-07-09] [RENDAH] UI tidak pernah tampilkan error discovery**: `DiscoveryEvent::ERROR` ada di enum tapi tidak pernah dikirim; user buta terhadap penyebab 0 peer. Status: BELUM DIFIX.
+15. **[2026-07-09] [ENV] Prasyarat jaringan cross-platform**: Android ↔ PC harus satu subnet / L2 sama (tidak ada Wi-Fi client isolation / VLAN beda), mDNS UDP 5353 tidak diblokir firewall, dan Android butuh Wi-Fi aktif. Tanpa ini discovery tidak menemukan apa pun meski kode benar. Status: BELUM DIFIX.
