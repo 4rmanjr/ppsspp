@@ -1,5 +1,13 @@
 # LAN Save State Sync (PPSSPP-LANSYNC) — Status
 
+## 📐 Rules & Constraints
+
+- **Zero upstream deletion**: Semua kode LANSync digate dengan `#ifdef PPSSPP_LANSYNC` + comment `// [PPSSPP-FORK]`
+- **Additive-only**: Jangan hapus atau ubah existing logic — tambah di sampingnya
+- **Konvensi commit**: `type(lansync): deskripsi` + footer `[PPSSPP-FORK]`
+- **PRIVATE define sudah diganti PUBLIC**: Jangan balikin ke PRIVATE
+- **File scope**: Semua file baru di `LANSync/`, modify existing file minimal (hanya tambah `#ifdef` block)
+
 ## ✅ Done
 
 ### Phase 1 — Core Implementation (19 commits)
@@ -127,11 +135,8 @@
 3. **Linux SDL close button broken**: `SDL_EVENT_WINDOW_CLOSE_REQUESTED` not handled (SDL3 migration gap). Use `--escape-exit` + ESC or Pause Menu → "Exit the emulator".
 4. **Linux requires `avahi-daemon`**: mDNS discovery silently fails if avahi-daemon is not running. No error is shown in UI.
 5. **Firewall**: mDNS (UDP 5353) and LANSync data (TCP 27314) must be open on local network.
-
-## 📐 Rules & Constraints
-
-- **Zero upstream deletion**: Semua kode LANSync digate dengan `#ifdef PPSSPP_LANSYNC` + comment `// [PPSSPP-FORK]`
-- **Additive-only**: Jangan hapus atau ubah existing logic — tambah di sampingnya
-- **Konvensi commit**: `type(lansync): deskripsi` + footer `[PPSSPP-FORK]`
-- **PRIVATE define sudah diganti PUBLIC**: Jangan balikin ke PRIVATE
-- **File scope**: Semua file baru di `LANSync/`, modify existing file minimal (hanya tambah `#ifdef` block)
+6. **[2026-07-09] [KRITIS] TLS antar-device gagal (sync tidak jalan)**: `LANSyncClient` set `SSL_VERIFY_PEER` (`TLSTransport.cpp:209`) tapi tidak pernah memuat sertifikat peer ke trust store. Tiap device punya self-signed cert sendiri → handshake ke device lain ditolak (`Connect()` gagal) → sync batal. Smoke test 10/10 lulus hanya lewat tool eksternal (`openssl s_client`/`curl`), bukan kode `LANSyncClient`. Model TOFU pairing tidak di-wire ke layer TLS. Status: BELUM DIFIX.
+7. **[2026-07-09] [TINGGI] Pairing tidak di-enforce di endpoint data**: `/states` GET/PUT (`SaveStateLANSync.cpp:80-91`) didaftarkan tanpa cek daftar paired peer; `AutoSyncLoop`/`SyncWithAllPeers` sync ke semua peer terdeteksi. Begitu #6 diperbaiki, peer LAN mana pun bisa baca/timpa `.ppst` tanpa pairing. Pairing saat ini kosmetik. Status: BELUM DIFIX.
+8. **[2026-07-09] [SEDANG] Resolusi konflik murni mtime (LWW) + celah tie**: `ResolveConflict` (`SaveStateLANSync.cpp:508-539`) hanya bertindak bila satu mtime > lainnya. Jika mtime sama tapi isi beda, tidak ada branch jalan → konflik dibuang diam-diam, salinan divergen, tak ada `.conflict`. Tak ada tiebreak checksum. Status: BELUM DIFIX.
+9. **[2026-07-09] [RENDAH] Tidak ada batas ukuran PUT**: `HandlePutSaveState` tulis seluruh body ke disk tanpa cap → potensi disk-fill DoS. Status: BELUM DIFIX.
+10. **[2026-07-09] [RENDAH] Parse gameId/slot asumsi 1 underscore**: `base.rfind('_')` (`:200`,`:558`) rapuh bila disc ID mengandung underscore. Status: BELUM DIFIX.
