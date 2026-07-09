@@ -109,12 +109,24 @@
 - **CLI disable flag**: Added `--lansync-disabled` (transient via `DoNotSaveSetting`, follows PPSSPP `--fullscreen`/`--windowed` pattern); `--lansync-enabled` also made transient + switched from `strncmp` (prefix) to `strcmp` (exact match)
 - **TLS non-blocking handshake**: Added `SSLHandshakeWithTimeout()` in `TLSTransport` — sets socket non-blocking, loops on `SSL_connect()`/`SSL_accept()` with `select()` + deadline, restores blocking mode on success. Migrated both `LANSyncClient::Connect()` and `LANSyncServer::HandleConnection()`. Verified with TLS 1.3 via openssl s_client (handshake + HTTP request/response ✅).
 
+### Session 2026-07-09 — Android Build + Bugfixes
+- **Android build**: Built APK for arm64-v8a + armeabi-v7a (AGP 9.2.1, Gradle 9.4.1, NDK 29). Installed and ran on Infinix X6532 (Android).
+- **`ext/openssl/build_android.sh`**: Added `-fPIC` (fix `R_ARM_REL32` against `OPENSSL_armcap_P`), `-DOPENSSL_NO_STDIO` + `no-apps` (fix `undefined stdin/stderr`), `no-ui-console`, `no-engine`, `no-cmp` for armeabi-v7a compat.
+- **`LANSync/TLSTransport.cpp`**: Converted FILE-based PEM I/O (`PEM_read_X509`, `PEM_write_X509`, etc.) to BIO-based (`PEM_read_bio_X509`, `PEM_write_bio_X509`, etc.) — required by `OPENSSL_NO_STDIO` on Android.
+- **`LANSync/MDNS_Linux.cpp`**: Added `AVAHI_LOOKUP_RESULT_LOCAL` check in `ResolveCallback()` and `BrowseCallback()` — prevents self-discovery (device seeing own service on all interfaces as 3 separate entries: IPv6, 127.0.0.1, IPv4).
+- **`LANSync/LANSyncDiscovery.cpp`**: Added device name comparison + loopback/APIPA filter (`127.0.0.1`, `::1`, `169.254.x.x`) as cross-platform safety net. Removed `fe80:` filter (was too broad — blocked all IPv6 link-local peers including remote Android devices).
+- **`LANSync/LANSyncClient.cpp`**: Fixed upload protocol mismatch — changed `UploadFile()` from `POST` to `PUT` (server only handled `PUT`; client silently failed on all uploads with `method_not_allowed`).
+- **Linux SDL close bug identified**: Missing `SDL_EVENT_WINDOW_CLOSE_REQUESTED` handler — SDL3 change, not yet fixed.
+
 ---
 
 ## ⚠️ Limitations & Known Issues
 
-1. **Runtime-untested on Android**: Build passes for arm64-v8a and x86_64 but never ran on device; `LANSyncMDNSHelper.java` untested with real NsdManager
+1. ~~**Runtime-untested on Android**~~: ✅ Tested on Infinix X6532 (Android). Build + install + discovery + pairing verified.
 2. **OpenSSL required for Android**: `ext/openssl/build_android.sh` must be run (once) before Android build; needs NDK + internet
+3. **Linux SDL close button broken**: `SDL_EVENT_WINDOW_CLOSE_REQUESTED` not handled (SDL3 migration gap). Use `--escape-exit` + ESC or Pause Menu → "Exit the emulator".
+4. **Linux requires `avahi-daemon`**: mDNS discovery silently fails if avahi-daemon is not running. No error is shown in UI.
+5. **Firewall**: mDNS (UDP 5353) and LANSync data (TCP 27314) must be open on local network.
 
 ## 📐 Rules & Constraints
 
