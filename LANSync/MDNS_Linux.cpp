@@ -99,7 +99,7 @@ bool MDNSAnnouncerLinux::Start(const std::string &serviceType, int port, const s
 	AvahiStringList *txt = nullptr;
 	txt = avahi_string_list_add_pair(txt, "device", deviceName.c_str());
 
-	int ret = avahi_entry_group_add_service_strlst(group_, AVAHI_IF_UNSPEC, AVAHI_PROTO_UNSPEC,
+	int ret = avahi_entry_group_add_service_strlst(group_, AVAHI_IF_UNSPEC, AVAHI_PROTO_INET,
 	                                               (AvahiPublishFlags)0, deviceName.c_str(),
 	                                               serviceType.c_str(), nullptr, nullptr,
 	                                               port_, txt);
@@ -300,7 +300,7 @@ bool MDNSBrowserLinux::Start(const std::string &serviceType, OnPeerFound onFound
 		return false;
 	}
 
-	browser_ = avahi_service_browser_new(client_, AVAHI_IF_UNSPEC, AVAHI_PROTO_UNSPEC,
+	browser_ = avahi_service_browser_new(client_, AVAHI_IF_UNSPEC, AVAHI_PROTO_INET,
 	                                     serviceType.c_str(), nullptr, (AvahiLookupFlags)0,
 	                                     BrowseCallback, this);
 	if (!browser_) {

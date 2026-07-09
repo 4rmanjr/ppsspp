@@ -150,3 +150,14 @@ Laporan: peer tidak muncul di daftar discovery baik di Android maupun PC. Hasil 
 13. **[2026-07-09] [SEDANG] Android tidak punya guard LOCAL**: Avahi punya `AVAHI_LOOKUP_RESULT_LOCAL` (`MDNS_Linux.cpp:269`) untuk buang self, tapi `MDNS_Android.cpp` / `LANSyncMDNSHelper.java` tidak memfilternya → Android mendaftarkan dirinya sendiri sebagai peer. Status: BELUM DIFIX.
 14. **[2026-07-09] [RENDAH] UI tidak pernah tampilkan error discovery**: `DiscoveryEvent::ERROR` ada di enum tapi tidak pernah dikirim; user buta terhadap penyebab 0 peer. Status: BELUM DIFIX.
 15. **[2026-07-09] [ENV] Prasyarat jaringan cross-platform**: Android ↔ PC harus satu subnet / L2 sama (tidak ada Wi-Fi client isolation / VLAN beda), mDNS UDP 5353 tidak diblokir firewall, dan Android butuh Wi-Fi aktif. Tanpa ini discovery tidak menemukan apa pun meski kode benar. Status: BELUM DIFIX.
+
+### Design Decision 2026-07-09 — Transport LAN Sync = IPv4-Only
+
+**Keputusan**: Seluruh LAN sync berjalan di **IPv4 saja**, konsisten dengan server (`LANSyncServer.cpp` → `socket(AF_INET)`, `INADDR_ANY`). IPv6 sengaja tidak dipakai untuk menghindari pitfall scope-id / `fe80::` (alamat link-local IPv6 butuh zone id, sering gagal disambung meski server dual-stack).
+
+**Implementasi (DONE)**:
+- `MDNS_Linux.cpp`: `AVAHI_PROTO_UNSPEC` → `AVAHI_PROTO_INET` pada announcer (`MDNSAnnouncerLinux::Start`) dan browser (`MDNSBrowserLinux::Start`) → mDNS hanya IPv4.
+- `LANSyncDiscovery.cpp`: `OnPeerFound` & `OnPeerLost` membuang peer dengan host IPv6 (deteksi via `host.find(':') != npos`) + filter loopback/APIPA tetap. Mencover Android (NsdManager tak bisa batasi protokol) dan defense-in-depth.
+- `fd_util::ConnectWithTimeout` **tidak diubah** (util shared PPSSPP lain); client otomatis konek IPv4 karena discovery hanya mengembalikan IPv4.
+
+**Dampak**: Ketidakcocokan IPv4(server)/IPv6(discovery) **RESOLVED by design**. Risiko residual: jaringan murni IPv6-only tak terdeteksi (sesuai pilihan IPv4-only).

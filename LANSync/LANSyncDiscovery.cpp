@@ -131,6 +131,12 @@ std::string LANSyncDiscovery::GetDeviceName() const {
 void LANSyncDiscovery::OnPeerFound(const DiscoveredPeer &peer) {
 	if (!deviceName_.empty() && peer.deviceName == deviceName_)
 		return;
+	// LAN sync is IPv4-only by design (server binds AF_INET). IPv6 addresses
+	// (always contain ':') cannot connect to the IPv4-only server, so skip them.
+	if (peer.host.find(':') != std::string::npos) {
+		WARN_LOG(Log::System, "Discovery: skipping IPv6 peer %s (IPv4-only mode)", peer.host.c_str());
+		return;
+	}
 	if (peer.host == "127.0.0.1" || peer.host == "::1" ||
 		peer.host.compare(0, 4, "169.") == 0) {
 		WARN_LOG(Log::System, "Discovery: skipping loopback/APIPA %s", peer.host.c_str());
@@ -177,6 +183,9 @@ void LANSyncDiscovery::OnPeerFound(const DiscoveredPeer &peer) {
 
 void LANSyncDiscovery::OnPeerLost(const DiscoveredPeer &peer) {
 	if (!deviceName_.empty() && peer.deviceName == deviceName_)
+		return;
+	// Mirror the IPv4-only guard from OnPeerFound for symmetry.
+	if (peer.host.find(':') != std::string::npos)
 		return;
 
 	DiscoveredPeer removed = peer;
