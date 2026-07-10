@@ -34,9 +34,8 @@ TLSContext::TLSContext() {
 }
 
 TLSContext::~TLSContext() {
-    if (ctx_) {
-        SSL_CTX_free(ctx_);
-    }
+    if (ctxServer_) SSL_CTX_free(ctxServer_);
+    if (ctxClient_) SSL_CTX_free(ctxClient_);
 }
 
 bool TLSContext::LoadOrCreateCert() {
@@ -55,7 +54,7 @@ bool TLSContext::LoadOrCreateCert() {
 
             if (cert && key) {
                 EVP_PKEY_free(key);
-                fingerprint_ = ComputeFingerprint(cert);
+                fingerprint_ = GetX509Fingerprint(cert);
                 X509_free(cert);
                 certInitialized_ = true;
                 return true;
@@ -117,7 +116,7 @@ bool TLSContext::GenerateSelfSignedCert() {
     BIO_free(certOut);
     BIO_free(keyOut);
 
-    fingerprint_ = ComputeFingerprint(cert);
+    fingerprint_ = GetX509Fingerprint(cert);
 
     BIO *bio = BIO_new(BIO_s_mem());
     if (bio) {
@@ -136,7 +135,7 @@ bool TLSContext::GenerateSelfSignedCert() {
     return true;
 }
 
-std::string TLSContext::ComputeFingerprint(X509 *cert) {
+std::string TLSContext::GetX509Fingerprint(X509 *cert) {
     unsigned char hash[EVP_MAX_MD_SIZE];
     unsigned int hashLen = 0;
     if (X509_digest(cert, EVP_sha256(), hash, &hashLen)) {
@@ -147,6 +146,49 @@ std::string TLSContext::ComputeFingerprint(X509 *cert) {
         return std::string(hex);
     }
     return "";
+}
+
+/*static*/ std::string TLSContext::GetPeerFingerprint(SSL *ssl) {
+    X509 *cert = SSL_get_peer_certificate(ssl);
+    if (!cert) return "";
+    std::string fp = GetX509Fingerprint(cert);
+    X509_free(cert);
+    return fp;
+}
+
+/*static*/ std::string TLSContext::GetPeerCertPEM(SSL *ssl) {
+    X509 *cert = SSL_get_peer_certificate(ssl);
+    if (!cert) return "";
+    BIO *bio = BIO_new(BIO_s_mem());
+    if (!bio) {
+        X509_free(cert);
+        return "";
+    }
+    if (!PEM_write_bio_X509(bio, cert)) {
+        BIO_free(bio);
+        X509_free(cert);
+        return "";
+    }
+    char *data = nullptr;
+    long len = BIO_get_mem_data(bio, &data);
+    std::string pem;
+    if (len > 0 && data) {
+        pem.assign(data, len);
+    }
+    BIO_free(bio);
+    X509_free(cert);
+    return pem;
+}
+
+/*static*/ std::string TLSContext::GetFingerprintFromPEM(const std::string &pem) {
+    BIO *bio = BIO_new_mem_buf(pem.data(), pem.size());
+    if (!bio) return "";
+    X509 *cert = PEM_read_bio_X509(bio, nullptr, nullptr, nullptr);
+    BIO_free(bio);
+    if (!cert) return "";
+    std::string fp = GetX509Fingerprint(cert);
+    X509_free(cert);
+    return fp;
 }
 
 bool SSLHandshakeWithTimeout(SSL *ssl, int fd, int timeoutSec, bool asServer) {
@@ -185,17 +227,17 @@ bool SSLHandshakeWithTimeout(SSL *ssl, int fd, int timeoutSec, bool asServer) {
 bool TLSContext::InitServer() {
     if (!LoadOrCreateCert()) return false;
 
-    ctx_ = SSL_CTX_new(TLS_server_method());
-    if (!ctx_) return false;
+    ctxServer_ = SSL_CTX_new(TLS_server_method());
+    if (!ctxServer_) return false;
 
     Path certPath = certDir_ / "sync_cert.pem";
     Path keyPath = certDir_ / "sync_key.pem";
 
-    SSL_CTX_use_certificate_file(ctx_, certPath.ToString().c_str(), SSL_FILETYPE_PEM);
-    SSL_CTX_use_PrivateKey_file(ctx_, keyPath.ToString().c_str(), SSL_FILETYPE_PEM);
+    SSL_CTX_use_certificate_file(ctxServer_, certPath.ToString().c_str(), SSL_FILETYPE_PEM);
+    SSL_CTX_use_PrivateKey_file(ctxServer_, keyPath.ToString().c_str(), SSL_FILETYPE_PEM);
 
-    SSL_CTX_set_cipher_list(ctx_, "ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256");
-    SSL_CTX_set_ecdh_auto(ctx_, 1);
+    SSL_CTX_set_cipher_list(ctxServer_, "ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256");
+    SSL_CTX_set_ecdh_auto(ctxServer_, 1);
 
     return true;
 }
@@ -203,11 +245,12 @@ bool TLSContext::InitServer() {
 bool TLSContext::InitClient() {
     if (!LoadOrCreateCert()) return false;
 
-    ctx_ = SSL_CTX_new(TLS_client_method());
-    if (!ctx_) return false;
+    ctxClient_ = SSL_CTX_new(TLS_client_method());
+    if (!ctxClient_) return false;
 
-    SSL_CTX_set_verify(ctx_, SSL_VERIFY_PEER, nullptr);
-    SSL_CTX_set_verify_depth(ctx_, 1);
+    SSL_CTX_set_verify(ctxClient_, SSL_VERIFY_NONE, nullptr);
+    SSL_CTX_set_cipher_list(ctxClient_, "ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256");
+    SSL_CTX_set_ecdh_auto(ctxClient_, 1);
 
     return true;
 }

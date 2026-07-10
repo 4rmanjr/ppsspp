@@ -91,8 +91,8 @@ void LANSyncServer::AcceptLoop() {
 
 void LANSyncServer::HandleConnection(int fd, SSL *ssl) {
     bool ownedSSL = false;
-    if (!ssl && tlsCtx_ && tlsCtx_->GetSSLContext()) {
-        ssl = SSL_new(tlsCtx_->GetSSLContext());
+    if (!ssl && tlsCtx_ && tlsCtx_->GetServerContext()) {
+        ssl = SSL_new(tlsCtx_->GetServerContext());
         if (ssl) {
             SSL_set_fd(ssl, fd);
             if (!SSLHandshakeWithTimeout(ssl, fd, 10, true)) {

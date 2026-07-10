@@ -46,7 +46,7 @@ private:
 
     static std::string ComputePin(const std::string &nonce);
     static std::string GenerateNonce();
-    static std::string GetLocalPeerId();
+    std::string GetLocalPeerId();
 
     struct PendingPairing {
         std::string host;
@@ -72,6 +72,7 @@ private:
         std::string nonce;
         uint64_t createdAt;
         std::string peerFingerprint;
+        std::string certPEM;
     };
     std::vector<PendingNonce> pendingNonces_;
     mutable std::mutex nonceMutex_;

@@ -5,6 +5,7 @@
 #include "LANSync/LANSyncMetadata.h"
 #include "LANSync/LANSyncConfig.h"
 #include "LANSync/LANSyncPairing.h"
+#include "LANSync/PlatformKeyStore.h"
 #include "LANSync/TLSTransport.h"
 #include "Core/Config.h"
 #include "Core/Util/PathUtil.h"
@@ -411,6 +412,7 @@ void SaveStateLANSync::DoSyncWithPeer(const DiscoveredPeer &peer) {
     if (!syncing_) return;
 
     LANSyncClient client(tlsCtx_.get());
+
     if (!client.Connect(peer.host, peer.port)) {
       if (attempt < config.iSyncRetryCount) {
         std::this_thread::sleep_for(
@@ -420,6 +422,22 @@ void SaveStateLANSync::DoSyncWithPeer(const DiscoveredPeer &peer) {
       UpdateProgress(SyncProgress::ERROR, peer.deviceName, 0, 0,
           "Failed after " + std::to_string(config.iSyncRetryCount + 1) + " attempts");
       return;
+    }
+
+    // Post-connect TLS fingerprint verification (TOFU)
+    // Checks if this peer's cert matches any stored trusted peer.
+    // When no peers have been paired yet (first use), any cert is accepted.
+    std::string peerFP = client.GetPeerFingerprint();
+    if (!peerFP.empty()) {
+      if (!PlatformKeyStore::LoadPeers().empty() && !PlatformKeyStore::IsTrusted(peerFP)) {
+        WARN_LOG(Log::System, "LANSync: peer '%s' cert fingerprint %s not in trusted list, rejecting",
+                 peer.deviceName.c_str(), peerFP.c_str());
+        client.Disconnect();
+        UpdateProgress(SyncProgress::ERROR, peer.deviceName, 0, 0,
+            "Peer not trusted (cert fingerprint mismatch)");
+        return;
+      }
+      INFO_LOG(Log::System, "LANSync: peer '%s' cert verified (TOFU match)", peer.deviceName.c_str());
     }
 
     HTTPResponse resp = client.Get("/states");
@@ -639,11 +657,17 @@ std::string SaveStateLANSync::ExtractJsonField(const std::string &json, const st
 }
 
 std::string SaveStateLANSync::GetDeviceId() const {
-  std::string mac = g_Config.sMACAddress;
-  if (mac.size() >= 4) {
-    return "PPSSPP-" + mac.substr(mac.size() - 4);
-  }
-  return "PPSSPP-Unknown";
+    if (tlsCtx_) {
+        std::string fp = tlsCtx_->GetCertFingerprint();
+        if (fp.size() >= 8) {
+            return "PPSSPP-" + fp.substr(0, 8);
+        }
+    }
+    std::string mac = g_Config.sMACAddress;
+    if (mac.size() >= 4) {
+        return "PPSSPP-" + mac.substr(mac.size() - 4);
+    }
+    return "PPSSPP-Unknown";
 }
 
 }  // namespace LANSync

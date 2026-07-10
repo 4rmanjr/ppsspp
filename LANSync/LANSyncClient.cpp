@@ -1,4 +1,5 @@
 #include "LANSync/LANSyncClient.h"
+#include "Common/Log.h"
 #include "Common/File/FileDescriptor.h"
 #include "Common/Net/SocketCompat.h"
 #include "Common/StringUtils.h"
@@ -32,8 +33,8 @@ bool LANSyncClient::Connect(const std::string &host, int port, int timeoutSec) {
     setsockopt(fd_, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
 
     // Wrap in TLS
-    if (tlsCtx_ && tlsCtx_->GetSSLContext()) {
-        SSL *ssl = SSL_new(tlsCtx_->GetSSLContext());
+    if (tlsCtx_ && tlsCtx_->GetClientContext()) {
+        SSL *ssl = SSL_new(tlsCtx_->GetClientContext());
         if (!ssl) {
             closesocket(fd_);
             fd_ = -1;
@@ -46,6 +47,21 @@ bool LANSyncClient::Connect(const std::string &host, int port, int timeoutSec) {
             closesocket(fd_);
             fd_ = -1;
             return false;
+        }
+
+        peerFingerprint_ = TLSContext::GetPeerFingerprint(ssl);
+        peerCertPEM_ = TLSContext::GetPeerCertPEM(ssl);
+
+        if (!expectedFingerprint_.empty()) {
+            if (peerFingerprint_ != expectedFingerprint_) {
+                WARN_LOG(Log::System, "LANSync: peer cert fingerprint mismatch: expected=%s got=%s",
+                         expectedFingerprint_.c_str(), peerFingerprint_.c_str());
+                SSL_free(ssl);
+                closesocket(fd_);
+                fd_ = -1;
+                return false;
+            }
+            INFO_LOG(Log::System, "LANSync: peer cert verified (fingerprint match)");
         }
 
         conn_ = new TLSConnection(ssl, fd_);

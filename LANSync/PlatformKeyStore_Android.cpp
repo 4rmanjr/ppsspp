@@ -1,6 +1,7 @@
 // Android implementation uses file-based storage for now.
 // Android Keystore via JNI can be added later.
 #include "LANSync/PlatformKeyStore.h"
+#include "LANSync/TLSTransport.h"
 #include "Core/Util/PathUtil.h"
 #include "Common/File/FileUtil.h"
 #include "Common/File/DirListing.h"
@@ -18,17 +19,12 @@ Path PlatformKeyStore::StorageDir() {
 
 bool PlatformKeyStore::SavePeer(const TrustedPeer &peer) {
     Path filePath = StorageDir() / (peer.peerId + ".json");
-    char buf[2048];
-    int n = snprintf(buf, sizeof(buf),
-        "{\"peerId\":\"%s\",\"deviceName\":\"%s\",\"certPEM\":\"%s\",\"lastIP\":\"%s\",\"pairedAt\":%llu}\n",
-        peer.peerId.c_str(),
-        peer.deviceName.c_str(),
-        peer.certPEM.c_str(),
-        peer.lastIP.c_str(),
-        (unsigned long long)peer.pairedAt);
-    if (n < 0 || (size_t)n >= sizeof(buf))
-        return false;
-    return File::WriteStringToFile(false, std::string(buf, n), filePath);
+    std::string json = "{\"peerId\":\"" + JsonEscape(peer.peerId)
+        + "\",\"deviceName\":\"" + JsonEscape(peer.deviceName)
+        + "\",\"certPEM\":\"" + JsonEscape(peer.certPEM)
+        + "\",\"lastIP\":\"" + JsonEscape(peer.lastIP)
+        + "\",\"pairedAt\":" + std::to_string(peer.pairedAt) + "}\n";
+    return File::WriteStringToFile(false, json, filePath);
 }
 
 std::vector<TrustedPeer> PlatformKeyStore::LoadPeers() {
@@ -99,8 +95,13 @@ std::vector<TrustedPeer> PlatformKeyStore::LoadPeers() {
 }
 
 bool PlatformKeyStore::IsTrusted(const std::string &fingerprint) {
-    Path filePath = StorageDir() / (fingerprint + ".json");
-    return File::Exists(filePath);
+    auto peers = LoadPeers();
+    for (const auto &p : peers) {
+        if (p.certPEM.empty()) continue;
+        if (TLSContext::GetFingerprintFromPEM(p.certPEM) == fingerprint)
+            return true;
+    }
+    return false;
 }
 
 const TrustedPeer *PlatformKeyStore::FindPeer(const std::string &peerId) {

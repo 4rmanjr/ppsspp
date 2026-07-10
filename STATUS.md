@@ -141,29 +141,42 @@
 9. **[2026-07-09] [RENDAH] Tidak ada batas ukuran PUT**: `HandlePutSaveState` tulis seluruh body ke disk tanpa cap → potensi disk-fill DoS. Status: BELUM DIFIX.
 10. **[2026-07-09] [RENDAH] Parse gameId/slot asumsi 1 underscore**: `base.rfind('_')` (`:200`,`:558`) rapuh bila disc ID mengandung underscore. Status: BELUM DIFIX.
 
-### Session 2026-07-10 — Discovery Bugfixes (#11, #12, #14)
+### Session 2026-07-10 — Discovery Bugfixes (#11, #12, #14) + TLS Fix (#6) - IMPLEMENTED
 
-**Issues #11, #12, #14 — SEMUA FIXED & VERIFIED (both Linux SDL + Android APK builds pass):**
+**Issues #11, #12, #14 — ALL FIXED & VERIFIED (both Linux SDL + Android APK builds pass):**
 
-| # | Issue | Fix |
-|---|-------|------|
-| 11 | Silent discovery failure | `Start()` checks return values of `announcer_->Start()`/`browser_->Start()`, calls `SendError()` on failure, returns false. `SaveStateLANSync::Initialize()` + `Resume()` log failure. `CMakeLists.txt` fixed `if(NOT PPSSPP_LANSYNC)` → `if(NOT DEFINED PPSSPP_LANSYNC)` for stale cache. |
-| 12 | Self-filter `deviceName` rapuh + `peer.peerId` kosong | `GetDeviceName()` fallback pakai `hostname+this` (bukan `"PPSSPP-Unknown"`). `MDNS_Linux.cpp`: TXT `"id"` record + resolve parses `peer.peerId`. `MDNS_Android.cpp`: both callbacks set `peer.peerId = name`. `LANSyncMDNSHelper.java`: TXT `"id"` attribute on announce for cross-platform consistency. |
-| 13 | Android LOCAL guard | Mitigated by `deviceName` self-filter in `OnPeerFound`/`OnPeerLost` (cross-platform safety net). |
-| 14 | UI no error display | `SendError()` sends `DiscoveryEvent::ERROR` → `LANSyncScreen` shows error message in status bar. `SaveStateLANSync` logs on `StartDiscovery()` failure. |
-| 15 | Network prerequisites | Not applicable (env issue, not code). |
+**Issue #6 — TLS antar-device gagal — FIXED:**
 
-**Code review juga executed (2026-07-10, 3 minor findings fixed):**
-- Partial announcer leak: `announcer_->Stop()` jika browser gagal
-- `Resume()` konsistensi: log `StartDiscovery()` failure
-- Thread safety: `discoveryError_` dilindungi `progressMutex_`, `peersDirty_` jadi `std::atomic`
+Root cause: `TLSContext` single `ctx_` overwritten by `InitServer()` after `InitClient()`. When `LANSyncClient::Connect()` calls `GetSSLContext()` (which returned the server context after `InitServer()`), the client uses a `TLS_server_method()` SSL → handshake fails.
+
+Fix (6 files modified):
+- **Dual SSL_CTX**: `ctx_` split into `ctxServer_`/`ctxClient_`. `InitServer()` uses `TLS_server_method()`, `InitClient()` uses `TLS_client_method()`. Client calls `GetClientContext()`, server calls `GetServerContext()`.
+- **SSL_VERIFY_NONE on client**: Fingerprint verified manually after handshake (TOFU model), not via OpenSSL CA chain.
+- **Static helpers**: `GetPeerFingerprint()`, `GetPeerCertPEM()`, `GetX509Fingerprint()`, `GetFingerprintFromPEM()` for fingerprint extraction and verification.
+- **LANSyncClient::Connect()**: After successful TLS handshake, extracts peer cert fingerprint and certPEM. If `expectedFingerprint_` is set (from stored TrustedPeer), verifies it matches the peer's cert and rejects on mismatch.
+- **PairingManager**: `GetLocalPeerId()` uses cert fingerprint prefix (stable cross-session ID). `HandlePairBegin()` receives client certPEM in body, returns server certPEM in response. `HandlePairVerify()` stores client certPEM in TrustedPeer. `PairWithPeer()` sends client certPEM, extracts server certPEM from response, stores in TrustedPeer on success.
+- **PlatformKeyStore**: `IsTrusted()` now matches fingerprint against stored `certPEM` fields of all trusted peers (was broken — looked for `${fingerprint}.json` files that never existed).
+- **SaveStateLANSync::DoSyncWithPeer()**: After TLS handshake, verifies peer's cert fingerprint against all stored TrustedPeer certs. If any trusted peers exist and this fingerprint isn't among them, connection is rejected.
+- **RAND_bytes for nonce**: Replaced weak timestamp-based nonce with OpenSSL CSPRNG.
+
+### Code Review — Production Hardening (Session 2026-07-10)
+
+Four findings from code review of the TLS fix implementation:
+
+| # | Severity | Finding | Fix |
+|---|----------|---------|-----|
+| CR1 | HIGH | `FindPeer(peer.peerId)` mismatch — mDNS returns MAC-based ID, pairing stores fingerprint-based ID. Pre-connect TOFU verification silently skipped. | Replaced pre-connect `FindPeer` with post-connect `IsTrusted(fingerprint)`. After TLS handshake, loads all stored peers and checks if the received fingerprint matches any known certPEM. If trusted peers exist and none match, rejects connection. Handles IP changes, peerId mismatches, and first-use TOFU. |
+| CR2 | MEDIUM | `GetPeerCertPEM()` UB: `std::string(nullptr, 0)` if `BIO_get_mem_data` returns 0 on failed PEM write. | Added `len > 0 && data` guard + explicit `PEM_write_bio_X509` return check + `BIO_new` null check. |
+| CR3 | MEDIUM | `SavePeer()` fixed 2048-byte buffer overflow — PEM cert (~1-2KB) + JSON wrapper can exceed limit. Save silently fails. | Replaced `char buf[2048]` + `snprintf` with `std::string` concatenation (both Linux + Android). |
+| CR3 | MEDIUM | `SavePeer()` fixed 2048-byte buffer overflow — PEM cert (~1-2KB) + JSON wrapper can exceed limit. Save silently fails. | Replaced `char buf[2048]` + `snprintf` with `std::string` concatenation + `JsonEscape` for valid JSON output (both Linux + Android). |
+| CR4 | LOW/CRITICAL | PEM embedded in JSON without string escaping — technically invalid JSON. Initial fix applied `JsonEscape` at both transport and file layers, but transport + PendingNonce + SavePeer chain caused double-escape → `GetFingerprintFromPEM` receives `\n` as backslash+n, not newline → parse fails. | `JsonEscape` removed from transport layer (`PairWithPeer` request, `HandlePairBegin` response). **Only `SavePeer` escapes** for file storage. HTTP uses raw PEM (safe: custom parser reads until next `"`, PEM has no `"`). `extractStr` handles both escaped and legacy unescaped files. |
 
 ### Remaining Open Issues (Priority Order)
 
 | # | Priority | Issue | Status |
 |---|----------|-------|--------|
-| 6 | KRITIS | TLS antar-device gagal (sync tidak jalan) | BELUM DIFIX |
-| 7 | TINGGI | Pairing tidak di-enforce di endpoint data | BELUM DIFIX |
+| 6 | ~~KRITIS~~ | ~~TLS antar-device gagal (sync tidak jalan)~~ | **FIXED** |
+| 7 | TINGGI | Pairing tidak di-enforce di endpoint data | **PARTIALLY FIXED** (TOFU verification in `DoSyncWithPeer()` rejects unpaired peers when trusted list is non-empty; endpoint-level enforcement still pending) |
 | 8 | SEDANG | LWW conflict tie gap (mtime sama, isi beda) | BELUM DIFIX |
 | 9 | RENDAH | Tidak ada batas ukuran PUT | BELUM DIFIX |
 | 10 | RENDAH | Parse gameId/slot asumsi 1 underscore | BELUM DIFIX |

@@ -15,6 +15,7 @@
 #include <iomanip>
 #include <sstream>
 #include <thread>
+#include <openssl/rand.h>
 
 namespace LANSync {
 
@@ -49,11 +50,7 @@ std::string PairingManager::ComputePin(const std::string &nonce) {
 
 std::string PairingManager::GenerateNonce() {
     unsigned char nonceBytes[32];
-    uint64_t now = std::chrono::duration_cast<std::chrono::milliseconds>(
-        std::chrono::system_clock::now().time_since_epoch()).count();
-    for (int i = 0; i < 32; i++) {
-        nonceBytes[i] = static_cast<unsigned char>(rand() ^ (now >> ((i * 8) & 63)));
-    }
+    RAND_bytes(nonceBytes, sizeof(nonceBytes));
 
     std::string nonce;
     for (auto b : nonceBytes) {
@@ -65,6 +62,12 @@ std::string PairingManager::GenerateNonce() {
 }
 
 std::string PairingManager::GetLocalPeerId() {
+    if (tlsCtx_) {
+        std::string fp = tlsCtx_->GetCertFingerprint();
+        if (fp.size() >= 8) {
+            return "PPSSPP-" + fp.substr(0, 8);
+        }
+    }
     std::string mac = g_Config.sMACAddress;
     if (mac.size() >= 4) {
         return "PPSSPP-" + mac.substr(mac.size() - 4);
@@ -88,10 +91,25 @@ void PairingManager::RegisterHandlers(LANSyncServer *server) {
 
 std::string PairingManager::HandlePairBegin(const std::string &method, const std::string &path, const std::string &body) {
     (void)path;
-    (void)body;
     if (method != "POST") {
         return "{\"error\":\"method_not_allowed\"}";
     }
+
+    auto extractJsonStr = [](const std::string &json, const std::string &key) -> std::string {
+        auto keyStr = "\"" + key + "\"";
+        auto pos = json.find(keyStr);
+        if (pos == std::string::npos) return "";
+        pos = json.find(':', pos);
+        if (pos == std::string::npos) return "";
+        pos = json.find_first_of("\"", pos);
+        if (pos == std::string::npos) return "";
+        auto start = pos + 1;
+        auto end = json.find("\"", start);
+        if (end == std::string::npos) return "";
+        return json.substr(start, end - start);
+    };
+
+    std::string clientCertPEM = extractJsonStr(body, "certPEM");
 
     std::string nonce = GenerateNonce();
 
@@ -109,10 +127,16 @@ std::string PairingManager::HandlePairBegin(const std::string &method, const std
         pn.nonce = nonce;
         pn.createdAt = now;
         pn.peerFingerprint = fingerprint;
+        pn.certPEM = std::move(clientCertPEM);
         pendingNonces_.push_back(std::move(pn));
     }
 
-    return "{\"nonce\":\"" + nonce + "\",\"certFingerprint\":\"" + fingerprint + "\"}";
+    std::string serverCertPEM;
+    if (tlsCtx_) {
+        serverCertPEM = tlsCtx_->GetCertPEM();
+    }
+
+    return "{\"nonce\":\"" + nonce + "\",\"certFingerprint\":\"" + fingerprint + "\",\"certPEM\":\"" + serverCertPEM + "\"}";
 }
 
 std::string PairingManager::HandlePairVerify(const std::string &method, const std::string &path, const std::string &body) {
@@ -145,6 +169,7 @@ std::string PairingManager::HandlePairVerify(const std::string &method, const st
 
     // Verify nonce was issued by us
     bool nonceFound = false;
+    std::string clientCertPEM;
     {
         std::lock_guard<std::mutex> lock(nonceMutex_);
         uint64_t now = std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -152,6 +177,7 @@ std::string PairingManager::HandlePairVerify(const std::string &method, const st
         for (auto it = pendingNonces_.begin(); it != pendingNonces_.end(); ) {
             if (it->nonce == nonce) {
                 nonceFound = true;
+                clientCertPEM = it->certPEM;
                 it = pendingNonces_.erase(it);
             } else if (now - it->createdAt > 300000) {
                 it = pendingNonces_.erase(it);
@@ -168,12 +194,13 @@ std::string PairingManager::HandlePairVerify(const std::string &method, const st
         TrustedPeer peer;
         peer.peerId = peerId;
         peer.deviceName = peerId;
+        peer.certPEM = clientCertPEM;
         peer.pairedAt = std::chrono::duration_cast<std::chrono::milliseconds>(
             std::chrono::system_clock::now().time_since_epoch()).count();
         PlatformKeyStore::SavePeer(peer);
     }
 
-    return "{\"success\":" + std::string(pinMatch ? "true" : "false") + ",\"peerId\":\"" + peerId + "\"}";
+    return "{\"success\":" + std::string(pinMatch ? "true" : "false") + ",\"peerId\":\"" + GetLocalPeerId() + "\"}";
 }
 
 // --- Client-side Pairing ---
@@ -200,7 +227,10 @@ bool PairingManager::PairWithPeer(const std::string &host, int port, PairingComp
             return;
         }
 
-        HTTPResponse resp = client.Post("/pair/begin", "application/json", "");
+        std::string certPEM;
+        if (tlsCtx_) certPEM = tlsCtx_->GetCertPEM();
+        std::string beginBody = "{\"certPEM\":\"" + certPEM + "\"}";
+        HTTPResponse resp = client.Post("/pair/begin", "application/json", beginBody);
         if (resp.statusCode != 200) {
             std::lock_guard<std::mutex> l(mutex_);
             if (pending_ && pending_->callback) {
@@ -224,6 +254,17 @@ bool PairingManager::PairWithPeer(const std::string &host, int port, PairingComp
             }
             pending_.reset();
             return;
+        }
+
+        // Extract server's certPEM from the response for TOFU storage
+        std::string serverCertPEM;
+        auto certPEMStart = resp.body.find("\"certPEM\":\"");
+        if (certPEMStart != std::string::npos) {
+            certPEMStart += 11;
+            auto certPEMEnd = resp.body.find("\"", certPEMStart);
+            if (certPEMEnd != std::string::npos) {
+                serverCertPEM = resp.body.substr(certPEMStart, certPEMEnd - certPEMStart);
+            }
         }
 
         std::string pin = ComputePin(nonce);
@@ -279,6 +320,7 @@ bool PairingManager::PairWithPeer(const std::string &host, int port, PairingComp
             TrustedPeer peer;
             peer.peerId = localPeerId + "@" + host;
             peer.deviceName = localPeerId;
+            peer.certPEM = serverCertPEM;
             peer.lastIP = host;
             peer.pairedAt = std::chrono::duration_cast<std::chrono::milliseconds>(
                 std::chrono::system_clock::now().time_since_epoch()).count();

@@ -24,6 +24,12 @@ public:
     HTTPResponse Get(const std::string &path);
     HTTPResponse Post(const std::string &path, const std::string &contentType, const std::string &body);
 
+    // Set expected peer cert fingerprint for verification after TLS handshake.
+    void SetExpectedFingerprint(const std::string &fp) { expectedFingerprint_ = fp; }
+    // Peer cert info from the last successful TLS handshake.
+    std::string GetPeerFingerprint() const { return peerFingerprint_; }
+    std::string GetPeerCertPEM() const { return peerCertPEM_; }
+
     // Download a file from the peer to a local path
     bool DownloadFile(const std::string &urlPath, const Path &outputPath);
 
@@ -41,6 +47,9 @@ private:
     int port_ = 0;
     int fd_ = -1;
     bool connected_ = false;
+    std::string expectedFingerprint_;
+    std::string peerFingerprint_;
+    std::string peerCertPEM_;
 };
 
 }  // namespace LANSync

@@ -19,16 +19,23 @@ public:
     bool InitClient();
     bool HasCert() const { return certInitialized_; }
 
-    SSL_CTX *GetSSLContext() const { return ctx_; }
+    SSL_CTX *GetServerContext() const { return ctxServer_; }
+    SSL_CTX *GetClientContext() const { return ctxClient_; }
     std::string GetCertFingerprint() const { return fingerprint_; }
     std::string GetCertPEM() const { return certPEM_; }
+
+    // Static helpers for peer cert verification
+    static std::string GetPeerFingerprint(SSL *ssl);
+    static std::string GetPeerCertPEM(SSL *ssl);
+    static std::string GetX509Fingerprint(X509 *cert);
+    static std::string GetFingerprintFromPEM(const std::string &pem);
 
 private:
     bool GenerateSelfSignedCert();
     bool LoadOrCreateCert();
-    std::string ComputeFingerprint(X509 *cert);
 
-    SSL_CTX *ctx_ = nullptr;
+    SSL_CTX *ctxServer_ = nullptr;
+    SSL_CTX *ctxClient_ = nullptr;
     bool certInitialized_ = false;
     std::string fingerprint_;
     std::string certPEM_;
@@ -55,5 +62,24 @@ private:
 // fd must already be connected. Restores blocking mode on success.
 // Returns true if handshake completes within timeoutSec (> 0).
 bool SSLHandshakeWithTimeout(SSL *ssl, int fd, int timeoutSec, bool asServer);
+
+// Utility: escape a raw string for embedding in a JSON string value.
+// Escapes: backslash, double-quote, newline, carriage return, tab.
+inline std::string JsonEscape(const std::string &raw) {
+    std::string out;
+    out.reserve(raw.size() + 16);
+    for (size_t i = 0; i < raw.size(); i++) {
+        char c = raw[i];
+        switch (c) {
+            case '\\': out += "\\\\"; break;
+            case '"':  out += "\\\""; break;
+            case '\n': out += "\\n"; break;
+            case '\r': out += "\\r"; break;
+            case '\t': out += "\\t"; break;
+            default:   out += c; break;
+        }
+    }
+    return out;
+}
 
 }  // namespace LANSync
