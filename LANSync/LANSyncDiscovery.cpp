@@ -26,16 +26,29 @@ bool LANSyncDiscovery::Start(DiscoveryCallback callback) {
 	announcer_.reset(CreateMDNSAnnouncer());
 	browser_.reset(CreateMDNSBrowser());
 
+	bool ok = true;
 	if (announcer_) {
-		announcer_->Start(kServiceType, port_, deviceName_);
+		if (!announcer_->Start(kServiceType, port_, deviceName_)) {
+			WARN_LOG(Log::System, "Discovery: announcer failed to start");
+			ok = false;
+		}
 	}
 
 	if (browser_) {
 		auto self = shared_from_this();
-		browser_->Start(kServiceType,
-			[self](const DiscoveredPeer &peer) { self->OnPeerFound(peer); },
-			[self](const DiscoveredPeer &peer) { self->OnPeerLost(peer); }
-		);
+		if (!browser_->Start(kServiceType,
+				[self](const DiscoveredPeer &peer) { self->OnPeerFound(peer); },
+				[self](const DiscoveredPeer &peer) { self->OnPeerLost(peer); }))
+		{
+			WARN_LOG(Log::System, "Discovery: browser failed to start");
+			ok = false;
+		}
+	}
+
+	if (!ok) {
+		if (announcer_) announcer_->Stop();
+		SendError("mDNS discovery failed. Check avahi-daemon & firewall (UDP 5353)");
+		return false;
 	}
 
 	running_ = true;
@@ -212,6 +225,15 @@ void LANSyncDiscovery::OnPeerLost(const DiscoveredPeer &peer) {
 		DiscoveryEvent ev;
 		ev.type = DiscoveryEvent::PEER_LOST;
 		ev.peer = removed;
+		callback_(ev);
+	}
+}
+
+void LANSyncDiscovery::SendError(const std::string &msg) {
+	if (callback_) {
+		DiscoveryEvent ev;
+		ev.type = DiscoveryEvent::ERROR;
+		ev.errorMessage = msg;
 		callback_(ev);
 	}
 }

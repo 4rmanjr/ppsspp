@@ -358,7 +358,7 @@ endif()
 include(FindThreads)
 
 # [PPSSPP-FORK] LANSync: save state sync over LAN
-if(NOT PPSSPP_LANSYNC)
+if(NOT DEFINED PPSSPP_LANSYNC)
 	option(PPSSPP_LANSYNC "Enable LAN Save State Sync" OFF)
 endif()
 if(PPSSPP_LANSYNC)

@@ -165,6 +165,7 @@ Java_org_ppsspp_ppsspp_LANSyncMDNSHelper_nativeOnPeerFound(
 	peer.deviceName = name;
 	peer.host = host;
 	peer.port = (int)jPort;
+	peer.peerId = name;
 
 	INFO_LOG(Log::System, "mDNS: Peer found '%s' @ %s:%d", name, host, (int)jPort);
 
@@ -192,6 +193,7 @@ Java_org_ppsspp_ppsspp_LANSyncMDNSHelper_nativeOnPeerLost(
 	peer.deviceName = name;
 	peer.host = host;
 	peer.port = (int)jPort;
+	peer.peerId = name;
 
 	INFO_LOG(Log::System, "mDNS: Peer lost '%s'", name);
 

@@ -94,6 +94,14 @@ void LANSyncScreen::CreateViews() {
   });
 
   g_LANSync.SetDiscoveryCallback([this](const LANSync::DiscoveryEvent &event) {
+    std::lock_guard<std::mutex> lock(progressMutex_);
+    if (event.type == LANSync::DiscoveryEvent::ERROR) {
+      discoveryError_ = event.errorMessage;
+    } else if (event.type == LANSync::DiscoveryEvent::PEER_FOUND ||
+               event.type == LANSync::DiscoveryEvent::PEER_LOST ||
+               event.type == LANSync::DiscoveryEvent::PEER_UPDATED) {
+      discoveryError_.clear();
+    }
     peersDirty_ = true;
   });
 
@@ -118,9 +126,17 @@ void LANSyncScreen::update() {
     discoveryActive_ = false;
   }
 
+  std::string statusError;
+  {
+    std::lock_guard<std::mutex> lock(progressMutex_);
+    statusError = discoveryError_;
+  }
+
   {
     std::string statusText;
-    if (g_LANSync.IsSyncing()) {
+    if (!statusError.empty()) {
+      statusText = statusError;
+    } else if (g_LANSync.IsSyncing()) {
       statusText = "Syncing in progress...";
     } else if (discoveryActive_) {
       statusText = "Discovery active - scanning for peers";

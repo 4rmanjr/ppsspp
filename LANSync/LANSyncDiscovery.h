@@ -47,6 +47,7 @@ public:
 private:
 	void OnPeerFound(const DiscoveredPeer &peer);
 	void OnPeerLost(const DiscoveredPeer &peer);
+	void SendError(const std::string &msg);
 	void TryConnectManual(const std::string &host, int port);
 	void ManualPeerLoop();
 

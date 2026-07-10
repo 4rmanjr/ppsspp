@@ -45,7 +45,7 @@ class LANSyncMDNSHelper {
 	}
 
 	public static void startAnnounce(String serviceType, int port, String deviceName) {
-		if (sInstance != null) sInstance.startAnnounceInternal(serviceType, port, deviceName);
+		if (sInstance != null) sInstance.startAnnounceInternal(serviceType, port, deviceName, deviceName);
 	}
 
 	public static void stopAnnounce() {
@@ -81,6 +81,13 @@ class LANSyncMDNSHelper {
 						String host = resolvedInfo.getHost() != null
 							? resolvedInfo.getHost().getHostAddress()
 							: "";
+						String peerId = "";
+						if (android.os.Build.VERSION.SDK_INT >= 16) {
+							java.util.Map<String, byte[]> attrs = resolvedInfo.getAttributes();
+							if (attrs != null && attrs.containsKey("id")) {
+								peerId = new String(attrs.get("id"));
+							}
+						}
 						Log.d(TAG, "Resolved: " + resolvedInfo.getServiceName()
 							+ " @ " + host + ":" + resolvedInfo.getPort());
 						nativeOnPeerFound(
@@ -130,13 +137,16 @@ class LANSyncMDNSHelper {
 		mDiscoveryListener = null;
 	}
 
-	private void startAnnounceInternal(String serviceType, int port, String deviceName) {
+	private void startAnnounceInternal(String serviceType, int port, String deviceName, String peerId) {
 		if (mNsdManager == null) return;
 
 		NsdServiceInfo serviceInfo = new NsdServiceInfo();
 		serviceInfo.setServiceName(deviceName);
 		serviceInfo.setServiceType(ensureDnsSdType(serviceType));
 		serviceInfo.setPort(port);
+		if (android.os.Build.VERSION.SDK_INT >= 21) {
+			serviceInfo.setAttribute("id", peerId);
+		}
 
 		mRegistrationListener = new NsdManager.RegistrationListener() {
 			@Override

@@ -133,7 +133,7 @@
 1. ~~**Runtime-untested on Android**~~: ✅ Tested on Infinix X6532 (Android). Build + install + discovery + pairing verified.
 2. **OpenSSL required for Android**: `ext/openssl/build_android.sh` must be run (once) before Android build; needs NDK + internet
 3. **Linux SDL close button broken**: `SDL_EVENT_WINDOW_CLOSE_REQUESTED` not handled (SDL3 migration gap). Use `--escape-exit` + ESC or Pause Menu → "Exit the emulator".
-4. **Linux requires `avahi-daemon`**: mDNS discovery silently fails if avahi-daemon is not running. No error is shown in UI.
+4. ~~**Linux requires `avahi-daemon`**: mDNS discovery silently fails if avahi-daemon is not running. No error is shown in UI.~~ ✅ Error shown in UI via `DiscoveryEvent::ERROR` (fix #11).
 5. **Firewall**: mDNS (UDP 5353) and LANSync data (TCP 27314) must be open on local network.
 6. **[2026-07-09] [KRITIS] TLS antar-device gagal (sync tidak jalan)**: `LANSyncClient` set `SSL_VERIFY_PEER` (`TLSTransport.cpp:209`) tapi tidak pernah memuat sertifikat peer ke trust store. Tiap device punya self-signed cert sendiri → handshake ke device lain ditolak (`Connect()` gagal) → sync batal. Smoke test 10/10 lulus hanya lewat tool eksternal (`openssl s_client`/`curl`), bukan kode `LANSyncClient`. Model TOFU pairing tidak di-wire ke layer TLS. Status: BELUM DIFIX.
 7. **[2026-07-09] [TINGGI] Pairing tidak di-enforce di endpoint data**: `/states` GET/PUT (`SaveStateLANSync.cpp:80-91`) didaftarkan tanpa cek daftar paired peer; `AutoSyncLoop`/`SyncWithAllPeers` sync ke semua peer terdeteksi. Begitu #6 diperbaiki, peer LAN mana pun bisa baca/timpa `.ppst` tanpa pairing. Pairing saat ini kosmetik. Status: BELUM DIFIX.
@@ -141,15 +141,33 @@
 9. **[2026-07-09] [RENDAH] Tidak ada batas ukuran PUT**: `HandlePutSaveState` tulis seluruh body ke disk tanpa cap → potensi disk-fill DoS. Status: BELUM DIFIX.
 10. **[2026-07-09] [RENDAH] Parse gameId/slot asumsi 1 underscore**: `base.rfind('_')` (`:200`,`:558`) rapuh bila disc ID mengandung underscore. Status: BELUM DIFIX.
 
-### Investigation 2026-07-09 — Discovery Peer Tidak Terdeteksi (Android & PC)
+### Session 2026-07-10 — Discovery Bugfixes (#11, #12, #14)
 
-Laporan: peer tidak muncul di daftar discovery baik di Android maupun PC. Hasil investigasi (read-only, belum di-fix):
+**Issues #11, #12, #14 — SEMUA FIXED & VERIFIED (both Linux SDL + Android APK builds pass):**
 
-11. **[2026-07-09] [KRITIS] Silent discovery failure**: `LANSyncDiscovery::Start` (`LANSyncDiscovery.cpp:33-39`) mengabaikan return value `browser_->Start()` & `announcer_->Start()`. Bila `avahi-daemon` tidak jalan (PC), `avahi_client_new()` gagal → `MDNSBrowserLinux::Start` return false, tapi `running_` tetap true → UI tampil "Discovery active" padahal tidak ada yang di-browse → 0 peer tanpa error. Ini penyebab utama kasus PC. Status: BELUM DIFIX.
-12. **[2026-07-09] [TINGGI] Self-filter pakai `deviceName` rapuh**: `OnPeerFound`/`OnPeerLost` (`LANSyncDiscovery.cpp:132,179`) menyembunyikan peer bila `peer.deviceName == deviceName_`. `deviceName` = `"PPSSPP-" + 4 digit MAC`. Bila `sMACAddress` kosong/invalid di beberapa device → nama jadi `"PPSSPP-Unknown"` → semua device tersebut saling menyembunyikan. `peer.peerId` **tidak pernah diisi** di resolver Linux maupun JNI Android → identitas peer tidak stabil. Status: BELUM DIFIX.
-13. **[2026-07-09] [SEDANG] Android tidak punya guard LOCAL**: Avahi punya `AVAHI_LOOKUP_RESULT_LOCAL` (`MDNS_Linux.cpp:269`) untuk buang self, tapi `MDNS_Android.cpp` / `LANSyncMDNSHelper.java` tidak memfilternya → Android mendaftarkan dirinya sendiri sebagai peer. Status: BELUM DIFIX.
-14. **[2026-07-09] [RENDAH] UI tidak pernah tampilkan error discovery**: `DiscoveryEvent::ERROR` ada di enum tapi tidak pernah dikirim; user buta terhadap penyebab 0 peer. Status: BELUM DIFIX.
-15. **[2026-07-09] [ENV] Prasyarat jaringan cross-platform**: Android ↔ PC harus satu subnet / L2 sama (tidak ada Wi-Fi client isolation / VLAN beda), mDNS UDP 5353 tidak diblokir firewall, dan Android butuh Wi-Fi aktif. Tanpa ini discovery tidak menemukan apa pun meski kode benar. Status: BELUM DIFIX.
+| # | Issue | Fix |
+|---|-------|------|
+| 11 | Silent discovery failure | `Start()` checks return values of `announcer_->Start()`/`browser_->Start()`, calls `SendError()` on failure, returns false. `SaveStateLANSync::Initialize()` + `Resume()` log failure. `CMakeLists.txt` fixed `if(NOT PPSSPP_LANSYNC)` → `if(NOT DEFINED PPSSPP_LANSYNC)` for stale cache. |
+| 12 | Self-filter `deviceName` rapuh + `peer.peerId` kosong | `GetDeviceName()` fallback pakai `hostname+this` (bukan `"PPSSPP-Unknown"`). `MDNS_Linux.cpp`: TXT `"id"` record + resolve parses `peer.peerId`. `MDNS_Android.cpp`: both callbacks set `peer.peerId = name`. `LANSyncMDNSHelper.java`: TXT `"id"` attribute on announce for cross-platform consistency. |
+| 13 | Android LOCAL guard | Mitigated by `deviceName` self-filter in `OnPeerFound`/`OnPeerLost` (cross-platform safety net). |
+| 14 | UI no error display | `SendError()` sends `DiscoveryEvent::ERROR` → `LANSyncScreen` shows error message in status bar. `SaveStateLANSync` logs on `StartDiscovery()` failure. |
+| 15 | Network prerequisites | Not applicable (env issue, not code). |
+
+**Code review juga executed (2026-07-10, 3 minor findings fixed):**
+- Partial announcer leak: `announcer_->Stop()` jika browser gagal
+- `Resume()` konsistensi: log `StartDiscovery()` failure
+- Thread safety: `discoveryError_` dilindungi `progressMutex_`, `peersDirty_` jadi `std::atomic`
+
+### Remaining Open Issues (Priority Order)
+
+| # | Priority | Issue | Status |
+|---|----------|-------|--------|
+| 6 | KRITIS | TLS antar-device gagal (sync tidak jalan) | BELUM DIFIX |
+| 7 | TINGGI | Pairing tidak di-enforce di endpoint data | BELUM DIFIX |
+| 8 | SEDANG | LWW conflict tie gap (mtime sama, isi beda) | BELUM DIFIX |
+| 9 | RENDAH | Tidak ada batas ukuran PUT | BELUM DIFIX |
+| 10 | RENDAH | Parse gameId/slot asumsi 1 underscore | BELUM DIFIX |
+| 13 | SEDANG | Android LOCAL guard (mitigated by deviceName filter) | MITIGATED |
 
 ### Design Decision 2026-07-09 — Transport LAN Sync = IPv4-Only
 

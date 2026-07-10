@@ -98,6 +98,7 @@ bool MDNSAnnouncerLinux::Start(const std::string &serviceType, int port, const s
 	// Build TXT records
 	AvahiStringList *txt = nullptr;
 	txt = avahi_string_list_add_pair(txt, "device", deviceName.c_str());
+	txt = avahi_string_list_add_pair(txt, "id", deviceName.c_str());
 
 	int ret = avahi_entry_group_add_service_strlst(group_, AVAHI_IF_UNSPEC, AVAHI_PROTO_INET,
 	                                               (AvahiPublishFlags)0, deviceName.c_str(),
@@ -215,6 +216,7 @@ void MDNSBrowserLinux::BrowseCallback(AvahiServiceBrowser *b, AvahiIfIndex inter
 		if (self->onLost_) {
 			DiscoveredPeer peer;
 			peer.deviceName = name;
+			peer.peerId = name;
 			self->onLost_(peer);
 		}
 		break;
@@ -265,6 +267,12 @@ void MDNSBrowserLinux::ResolveCallback(AvahiServiceResolver *r, AvahiIfIndex int
 		peer.deviceName = it->second;
 	else
 		peer.deviceName = name;
+
+	auto itId = txtMap.find("id");
+	if (itId != txtMap.end())
+		peer.peerId = itId->second;
+	else
+		peer.peerId = peer.deviceName;
 
 	if (flags & AVAHI_LOOKUP_RESULT_LOCAL) {
 		avahi_service_resolver_free(r);

@@ -44,7 +44,9 @@ bool SaveStateLANSync::Initialize() {
 
   if (g_Config.bLANSyncEnabled) {
     StartServer();
-    StartDiscovery();
+    if (!StartDiscovery()) {
+      WARN_LOG(Log::System, "LANSync: discovery failed to start");
+    }
   }
 
   autoSyncRunning_ = true;
@@ -135,7 +137,9 @@ void SaveStateLANSync::Pause() {
 void SaveStateLANSync::Resume() {
   if (g_Config.bLANSyncEnabled) {
     StartServer();
-    StartDiscovery();
+    if (!StartDiscovery()) {
+      WARN_LOG(Log::System, "LANSync: discovery failed to resume");
+    }
   }
 }
 

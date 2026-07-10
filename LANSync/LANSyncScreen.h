@@ -18,6 +18,7 @@
 #pragma once
 
 #include <mutex>
+#include <atomic>
 
 #include "Common/UI/UIScreen.h"
 #include "Common/UI/ViewGroup.h"
@@ -62,7 +63,8 @@ private:
 
   int frameCount_ = 0;
   bool discoveryActive_ = false;
-  bool peersDirty_ = false;
+  std::atomic<bool> peersDirty_{false};
   LANSync::SyncProgress currentProgress_;
   mutable std::mutex progressMutex_;
+  std::string discoveryError_;
 };
