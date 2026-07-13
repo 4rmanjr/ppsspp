@@ -135,11 +135,11 @@
 3. **Linux SDL close button broken**: `SDL_EVENT_WINDOW_CLOSE_REQUESTED` not handled (SDL3 migration gap). Use `--escape-exit` + ESC or Pause Menu → "Exit the emulator".
 4. ~~**Linux requires `avahi-daemon`**: mDNS discovery silently fails if avahi-daemon is not running. No error is shown in UI.~~ ✅ Error shown in UI via `DiscoveryEvent::ERROR` (fix #11).
 5. **Firewall**: mDNS (UDP 5353) and LANSync data (TCP 27314) must be open on local network.
-6. **[2026-07-09] [KRITIS] TLS antar-device gagal (sync tidak jalan)**: `LANSyncClient` set `SSL_VERIFY_PEER` (`TLSTransport.cpp:209`) tapi tidak pernah memuat sertifikat peer ke trust store. Tiap device punya self-signed cert sendiri → handshake ke device lain ditolak (`Connect()` gagal) → sync batal. Smoke test 10/10 lulus hanya lewat tool eksternal (`openssl s_client`/`curl`), bukan kode `LANSyncClient`. Model TOFU pairing tidak di-wire ke layer TLS. Status: BELUM DIFIX.
-7. **[2026-07-09] [TINGGI] Pairing tidak di-enforce di endpoint data**: `/states` GET/PUT (`SaveStateLANSync.cpp:80-91`) didaftarkan tanpa cek daftar paired peer; `AutoSyncLoop`/`SyncWithAllPeers` sync ke semua peer terdeteksi. Begitu #6 diperbaiki, peer LAN mana pun bisa baca/timpa `.ppst` tanpa pairing. Pairing saat ini kosmetik. Status: BELUM DIFIX.
-8. **[2026-07-09] [SEDANG] Resolusi konflik murni mtime (LWW) + celah tie**: `ResolveConflict` (`SaveStateLANSync.cpp:508-539`) hanya bertindak bila satu mtime > lainnya. Jika mtime sama tapi isi beda, tidak ada branch jalan → konflik dibuang diam-diam, salinan divergen, tak ada `.conflict`. Tak ada tiebreak checksum. Status: BELUM DIFIX.
-9. **[2026-07-09] [RENDAH] Tidak ada batas ukuran PUT**: `HandlePutSaveState` tulis seluruh body ke disk tanpa cap → potensi disk-fill DoS. Status: BELUM DIFIX.
-10. **[2026-07-09] [RENDAH] Parse gameId/slot asumsi 1 underscore — FIXED**: Analisis: `rfind('_')` sudah benar untuk format `<gameId>_<slot>.ppst`. Ditambah: helper `ParseSaveFilename()` (strtol + errno check, gameId kosong/tidak valid di-skip, validasi slot 0-999), 3 call site refactored ke satu fungsi. Commit: (soon).
+6. **[2026-07-09] [KRITIS] TLS antar-device gagal (sync tidak jalan) — FIXED**: Lihat session 2026-07-10 di bawah.
+7. **[2026-07-09] [TINGGI] Pairing tidak di-enforce di endpoint data — FIXED**: Lihat session 2026-07-13 di bawah.
+8. **[2026-07-09] [SEDANG] Resolusi konflik murni mtime (LWW) + celah tie — FIXED**: Commit `1a91fe810e`.
+9. **[2026-07-09] [RENDAH] Tidak ada batas ukuran PUT — FIXED**: Commit `40fe1cd2de`.
+10. **[2026-07-09] [RENDAH] Parse gameId/slot asumsi 1 underscore — FIXED**: Commit `67421d73bb`.
 
 ### Session 2026-07-10 — Discovery Bugfixes (#11, #12, #14) + TLS Fix (#6) - IMPLEMENTED
 
@@ -167,16 +167,43 @@ Four findings from code review of the TLS fix implementation:
 |---|----------|---------|-----|
 | CR1 | HIGH | `FindPeer(peer.peerId)` mismatch — mDNS returns MAC-based ID, pairing stores fingerprint-based ID. Pre-connect TOFU verification silently skipped. | Replaced pre-connect `FindPeer` with post-connect `IsTrusted(fingerprint)`. After TLS handshake, loads all stored peers and checks if the received fingerprint matches any known certPEM. If trusted peers exist and none match, rejects connection. Handles IP changes, peerId mismatches, and first-use TOFU. |
 | CR2 | MEDIUM | `GetPeerCertPEM()` UB: `std::string(nullptr, 0)` if `BIO_get_mem_data` returns 0 on failed PEM write. | Added `len > 0 && data` guard + explicit `PEM_write_bio_X509` return check + `BIO_new` null check. |
-| CR3 | MEDIUM | `SavePeer()` fixed 2048-byte buffer overflow — PEM cert (~1-2KB) + JSON wrapper can exceed limit. Save silently fails. | Replaced `char buf[2048]` + `snprintf` with `std::string` concatenation (both Linux + Android). |
 | CR3 | MEDIUM | `SavePeer()` fixed 2048-byte buffer overflow — PEM cert (~1-2KB) + JSON wrapper can exceed limit. Save silently fails. | Replaced `char buf[2048]` + `snprintf` with `std::string` concatenation + `JsonEscape` for valid JSON output (both Linux + Android). |
 | CR4 | LOW/CRITICAL | PEM embedded in JSON without string escaping — technically invalid JSON. Initial fix applied `JsonEscape` at both transport and file layers, but transport + PendingNonce + SavePeer chain caused double-escape → `GetFingerprintFromPEM` receives `\n` as backslash+n, not newline → parse fails. | `JsonEscape` removed from transport layer (`PairWithPeer` request, `HandlePairBegin` response). **Only `SavePeer` escapes** for file storage. HTTP uses raw PEM (safe: custom parser reads until next `"`, PEM has no `"`). `extractStr` handles both escaped and legacy unescaped files. |
+
+### Session 2026-07-13 — CR1-CR4 Code Review Hardening + Issues #7 #8 #9 #10 — ALL FIXED
+
+**CR1-CR4 — ALL FIXED & VERIFIED (SDL Linux build passes):**
+- **CR1**: Replaced pre-connect `FindPeer` with post-connect `IsTrusted(fingerprint)`. Handles IP changes, peerId mismatches, first-use TOFU.
+- **CR2**: Added `len > 0 && data` guard + `PEM_write_bio_X509` return check + `BIO_new` null check.
+- **CR3**: Replaced `char buf[2048]` + `snprintf` with `std::string` concatenation + `JsonEscape`.
+- **CR4**: `JsonEscape` removed from transport layer (PairWithPeer, HandlePairBegin). Only SavePeer escapes for file. extractStr handles both escaped and legacy unescaped files.
+
+**Issue #7 — Pairing enforcement at /states endpoint — FIXED:**
+- `TLSContext`: `InitClient()` loads stored cert into `ctxClient_` via `SSL_CTX_use_certificate_chain_file` + `SSL_CTX_use_PrivateKey_file`.
+- `LANSyncServer`: `HandleConnection()` sets `SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT`, stores `currentSSL_` for handler access.
+- `SaveStateLANSync`: `IsPeerTrusted()` checks `GetCurrentSSL()` fingerprint against stored trusted peers. Applied to all 3 `/states` handlers (list, get, put) → returns HTTP 403 with JSON error.
+- **Commit**: `4a9203ba0c`.
+
+**Issue #8 — LWW conflict tie gap — FIXED:**
+- `ResolveConflict()`: Added `else` branch when mtime equal. Compares SHA256 checksum. Diverged content → backup to `.conflict`, replaces with remote. Identical content → skip (log only).
+- **Commit**: `1a91fe810e`.
+
+**Issue #9 — PUT size limit — FIXED:**
+- `HandleConnection()`: Reads `Content-Length` header via `atoll`. If > 100MB, sends `413 Payload Too Large` before `Dispatch()`.
+- **Commit**: `40fe1cd2de`.
+
+**Issue #10 — Parse gameId/slot — FIXED:**
+- `rfind('_')` confirmed correct for `<gameId>_<slot>.ppst` format (slot is `std::to_string(int)`, no underscores).
+- Added `ParseSaveFilename()` helper: `strtol` with proper error checking, gameId empty guard, slot range 0-999.
+- Refactored 3 duplicated call sites → single function.
+- **Commit**: `67421d73bb`.
 
 ### Remaining Open Issues (Priority Order)
 
 | # | Priority | Issue | Status |
 |---|----------|-------|--------|
 | 6 | ~~KRITIS~~ | ~~TLS antar-device gagal (sync tidak jalan)~~ | **FIXED** |
-| 7 | TINGGI | Pairing tidak di-enforce di endpoint data | **PARTIALLY FIXED** (TOFU verification in `DoSyncWithPeer()` rejects unpaired peers when trusted list is non-empty; endpoint-level enforcement still pending) |
+| 7 | ~~TINGGI~~ | ~~Pairing tidak di-enforce di endpoint data~~ | **FIXED** |
 | 8 | ~~SEDANG~~ | ~~LWW conflict tie gap (mtime sama, isi beda)~~ | **FIXED** |
 | 9 | ~~RENDAH~~ | ~~Tidak ada batas ukuran PUT~~ | **FIXED** |
 | 10 | ~~RENDAH~~ | ~~Parse gameId/slot asumsi 1 underscore~~ | **FIXED** |
