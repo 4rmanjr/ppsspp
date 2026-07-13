@@ -139,7 +139,7 @@
 7. **[2026-07-09] [TINGGI] Pairing tidak di-enforce di endpoint data**: `/states` GET/PUT (`SaveStateLANSync.cpp:80-91`) didaftarkan tanpa cek daftar paired peer; `AutoSyncLoop`/`SyncWithAllPeers` sync ke semua peer terdeteksi. Begitu #6 diperbaiki, peer LAN mana pun bisa baca/timpa `.ppst` tanpa pairing. Pairing saat ini kosmetik. Status: BELUM DIFIX.
 8. **[2026-07-09] [SEDANG] Resolusi konflik murni mtime (LWW) + celah tie**: `ResolveConflict` (`SaveStateLANSync.cpp:508-539`) hanya bertindak bila satu mtime > lainnya. Jika mtime sama tapi isi beda, tidak ada branch jalan → konflik dibuang diam-diam, salinan divergen, tak ada `.conflict`. Tak ada tiebreak checksum. Status: BELUM DIFIX.
 9. **[2026-07-09] [RENDAH] Tidak ada batas ukuran PUT**: `HandlePutSaveState` tulis seluruh body ke disk tanpa cap → potensi disk-fill DoS. Status: BELUM DIFIX.
-10. **[2026-07-09] [RENDAH] Parse gameId/slot asumsi 1 underscore**: `base.rfind('_')` (`:200`,`:558`) rapuh bila disc ID mengandung underscore. Status: BELUM DIFIX.
+10. **[2026-07-09] [RENDAH] Parse gameId/slot asumsi 1 underscore — FIXED**: Analisis: `rfind('_')` sudah benar untuk format `<gameId>_<slot>.ppst`. Ditambah: helper `ParseSaveFilename()` (strtol + errno check, gameId kosong/tidak valid di-skip, validasi slot 0-999), 3 call site refactored ke satu fungsi. Commit: (soon).
 
 ### Session 2026-07-10 — Discovery Bugfixes (#11, #12, #14) + TLS Fix (#6) - IMPLEMENTED
 
@@ -177,9 +177,9 @@ Four findings from code review of the TLS fix implementation:
 |---|----------|-------|--------|
 | 6 | ~~KRITIS~~ | ~~TLS antar-device gagal (sync tidak jalan)~~ | **FIXED** |
 | 7 | TINGGI | Pairing tidak di-enforce di endpoint data | **PARTIALLY FIXED** (TOFU verification in `DoSyncWithPeer()` rejects unpaired peers when trusted list is non-empty; endpoint-level enforcement still pending) |
-| 8 | SEDANG | LWW conflict tie gap (mtime sama, isi beda) | BELUM DIFIX |
-| 9 | RENDAH | Tidak ada batas ukuran PUT | BELUM DIFIX |
-| 10 | RENDAH | Parse gameId/slot asumsi 1 underscore | BELUM DIFIX |
+| 8 | ~~SEDANG~~ | ~~LWW conflict tie gap (mtime sama, isi beda)~~ | **FIXED** |
+| 9 | ~~RENDAH~~ | ~~Tidak ada batas ukuran PUT~~ | **FIXED** |
+| 10 | ~~RENDAH~~ | ~~Parse gameId/slot asumsi 1 underscore~~ | **FIXED** |
 | 13 | SEDANG | Android LOCAL guard (mitigated by deviceName filter) | MITIGATED |
 
 ### Design Decision 2026-07-09 — Transport LAN Sync = IPv4-Only

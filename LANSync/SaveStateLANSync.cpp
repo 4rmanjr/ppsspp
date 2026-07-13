@@ -23,6 +23,24 @@
 
 namespace LANSync {
 
+bool ParseSaveFilename(const std::string &base, std::string &gameId, int &slot) {
+    size_t underscore = base.rfind('_');
+    if (underscore == std::string::npos) return false;
+
+    std::string parsedGameId = base.substr(0, underscore);
+    if (parsedGameId.empty()) return false;
+
+    const char *slotStart = base.c_str() + underscore + 1;
+    char *end = nullptr;
+    long val = std::strtol(slotStart, &end, 10);
+    if (end == slotStart || *end != '\0') return false;
+    if (val < 0 || val > 999) return false;
+
+    gameId = parsedGameId;
+    slot = static_cast<int>(val);
+    return true;
+}
+
 SaveStateLANSync::SaveStateLANSync() {
 }
 
@@ -215,11 +233,9 @@ std::string SaveStateLANSync::HandleListSaveStates(const std::string &method, co
     if (dot == std::string::npos) continue;
     std::string base = name.substr(0, dot);
 
-    size_t underscore = base.rfind('_');
-    if (underscore == std::string::npos) continue;
-
-    std::string gameId = base.substr(0, underscore);
-    int slot = std::atoi(base.substr(underscore + 1).c_str());
+    std::string gameId;
+    int slot;
+    if (!ParseSaveFilename(base, gameId, slot)) continue;
 
     Path fullPath = stateDir_ / name;
 
@@ -622,11 +638,9 @@ std::vector<SaveFileEntry> SaveStateLANSync::GetLocalSaveFiles() const {
     if (dot == std::string::npos) continue;
     std::string base = name.substr(0, dot);
 
-    size_t underscore = base.rfind('_');
-    if (underscore == std::string::npos) continue;
-
-    std::string gameId = base.substr(0, underscore);
-    int slot = std::atoi(base.substr(underscore + 1).c_str());
+    std::string gameId;
+    int slot;
+    if (!ParseSaveFilename(base, gameId, slot)) continue;
 
     Path fullPath = stateDir_ / name;
 

@@ -19,6 +19,8 @@ class LANSyncDiscovery;
 class PairingManager;
 class TLSContext;
 
+bool ParseSaveFilename(const std::string &base, std::string &gameId, int &slot);
+
 class SaveStateLANSync {
 public:
   SaveStateLANSync();

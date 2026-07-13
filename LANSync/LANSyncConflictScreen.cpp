@@ -7,6 +7,7 @@
 #include "Common/File/FileUtil.h"
 #include "Common/File/DirListing.h"
 #include "Core/Util/PathUtil.h"
+#include "LANSync/SaveStateLANSync.h"
 #include <algorithm>
 #include <cstdio>
 
@@ -58,10 +59,11 @@ void LANSyncConflictScreen::RebuildList() {
     entry.originalPath = stateDir / (base + ".ppst");
     entry.conflictMtime = f.mtime;
 
-    size_t underscore = base.rfind('_');
-    if (underscore != std::string::npos) {
-      entry.displayName = base.substr(0, underscore);
-      entry.slot = std::atoi(base.substr(underscore + 1).c_str());
+    std::string gameId;
+    int slot;
+    if (LANSync::ParseSaveFilename(base, gameId, slot)) {
+      entry.displayName = gameId;
+      entry.slot = slot;
     } else {
       entry.displayName = base;
       entry.slot = 0;
