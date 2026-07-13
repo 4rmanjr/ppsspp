@@ -3,6 +3,7 @@
 #include "LANSync/LANSyncClient.h"
 #include "LANSync/LANSyncDiscovery.h"
 #include "LANSync/LANSyncMetadata.h"
+#include "LANSync/LANSyncJson.h"
 #include "LANSync/LANSyncConfig.h"
 #include "LANSync/LANSyncPairing.h"
 #include "LANSync/PlatformKeyStore.h"
@@ -147,7 +148,8 @@ void SaveStateLANSync::Resume() {
 }
 
 bool SaveStateLANSync::IsSyncing() const {
-  return syncing_.load();
+  std::lock_guard<std::mutex> lock(syncMutex_);
+  return !activeSyncKeys_.empty();
 }
 
 void SaveStateLANSync::SetProgressCallback(ProgressCallback cb) {
@@ -360,13 +362,22 @@ std::string SaveStateLANSync::HandlePutSaveState(const std::string &method, cons
 // --- Sync Operations ---
 
 void SaveStateLANSync::SyncWithPeer(const DiscoveredPeer &peer) {
-  if (!initialized_ || syncing_.exchange(true)) return;
+  if (!initialized_) return;
+
+  std::string syncKey = peer.host + ":" + std::to_string(peer.port);
+  {
+    std::lock_guard<std::mutex> lock(syncMutex_);
+    if (!activeSyncKeys_.insert(syncKey).second) return;
+  }
 
   UpdateProgress(SyncProgress::SYNCING, peer.deviceName, 0, 0);
 
-  std::thread([this, peer]() {
+  std::thread([this, peer, syncKey]() {
     DoSyncWithPeer(peer);
-    syncing_ = false;
+    {
+      std::lock_guard<std::mutex> lock(syncMutex_);
+      activeSyncKeys_.erase(syncKey);
+    }
   }).detach();
 }
 
@@ -380,9 +391,10 @@ void SaveStateLANSync::SyncWithAllPeers() {
 }
 
 void SaveStateLANSync::CancelSync() {
-  syncing_ = false;
+  cancelRequested_ = true;
   {
     std::lock_guard<std::mutex> lock(syncMutex_);
+    activeSyncKeys_.clear();
   }
 
   std::vector<File::FileInfo> files;
@@ -407,12 +419,12 @@ void SaveStateLANSync::AutoSyncLoop() {
       std::vector<DiscoveredPeer> peers = discovery_->GetPeers();
       for (const auto &peer : peers) {
         if (!autoSyncRunning_) break;
-        if (!syncing_) {
-          SyncWithPeer(peer);
-          while (syncing_ && autoSyncRunning_) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
-          }
+        std::string syncKey = peer.host + ":" + std::to_string(peer.port);
+        {
+          std::lock_guard<std::mutex> lock(syncMutex_);
+          if (activeSyncKeys_.count(syncKey) > 0) continue;
         }
+        SyncWithPeer(peer);
       }
     }
 
@@ -428,7 +440,7 @@ void SaveStateLANSync::DoSyncWithPeer(const DiscoveredPeer &peer) {
   config.Load();
 
   for (int attempt = 0; attempt <= config.iSyncRetryCount; attempt++) {
-    if (!syncing_) return;
+    if (cancelRequested_) return;
 
     LANSyncClient client(tlsCtx_.get());
 
@@ -488,7 +500,7 @@ void SaveStateLANSync::DoSyncWithPeer(const DiscoveredPeer &peer) {
     UpdateProgress(SyncProgress::SYNCING, peer.deviceName, total, completed);
 
     for (const auto &key : allKeys) {
-      if (!syncing_) break;
+      if (cancelRequested_) break;
 
       bool hasRemote = remoteMap.find(key) != remoteMap.end();
       bool hasLocal = localMap.find(key) != localMap.end();
@@ -531,7 +543,7 @@ void SaveStateLANSync::DoSyncWithPeer(const DiscoveredPeer &peer) {
       UpdateProgress(SyncProgress::SYNCING, key, total, completed);
     }
 
-    if (!syncing_) {
+    if (cancelRequested_) {
       UpdateProgress(SyncProgress::IDLE, "", 0, 0);
     } else {
       UpdateProgress(SyncProgress::COMPLETED, peer.deviceName, total, completed);
@@ -660,13 +672,11 @@ std::vector<SaveFileEntry> SaveStateLANSync::ParseSaveFileList(const std::string
     std::string obj = json.substr(objStart, objEnd - objStart + 1);
 
     SaveFileEntry entry;
-    entry.gameId = ExtractJsonField(obj, "gameId");
-    entry.slot = std::atoi(ExtractJsonField(obj, "slot").c_str());
-    entry.checksum = ExtractJsonField(obj, "checksum");
-    std::string mtimeStr = ExtractJsonField(obj, "mtime");
-    if (!mtimeStr.empty()) entry.mtime = (uint64_t)std::atoll(mtimeStr.c_str());
-    std::string sizeStr = ExtractJsonField(obj, "size");
-    if (!sizeStr.empty()) entry.size = std::atoll(sizeStr.c_str());
+    entry.gameId = JsonGetString(obj, "gameId");
+    entry.slot = (int)JsonGetInt64(obj, "slot");
+    entry.checksum = JsonGetString(obj, "checksum");
+    entry.mtime = (uint64_t)JsonGetInt64(obj, "mtime");
+    entry.size = JsonGetInt64(obj, "size");
 
     result.push_back(entry);
     pos = objEnd + 1;
@@ -675,42 +685,8 @@ std::vector<SaveFileEntry> SaveStateLANSync::ParseSaveFileList(const std::string
   return result;
 }
 
-std::string SaveStateLANSync::ExtractJsonField(const std::string &json, const std::string &key) const {
-  auto keyStr = "\"" + key + "\"";
-  auto pos = json.find(keyStr);
-  if (pos == std::string::npos) return "";
-  pos = json.find(':', pos);
-  if (pos == std::string::npos) return "";
-  pos++;
-  while (pos < json.size() && (json[pos] == ' ' || json[pos] == '\t')) pos++;
-  if (pos >= json.size()) return "";
-  if (json[pos] == '"') {
-    pos++;
-    std::string val;
-    while (pos < json.size() && json[pos] != '"') {
-      val += json[pos++];
-    }
-    return val;
-  }
-  std::string val;
-  while (pos < json.size() && (isdigit((unsigned char)json[pos]) || json[pos] == '-' || json[pos] == '.')) {
-    val += json[pos++];
-  }
-  return val;
-}
-
 std::string SaveStateLANSync::GetDeviceId() const {
-    if (tlsCtx_) {
-        std::string fp = tlsCtx_->GetCertFingerprint();
-        if (fp.size() >= 8) {
-            return "PPSSPP-" + fp.substr(0, 8);
-        }
-    }
-    std::string mac = g_Config.sMACAddress;
-    if (mac.size() >= 4) {
-        return "PPSSPP-" + mac.substr(mac.size() - 4);
-    }
-    return "PPSSPP-Unknown";
+    return tlsCtx_ ? tlsCtx_->GetDeviceId() : "PPSSPP-Unknown";
 }
 
 }  // namespace LANSync

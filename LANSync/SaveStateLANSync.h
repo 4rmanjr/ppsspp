@@ -3,6 +3,7 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <set>
 #include <functional>
 #include <mutex>
 #include <atomic>
@@ -70,7 +71,6 @@ private:
 
   std::vector<SaveFileEntry> GetLocalSaveFiles() const;
   std::vector<SaveFileEntry> ParseSaveFileList(const std::string &json) const;
-  std::string ExtractJsonField(const std::string &json, const std::string &key) const;
 
   std::string GetDeviceId() const;
 
@@ -80,8 +80,9 @@ private:
   std::unique_ptr<PairingManager> pairing_;
 
   std::atomic<bool> initialized_{false};
-  std::atomic<bool> syncing_{false};
-  std::mutex syncMutex_;
+  std::set<std::string> activeSyncKeys_;
+  mutable std::mutex syncMutex_;
+  std::atomic<bool> cancelRequested_{false};
 
   ProgressCallback progressCb_;
   DiscoveryCallback discoveryCb_;

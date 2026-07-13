@@ -248,11 +248,11 @@ Hasil deep-dive alur kode LANSync (`SaveStateLANSync`, `LANSyncServer/Client`, `
 
 | # | Isu | Severity | Lokasi | Status |
 |---|-----|----------|--------|--------|
-| TD1 | Duplikasi `GetDeviceId()` / `GetLocalPeerId()` | Rendah | `SaveStateLANSync.cpp:706,711` · `LANSyncPairing.cpp:68,73` · `LANSyncConfig.cpp:44` | OPEN |
-| TD2 | **Bug:** `SyncWithAllPeers()` hanya sync 1 peer (flag `syncing_` global) | Medium | `SaveStateLANSync.cpp:362-378` | OPEN |
-| TD3 | 3 parser JSON manual berbeda (`ExtractJsonField`, `extractJsonStr`×2, `findField`) | Rendah | `SaveStateLANSync.cpp:~688` · `LANSyncPairing.cpp` · `LANSyncMetadata.cpp:~32` | OPEN |
-| TD4 | **UB:** `isdigit(data[pos])` tanpa cast `(unsigned char)` | Rendah (latent) | `LANSyncMetadata.cpp:42` | OPEN |
-| TD5 | HLC dihitung tapi tidak dipakai di `ResolveConflict` (masih murni `mtime`+checksum) | Low–Med | `LANSyncProtocol.h` · `SaveStateLANSync.cpp` (`ResolveConflict`) | OPEN |
+| TD1 | Duplikasi `GetDeviceId()` / `GetLocalPeerId()` | Rendah | `SaveStateLANSync.cpp:706,711` · `LANSyncPairing.cpp:68,73` · `LANSyncConfig.cpp:44` | **FIXED** |
+| TD2 | **Bug:** `SyncWithAllPeers()` hanya sync 1 peer (flag `syncing_` global) | Medium | `SaveStateLANSync.cpp:362-378` | **FIXED** |
+| TD3 | 4 parser JSON manual berbeda (`ExtractJsonField`, `extractJsonStr`×2, `findField`, inline) | Rendah | `SaveStateLANSync.cpp:~688` · `LANSyncPairing.cpp` · `LANSyncMetadata.cpp:~32` | **FIXED** |
+| TD4 | **UB:** `isdigit(data[pos])` tanpa cast `(unsigned char)` | Rendah (latent) | `LANSyncMetadata.cpp:42` | **FIXED** |
+| TD5 | HLC dihitung tapi tidak dipakai di `ResolveConflict` (butuh perubahan wire format) | Low–Med | `LANSyncProtocol.h` · `SaveStateLANSync.cpp` (`ResolveConflict`) | OPEN |
 
 ### TD1 — Duplikasi Device ID
 `SaveStateLANSync::GetDeviceId()` dan `PairingManager::GetLocalPeerId()` punya logika **identik**: `fp.size()>=8 → "PPSSPP-"+fp[0:8]`, else `mac.size()>=4 → "PPSSPP-"+mac[-4]`, else `"PPSSPP-Unknown"`. Total 4–5 tempat (termasuk `LANSyncConfig.cpp:44`).
@@ -281,9 +281,24 @@ while (pos < data.size() && (isdigit(data[pos]) || data[pos] == '-')) {  // data
 **Catatan — butuh perubahan wire-format:** `SaveFileEntry` harus kirim HLC (`hlcPhysical`/`hlcLogical`); `HandleListSaveStates` kirim dari sidecar + `ParseSaveFileList` parse. Baru `ResolveConflict` bisa pakai `HLC::operator<`/`ConflictsWith`. Perlu dipertimbangkan break kompatibilitas peer lama.
 **Severity:** Low–Med.
 
-### Urutan Perbaikan yang Disarankan
-1. **TD2** (bug user-facing) — opsi B (per-peer set).
-2. **TD4** (1 baris, UB nyata).
-3. **TD1 + TD3** (refactor: satukan device-ID & JSON parser).
-4. **TD5** ( enhancements, butuh diskusi protocol change).
+### Session 2026-07-13 (part 3) — Validasi TD1–TD5 + Implementasi Semua (Kecuali TD5)
+
+**TD1–TD4 — ALL FIXED & VERIFIED (SDL Linux build + 43 tests pass):**
+
+| # | Isu | Fix | Files |
+|---|-----|-----|-------|
+| TD1 | Duplikasi GetDeviceId/GetLocalPeerId | `TLSContext::GetDeviceId()` ditambah di `TLSTransport.h/.cpp`; `SaveStateLANSync::GetDeviceId()` dan `PairingManager::GetLocalPeerId()` delegate ke sana | `LANSync/TLSTransport.h`, `TLSTransport.cpp`, `SaveStateLANSync.cpp`, `LANSyncPairing.cpp` |
+| TD2 | `SyncWithAllPeers()` cuma sync 1 peer | `atomic<bool> syncing_` diganti `set<string> activeSyncKeys_` (key `host:port`) + `atomic<bool> cancelRequested_`. `SyncWithAllPeers()` now syncs all peers concurrently. `CancelSync()` pake flag terpisah. | `SaveStateLANSync.h`, `SaveStateLANSync.cpp` |
+| TD3 | 4 parser JSON manual rapuh | Buat `LANSyncJson.h` dengan `JsonGetString`/`JsonGetInt64` pake gason (lib JSON PPSSPP existing). Replace semua ad-hoc parser. PEM di transport di-escape (`JsonEscape`) untuk valid JSON. | `LANSync/LANSyncJson.h` (baru), `SaveStateLANSync.cpp`, `LANSyncPairing.cpp`, `LANSyncMetadata.cpp` |
+| TD4 | `isdigit` UB | Cast `(unsigned char)`. 1 baris. | `LANSync/LANSyncMetadata.cpp:42` |
+
+**TD5 tetap OPEN** — wire protocol change (butuh HLC di `SaveFileEntry`, serialize/deserialize, backward compat). Bukan blocker.
+
+**PEM JSON Escaping Note**: CR4 (session 2026-07-10) removed `JsonEscape` from transport because old custom parsers didn't handle escape sequences → double-escape. Sekarang dengan gason (`JsonGetString`) yang handle escape sequences dengan benar, `JsonEscape` dipakai di transport. Flow: `PairWithPeer` escape → kirim → `HandlePairBegin` gason decode → simpan raw → `SavePeer` escape untuk file. Single-escaping, no double-escape.
+
+### Urutan Perbaikan yang Disarankan (Updated)
+1. ~~**TD2** (bug user-facing) — opsi B (per-peer set).~~ ✅ FIXED
+2. ~~**TD4** (1 baris, UB nyata).~~ ✅ FIXED
+3. ~~**TD1 + TD3** (refactor: satukan device-ID & JSON parser).~~ ✅ FIXED
+4. **TD5** (enhancement, butuh diskusi protocol change) — masih OPEN.
 

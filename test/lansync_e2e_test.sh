@@ -40,6 +40,9 @@ openssl req -new -x509 -key "$CERT_DIR/clientB_key.pem" -out "$CERT_DIR/clientB_
 
 CLIENTA_CERT_PEM=$(cat "$CERT_DIR/clientA_cert.pem")
 CLIENTB_CERT_PEM=$(cat "$CERT_DIR/clientB_cert.pem")
+# Escape newlines for valid JSON (gason parser is strict)
+CLIENTA_CERT_PEM_ESC=$(sed ':a;N;$!ba;s/\n/\\n/g' "$CERT_DIR/clientA_cert.pem")
+CLIENTB_CERT_PEM_ESC=$(sed ':a;N;$!ba;s/\n/\\n/g' "$CERT_DIR/clientB_cert.pem")
 
 cleanup() {
   for pid in "$PID_A" "$PID_B"; do
@@ -139,16 +142,16 @@ if kill -0 "$PID_B" 2>/dev/null; then pass; else fail "instance B died"; exit 1;
 
 # =================================================
 echo "--- Test 3: Pair clientA with instance A ---"
-pair_client "$PORT_A" "$CERT_DIR/clientA" "CLIENT-A" "$CLIENTA_CERT_PEM" && pass
+pair_client "$PORT_A" "$CERT_DIR/clientA" "CLIENT-A" "$CLIENTA_CERT_PEM_ESC" && pass
 
 echo "--- Test 4: Pair clientB with instance B ---"
-pair_client "$PORT_B" "$CERT_DIR/clientB" "CLIENT-B" "$CLIENTB_CERT_PEM" && pass
+pair_client "$PORT_B" "$CERT_DIR/clientB" "CLIENT-B" "$CLIENTB_CERT_PEM_ESC" && pass
 
 echo "--- Test 5: Cross-pair: clientB trusted on instance A ---"
-pair_client "$PORT_A" "$CERT_DIR/clientB" "CLIENT-B-ON-A" "$CLIENTB_CERT_PEM" && pass
+pair_client "$PORT_A" "$CERT_DIR/clientB" "CLIENT-B-ON-A" "$CLIENTB_CERT_PEM_ESC" && pass
 
 echo "--- Test 6: Cross-pair: clientA trusted on instance B ---"
-pair_client "$PORT_B" "$CERT_DIR/clientA" "CLIENT-A-ON-B" "$CLIENTA_CERT_PEM" && pass
+pair_client "$PORT_B" "$CERT_DIR/clientA" "CLIENT-A-ON-B" "$CLIENTA_CERT_PEM_ESC" && pass
 
 # =================================================
 echo "--- Test 7: PUT save state on A (older HLC=1) ---"

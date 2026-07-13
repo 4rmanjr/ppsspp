@@ -1,4 +1,5 @@
 #include "LANSync/TLSTransport.h"
+#include "Core/Config.h"
 #include "Core/Util/PathUtil.h"
 #include "Common/File/FileUtil.h"
 #include "Common/File/FileDescriptor.h"
@@ -189,6 +190,17 @@ std::string TLSContext::GetX509Fingerprint(X509 *cert) {
     std::string fp = GetX509Fingerprint(cert);
     X509_free(cert);
     return fp;
+}
+
+/*static*/ std::string TLSContext::GetDeviceId() const {
+    if (!fingerprint_.empty() && fingerprint_.size() >= 8) {
+        return "PPSSPP-" + fingerprint_.substr(0, 8);
+    }
+    std::string mac = g_Config.sMACAddress;
+    if (mac.size() >= 4) {
+        return "PPSSPP-" + mac.substr(mac.size() - 4);
+    }
+    return "PPSSPP-Unknown";
 }
 
 bool SSLHandshakeWithTimeout(SSL *ssl, int fd, int timeoutSec, bool asServer) {

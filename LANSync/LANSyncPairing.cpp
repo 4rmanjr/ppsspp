@@ -3,6 +3,8 @@
 #include "LANSync/LANSyncPairing.h"
 #include "LANSync/LANSyncServer.h"
 #include "LANSync/LANSyncClient.h"
+#include "LANSync/LANSyncJson.h"
+#include "LANSync/TLSTransport.h"
 #include "LANSync/LANSyncConfig.h"
 #include "LANSync/PlatformKeyStore.h"
 #include "Core/Config.h"
@@ -62,17 +64,7 @@ std::string PairingManager::GenerateNonce() {
 }
 
 std::string PairingManager::GetLocalPeerId() {
-    if (tlsCtx_) {
-        std::string fp = tlsCtx_->GetCertFingerprint();
-        if (fp.size() >= 8) {
-            return "PPSSPP-" + fp.substr(0, 8);
-        }
-    }
-    std::string mac = g_Config.sMACAddress;
-    if (mac.size() >= 4) {
-        return "PPSSPP-" + mac.substr(mac.size() - 4);
-    }
-    return "PPSSPP-Unknown";
+    return tlsCtx_ ? tlsCtx_->GetDeviceId() : "PPSSPP-Unknown";
 }
 
 // --- HTTP Handlers ---
@@ -95,21 +87,7 @@ std::string PairingManager::HandlePairBegin(const std::string &method, const std
         return "{\"error\":\"method_not_allowed\"}";
     }
 
-    auto extractJsonStr = [](const std::string &json, const std::string &key) -> std::string {
-        auto keyStr = "\"" + key + "\"";
-        auto pos = json.find(keyStr);
-        if (pos == std::string::npos) return "";
-        pos = json.find(':', pos);
-        if (pos == std::string::npos) return "";
-        pos = json.find_first_of("\"", pos);
-        if (pos == std::string::npos) return "";
-        auto start = pos + 1;
-        auto end = json.find("\"", start);
-        if (end == std::string::npos) return "";
-        return json.substr(start, end - start);
-    };
-
-    std::string clientCertPEM = extractJsonStr(body, "certPEM");
+    std::string clientCertPEM = JsonGetString(body, "certPEM");
 
     std::string nonce = GenerateNonce();
 
@@ -136,7 +114,7 @@ std::string PairingManager::HandlePairBegin(const std::string &method, const std
         serverCertPEM = tlsCtx_->GetCertPEM();
     }
 
-    return "{\"nonce\":\"" + nonce + "\",\"certFingerprint\":\"" + fingerprint + "\",\"certPEM\":\"" + serverCertPEM + "\"}";
+    return "{\"nonce\":\"" + nonce + "\",\"certFingerprint\":\"" + fingerprint + "\",\"certPEM\":\"" + JsonEscape(serverCertPEM) + "\"}";
 }
 
 std::string PairingManager::HandlePairVerify(const std::string &method, const std::string &path, const std::string &body) {
@@ -145,23 +123,9 @@ std::string PairingManager::HandlePairVerify(const std::string &method, const st
         return "{\"error\":\"method_not_allowed\"}";
     }
 
-    auto extractJsonStr = [](const std::string &json, const std::string &key) -> std::string {
-        auto keyStr = "\"" + key + "\"";
-        auto pos = json.find(keyStr);
-        if (pos == std::string::npos) return "";
-        pos = json.find(':', pos);
-        if (pos == std::string::npos) return "";
-        pos = json.find_first_of("\"", pos);
-        if (pos == std::string::npos) return "";
-        auto start = pos + 1;
-        auto end = json.find("\"", start);
-        if (end == std::string::npos) return "";
-        return json.substr(start, end - start);
-    };
-
-    std::string nonce = extractJsonStr(body, "nonce");
-    std::string pin = extractJsonStr(body, "pin");
-    std::string peerId = extractJsonStr(body, "peerId");
+    std::string nonce = JsonGetString(body, "nonce");
+    std::string pin = JsonGetString(body, "pin");
+    std::string peerId = JsonGetString(body, "peerId");
 
     if (nonce.empty() || pin.empty() || peerId.empty()) {
         return "{\"success\":false}";
@@ -229,7 +193,7 @@ bool PairingManager::PairWithPeer(const std::string &host, int port, PairingComp
 
         std::string certPEM;
         if (tlsCtx_) certPEM = tlsCtx_->GetCertPEM();
-        std::string beginBody = "{\"certPEM\":\"" + certPEM + "\"}";
+        std::string beginBody = "{\"certPEM\":\"" + JsonEscape(certPEM) + "\"}";
         HTTPResponse resp = client.Post("/pair/begin", "application/json", beginBody);
         if (resp.statusCode != 200) {
             std::lock_guard<std::mutex> l(mutex_);
@@ -240,12 +204,7 @@ bool PairingManager::PairWithPeer(const std::string &host, int port, PairingComp
             return;
         }
 
-        auto nonceStart = resp.body.find("\"nonce\":\"");
-        auto nonceEnd = resp.body.find("\"", nonceStart + 9);
-        std::string nonce;
-        if (nonceStart != std::string::npos && nonceEnd != std::string::npos) {
-            nonce = resp.body.substr(nonceStart + 9, nonceEnd - (nonceStart + 9));
-        }
+        std::string nonce = JsonGetString(resp.body, "nonce");
 
         if (nonce.empty()) {
             std::lock_guard<std::mutex> l(mutex_);
@@ -256,16 +215,7 @@ bool PairingManager::PairWithPeer(const std::string &host, int port, PairingComp
             return;
         }
 
-        // Extract server's certPEM from the response for TOFU storage
-        std::string serverCertPEM;
-        auto certPEMStart = resp.body.find("\"certPEM\":\"");
-        if (certPEMStart != std::string::npos) {
-            certPEMStart += 11;
-            auto certPEMEnd = resp.body.find("\"", certPEMStart);
-            if (certPEMEnd != std::string::npos) {
-                serverCertPEM = resp.body.substr(certPEMStart, certPEMEnd - certPEMStart);
-            }
-        }
+        std::string serverCertPEM = JsonGetString(resp.body, "certPEM");
 
         std::string pin = ComputePin(nonce);
 

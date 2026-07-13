@@ -34,12 +34,10 @@ openssl ecparam -genkey -name prime256v1 -out "$CERT_DIR/clientB_key.pem" 2>/dev
 openssl req -new -x509 -key "$CERT_DIR/clientB_key.pem" -out "$CERT_DIR/clientB_cert.pem" -days 3650 \
     -subj '/CN=PPSSPP Evil Client B' -addext 'subjectAltName=DNS:localhost,IP:127.0.0.1' 2>/dev/null
 
-# Read clientA cert PEM (keep real newlines — server's naive parser handles it,
-# and PEM_read_bio_X509 requires newlines to parse the cert)
+# Read clientA cert PEM, escape newlines for valid JSON
+# PEM_read_bio_X509 handles \n escape sequences via gason's decoder
 CLIENT_A_PEM_RAW=$(cat "$CERT_DIR/clientA_cert.pem")
-# Build the JSON body with raw PEM (multi-line string value)
-# This is technically not strict JSON, but the server's extractJsonStr handles it
-CLIENT_A_PEM="$CLIENT_A_PEM_RAW"
+CLIENT_A_PEM=$(sed ':a;N;$!ba;s/\n/\\n/g' "$CERT_DIR/clientA_cert.pem")
 
 echo "  clientA_cert: $CERT_DIR/clientA_cert.pem"
 echo "  clientB_cert: $CERT_DIR/clientB_cert.pem"

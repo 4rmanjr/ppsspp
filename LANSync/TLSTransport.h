@@ -23,6 +23,7 @@ public:
     SSL_CTX *GetClientContext() const { return ctxClient_; }
     std::string GetCertFingerprint() const { return fingerprint_; }
     std::string GetCertPEM() const { return certPEM_; }
+    std::string GetDeviceId() const;
 
     // Static helpers for peer cert verification
     static std::string GetPeerFingerprint(SSL *ssl);

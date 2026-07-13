@@ -1,4 +1,5 @@
 #include "LANSync/LANSyncMetadata.h"
+#include "LANSync/LANSyncJson.h"
 #include "Common/File/FileUtil.h"
 #include "Common/File/Path.h"
 #include <cstdio>
@@ -18,43 +19,14 @@ bool LANSyncMetadata::Load(const Path &ppstPath, HLC &hlc, uint64_t &originalMti
     if (!File::ReadBinaryFileToString(sidecar, &data))
         return false;
 
-    // Simple JSON parsing (avoid full dependency)
     // Format: {"hlc":"1234567890:42","originalMtime":1712345678,"peerId":"a1b2c3..."}
-    auto findField = [&](const std::string &key) -> std::string {
-        auto pos = data.find("\"" + key + "\"");
-        if (pos == std::string::npos) return "";
-        pos = data.find(':', pos);
-        if (pos == std::string::npos) return "";
-        pos++; // skip ':'
-        while (pos < data.size() && (data[pos] == ' ' || data[pos] == '\t')) pos++;
-        if (pos >= data.size()) return "";
-        if (data[pos] == '"') {
-            // string value
-            pos++;
-            std::string result;
-            while (pos < data.size() && data[pos] != '"') {
-                result += data[pos++];
-            }
-            return result;
-        } else {
-            // numeric value
-            std::string result;
-            while (pos < data.size() && (isdigit(data[pos]) || data[pos] == '-')) {
-                result += data[pos++];
-            }
-            return result;
-        }
-    };
-
-    std::string hlcStr = findField("hlc");
+    std::string hlcStr = LANSync::JsonGetString(data, "hlc");
     if (!hlcStr.empty())
         hlc = HLC::FromString(hlcStr);
 
-    std::string mtimeStr = findField("originalMtime");
-    if (!mtimeStr.empty())
-        originalMtime = (uint64_t)atoll(mtimeStr.c_str());
+    originalMtime = (uint64_t)LANSync::JsonGetInt64(data, "originalMtime");
 
-    peerId = findField("peerId");
+    peerId = LANSync::JsonGetString(data, "peerId");
 
     return true;
 }
