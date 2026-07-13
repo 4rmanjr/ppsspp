@@ -14,8 +14,8 @@ class LANSyncMDNSHelper {
 	private NsdManager.DiscoveryListener mDiscoveryListener;
 	private NsdManager.RegistrationListener mRegistrationListener;
 
-	private static native void nativeOnPeerFound(String name, String host, int port, String serviceType);
-	private static native void nativeOnPeerLost(String name, String host, int port, String serviceType);
+	private static native void nativeOnPeerFound(String name, String host, int port, String serviceType, String peerId);
+	private static native void nativeOnPeerLost(String name, String host, int port, String serviceType, String peerId);
 	private static native void nativeOnAnnounceResult(boolean success, String msg);
 
 	private LANSyncMDNSHelper(Context context) {
@@ -44,8 +44,8 @@ class LANSyncMDNSHelper {
 		if (sInstance != null) sInstance.stopDiscoveryInternal();
 	}
 
-	public static void startAnnounce(String serviceType, int port, String deviceName) {
-		if (sInstance != null) sInstance.startAnnounceInternal(serviceType, port, deviceName, deviceName);
+	public static void startAnnounce(String serviceType, int port, String deviceName, String peerId) {
+		if (sInstance != null) sInstance.startAnnounceInternal(serviceType, port, deviceName, peerId);
 	}
 
 	public static void stopAnnounce() {
@@ -90,12 +90,13 @@ class LANSyncMDNSHelper {
 						}
 						Log.d(TAG, "Resolved: " + resolvedInfo.getServiceName()
 							+ " @ " + host + ":" + resolvedInfo.getPort());
-						nativeOnPeerFound(
-							resolvedInfo.getServiceName(),
-							host,
-							resolvedInfo.getPort(),
-							resolvedInfo.getServiceType()
-						);
+					nativeOnPeerFound(
+						resolvedInfo.getServiceName(),
+						host,
+						resolvedInfo.getPort(),
+						resolvedInfo.getServiceType(),
+						peerId
+					);
 					}
 				};
 				mNsdManager.resolveService(info, resolveListener);
@@ -104,7 +105,7 @@ class LANSyncMDNSHelper {
 			@Override
 			public void onServiceLost(NsdServiceInfo info) {
 				Log.d(TAG, "Service lost: " + info.getServiceName());
-				nativeOnPeerLost(info.getServiceName(), "", 0, info.getServiceType());
+				nativeOnPeerLost(info.getServiceName(), "", 0, info.getServiceType(), "");
 			}
 
 			@Override

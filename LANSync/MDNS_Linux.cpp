@@ -25,7 +25,7 @@ public:
 	MDNSAnnouncerLinux() = default;
 	~MDNSAnnouncerLinux() override { Stop(); }
 
-	bool Start(const std::string &serviceType, int port, const std::string &deviceName) override;
+	bool Start(const std::string &serviceType, int port, const std::string &deviceName, const std::string &peerId) override;
 	void Stop() override;
 
 private:
@@ -40,6 +40,7 @@ private:
 	std::string serviceType_;
 	int port_ = 0;
 	std::string deviceName_;
+	std::string peerId_;
 	std::atomic<bool> running_{false};
 	std::thread thread_;
 };
@@ -61,12 +62,13 @@ void MDNSAnnouncerLinux::EntryGroupCallback(AvahiEntryGroup *g, AvahiEntryGroupS
 	}
 }
 
-bool MDNSAnnouncerLinux::Start(const std::string &serviceType, int port, const std::string &deviceName) {
+bool MDNSAnnouncerLinux::Start(const std::string &serviceType, int port, const std::string &deviceName, const std::string &peerId) {
 	if (running_) return false;
 
 	serviceType_ = serviceType;
 	port_ = port;
 	deviceName_ = deviceName;
+	peerId_ = peerId;
 
 	simplePoll_ = avahi_simple_poll_new();
 	if (!simplePoll_) {
@@ -98,7 +100,7 @@ bool MDNSAnnouncerLinux::Start(const std::string &serviceType, int port, const s
 	// Build TXT records
 	AvahiStringList *txt = nullptr;
 	txt = avahi_string_list_add_pair(txt, "device", deviceName.c_str());
-	txt = avahi_string_list_add_pair(txt, "id", deviceName.c_str());
+	txt = avahi_string_list_add_pair(txt, "id", peerId_.empty() ? deviceName.c_str() : peerId_.c_str());
 
 	int ret = avahi_entry_group_add_service_strlst(group_, AVAHI_IF_UNSPEC, AVAHI_PROTO_INET,
 	                                               (AvahiPublishFlags)0, deviceName.c_str(),

@@ -198,6 +198,26 @@ Four findings from code review of the TLS fix implementation:
 - Refactored 3 duplicated call sites → single function.
 - **Commit**: `67421d73bb`.
 
+### Session 2026-07-13 (part 2) — Self-Detection via Peer ID (#13) — FIXED
+
+**Problem**: Android NsdManager tidak punya `AVAHI_LOOKUP_RESULT_LOCAL` seperti Avahi. Self-discovery hanya dimitigasi oleh deviceName comparison (false negative jika nama sama) + loopback/APIPA filter (tidak tangkap LAN IP asli).
+
+**Fix** — 3 lapis self-detection yang saling melengkapi:
+| Layer | Mekanisme | Platform |
+|---|---|---|
+| 1. Avahi LOCAL flag | `AVAHI_LOOKUP_RESULT_LOCAL` (existing) | Linux ✅ |
+| 2. Peer ID comparison | TXT `"id"` sekarang berisi cert fingerprint (bukan deviceName). `OnPeerFound`/`OnPeerLost` skip jika `peer.peerId == ourPeerId_`. | **ALL** |
+| 3. DeviceName filter | `peer.deviceName == deviceName_` (existing, jadi fallback) | ALL ✅ |
+| 4. Loopback/APIPA | `127.0.0.1`, `::1`, `169.254.x.x` (existing) | ALL ✅ |
+
+**Perubahan kunci**:
+- **TXT `id` diisi cert fingerprint**: `MDNS_Linux.cpp` (Avahi) dan `MDNS_Android.cpp` (JNI forward) + `LANSyncMDNSHelper.java` (NsdManager setAttribute) — bukan deviceName lagi.
+- **Java forward peerId**: `nativeOnPeerFound` signature tambah `String peerId` → diisi dari `resolvedInfo.getAttributes().get("id")` yang sudah di-parse tapi dibuang.
+- **Self-check di C++**: `LANSyncDiscovery` simpan `ourPeerId_` dari `tlsCtx_->GetCertFingerprint()`. `OnPeerFound` dan `OnPeerLost` skip jika match.
+- **Fallback untuk old device**: Jika TXT `id` masih berisi deviceName (device belum update), `peer.peerId == ourPeerId_` tidak match → layer 3 (deviceName) dan 4 (loopback) tetap jalan.
+
+**Commit**: (this commit).
+
 ### Remaining Open Issues (Priority Order)
 
 | # | Priority | Issue | Status |
@@ -207,7 +227,7 @@ Four findings from code review of the TLS fix implementation:
 | 8 | ~~SEDANG~~ | ~~LWW conflict tie gap (mtime sama, isi beda)~~ | **FIXED** |
 | 9 | ~~RENDAH~~ | ~~Tidak ada batas ukuran PUT~~ | **FIXED** |
 | 10 | ~~RENDAH~~ | ~~Parse gameId/slot asumsi 1 underscore~~ | **FIXED** |
-| 13 | SEDANG | Android LOCAL guard (mitigated by deviceName filter) | MITIGATED |
+| 13 | ~~SEDANG~~ | ~~Android LOCAL guard (mitigated by deviceName filter)~~ | **FIXED** |
 
 ### Design Decision 2026-07-09 — Transport LAN Sync = IPv4-Only
 

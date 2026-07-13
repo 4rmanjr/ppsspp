@@ -31,7 +31,7 @@ public:
 	LANSyncDiscovery();
 	~LANSyncDiscovery();
 
-	bool Start(DiscoveryCallback callback);
+	bool Start(DiscoveryCallback callback, const std::string &ourPeerId = "");
 	void Stop();
 
 	void AddManualPeer(const std::string &host, int port);
@@ -58,6 +58,7 @@ private:
 	mutable std::mutex peersMutex_;
 	std::vector<DiscoveredPeer> peers_;
 	std::string deviceName_;
+	std::string ourPeerId_;
 	int port_ = 27314;
 	std::atomic<bool> running_{false};
 

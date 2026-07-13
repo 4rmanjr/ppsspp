@@ -17,18 +17,19 @@ LANSyncDiscovery::~LANSyncDiscovery() {
 	Stop();
 }
 
-bool LANSyncDiscovery::Start(DiscoveryCallback callback) {
+bool LANSyncDiscovery::Start(DiscoveryCallback callback, const std::string &ourPeerId) {
 	if (running_)
 		return false;
 
 	callback_ = std::move(callback);
+	ourPeerId_ = ourPeerId;
 
 	announcer_.reset(CreateMDNSAnnouncer());
 	browser_.reset(CreateMDNSBrowser());
 
 	bool ok = true;
 	if (announcer_) {
-		if (!announcer_->Start(kServiceType, port_, deviceName_)) {
+		if (!announcer_->Start(kServiceType, port_, deviceName_, ourPeerId_)) {
 			WARN_LOG(Log::System, "Discovery: announcer failed to start");
 			ok = false;
 		}
@@ -133,7 +134,7 @@ void LANSyncDiscovery::SetDeviceName(const std::string &name) {
 	deviceName_ = name;
 	if (announcer_ && running_) {
 		announcer_->Stop();
-		announcer_->Start(kServiceType, port_, deviceName_);
+		announcer_->Start(kServiceType, port_, deviceName_, ourPeerId_);
 	}
 }
 
@@ -142,6 +143,8 @@ std::string LANSyncDiscovery::GetDeviceName() const {
 }
 
 void LANSyncDiscovery::OnPeerFound(const DiscoveredPeer &peer) {
+	if (!ourPeerId_.empty() && peer.peerId == ourPeerId_)
+		return;
 	if (!deviceName_.empty() && peer.deviceName == deviceName_)
 		return;
 	// LAN sync is IPv4-only by design (server binds AF_INET). IPv6 addresses
@@ -195,6 +198,8 @@ void LANSyncDiscovery::OnPeerFound(const DiscoveredPeer &peer) {
 }
 
 void LANSyncDiscovery::OnPeerLost(const DiscoveredPeer &peer) {
+	if (!ourPeerId_.empty() && peer.peerId == ourPeerId_)
+		return;
 	if (!deviceName_.empty() && peer.deviceName == deviceName_)
 		return;
 	// Mirror the IPv4-only guard from OnPeerFound for symmetry.

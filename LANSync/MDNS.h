@@ -8,7 +8,7 @@ namespace LANSync {
 class MDNSAnnouncer {
 public:
 	virtual ~MDNSAnnouncer() = default;
-	virtual bool Start(const std::string &serviceType, int port, const std::string &deviceName) = 0;
+	virtual bool Start(const std::string &serviceType, int port, const std::string &deviceName, const std::string &peerId) = 0;
 	virtual void Stop() = 0;
 };
 

@@ -132,13 +132,16 @@ bool SaveStateLANSync::StartDiscovery() {
 
   discovery_->SetDeviceName(config.GetDeviceName());
 
+  std::string ourPeerId = tlsCtx_->GetCertFingerprint();
+
   return discovery_->Start(
       [this](const DiscoveryEvent &event) {
           std::lock_guard<std::mutex> lock(cbMutex_);
           if (discoveryCb_) {
               discoveryCb_(event);
           }
-      }
+      },
+      ourPeerId
   );
 }
 

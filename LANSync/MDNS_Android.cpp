@@ -48,7 +48,7 @@ struct JNICache {
 
 			cache.startDiscovery = env->GetStaticMethodID(cache.clazz, "startDiscovery", "(Ljava/lang/String;)V");
 			cache.stopDiscovery = env->GetStaticMethodID(cache.clazz, "stopDiscovery", "()V");
-			cache.startAnnounce = env->GetStaticMethodID(cache.clazz, "startAnnounce", "(Ljava/lang/String;ILjava/lang/String;)V");
+			cache.startAnnounce = env->GetStaticMethodID(cache.clazz, "startAnnounce", "(Ljava/lang/String;ILjava/lang/String;Ljava/lang/String;)V");
 			cache.stopAnnounce = env->GetStaticMethodID(cache.clazz, "stopAnnounce", "()V");
 
 			if (!cache.startDiscovery || !cache.stopDiscovery || !cache.startAnnounce || !cache.stopAnnounce) {
@@ -64,21 +64,23 @@ class MDNSAnnouncerAndroid : public MDNSAnnouncer {
 public:
 	~MDNSAnnouncerAndroid() override { Stop(); }
 
-	bool Start(const std::string &serviceType, int port, const std::string &deviceName) override {
+	bool Start(const std::string &serviceType, int port, const std::string &deviceName, const std::string &peerId) override {
 		JNIEnv *env = EnsureAttached();
 		auto &cache = JNICache::Get();
 		if (!cache.clazz) return false;
 
 		jstring jType = env->NewStringUTF(serviceType.c_str());
 		jstring jName = env->NewStringUTF(deviceName.c_str());
+		jstring jPeerId = env->NewStringUTF(peerId.empty() ? deviceName.c_str() : peerId.c_str());
 
 		{
 			std::lock_guard<std::mutex> lock(g_announcerMutex);
 			g_activeAnnouncer = this;
 		}
 
-		env->CallStaticVoidMethod(cache.clazz, cache.startAnnounce, jType, port, jName);
+		env->CallStaticVoidMethod(cache.clazz, cache.startAnnounce, jType, port, jName, jPeerId);
 
+		env->DeleteLocalRef(jPeerId);
 		env->DeleteLocalRef(jName);
 		env->DeleteLocalRef(jType);
 
@@ -155,19 +157,20 @@ MDNSBrowser *CreateMDNSBrowserAndroid() {
 namespace LANSync {
 extern "C" void JNICALL
 Java_org_ppsspp_ppsspp_LANSyncMDNSHelper_nativeOnPeerFound(
-	JNIEnv *env, jclass, jstring jName, jstring jHost, jint jPort, jstring jServiceType)
+	JNIEnv *env, jclass, jstring jName, jstring jHost, jint jPort, jstring jServiceType, jstring jPeerId)
 {
 	const char *name = env->GetStringUTFChars(jName, nullptr);
 	const char *host = env->GetStringUTFChars(jHost, nullptr);
 	const char *serviceType = env->GetStringUTFChars(jServiceType, nullptr);
+	const char *peerId = jPeerId ? env->GetStringUTFChars(jPeerId, nullptr) : nullptr;
 
 	DiscoveredPeer peer;
 	peer.deviceName = name;
 	peer.host = host;
 	peer.port = (int)jPort;
-	peer.peerId = name;
+	peer.peerId = peerId ? peerId : name;
 
-	INFO_LOG(Log::System, "mDNS: Peer found '%s' @ %s:%d", name, host, (int)jPort);
+	INFO_LOG(Log::System, "mDNS: Peer found '%s' @ %s:%d id=%s", name, host, (int)jPort, peer.peerId.c_str());
 
 	{
 		std::lock_guard<std::mutex> lock(g_browserMutex);
@@ -176,6 +179,7 @@ Java_org_ppsspp_ppsspp_LANSyncMDNSHelper_nativeOnPeerFound(
 		}
 	}
 
+	if (peerId) env->ReleaseStringUTFChars(jPeerId, peerId);
 	env->ReleaseStringUTFChars(jServiceType, serviceType);
 	env->ReleaseStringUTFChars(jHost, host);
 	env->ReleaseStringUTFChars(jName, name);
@@ -183,19 +187,20 @@ Java_org_ppsspp_ppsspp_LANSyncMDNSHelper_nativeOnPeerFound(
 
 extern "C" void JNICALL
 Java_org_ppsspp_ppsspp_LANSyncMDNSHelper_nativeOnPeerLost(
-	JNIEnv *env, jclass, jstring jName, jstring jHost, jint jPort, jstring jServiceType)
+	JNIEnv *env, jclass, jstring jName, jstring jHost, jint jPort, jstring jServiceType, jstring jPeerId)
 {
 	const char *name = env->GetStringUTFChars(jName, nullptr);
 	const char *host = env->GetStringUTFChars(jHost, nullptr);
 	const char *serviceType = env->GetStringUTFChars(jServiceType, nullptr);
+	const char *peerId = jPeerId ? env->GetStringUTFChars(jPeerId, nullptr) : nullptr;
 
 	DiscoveredPeer peer;
 	peer.deviceName = name;
 	peer.host = host;
 	peer.port = (int)jPort;
-	peer.peerId = name;
+	peer.peerId = peerId ? peerId : name;
 
-	INFO_LOG(Log::System, "mDNS: Peer lost '%s'", name);
+	INFO_LOG(Log::System, "mDNS: Peer lost '%s' id=%s", name, peer.peerId.c_str());
 
 	{
 		std::lock_guard<std::mutex> lock(g_browserMutex);
@@ -204,6 +209,7 @@ Java_org_ppsspp_ppsspp_LANSyncMDNSHelper_nativeOnPeerLost(
 		}
 	}
 
+	if (peerId) env->ReleaseStringUTFChars(jPeerId, peerId);
 	env->ReleaseStringUTFChars(jServiceType, serviceType);
 	env->ReleaseStringUTFChars(jHost, host);
 	env->ReleaseStringUTFChars(jName, name);
