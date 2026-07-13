@@ -239,3 +239,51 @@ Four findings from code review of the TLS fix implementation:
 - `fd_util::ConnectWithTimeout` **tidak diubah** (util shared PPSSPP lain); client otomatis konek IPv4 karena discovery hanya mengembalikan IPv4.
 
 **Dampak**: Ketidakcocokan IPv4(server)/IPv6(discovery) **RESOLVED by design**. Risiko residual: jaringan murni IPv6-only tak terdeteksi (sesuai pilihan IPv4-only).
+
+---
+
+## 🧹 Code Review Findings — Technical Debt (2026-07-13)
+
+Hasil deep-dive alur kode LANSync (`SaveStateLANSync`, `LANSyncServer/Client`, `TLSTransport`, `LANSyncDiscovery`, `LANSyncPairing`, `LANSyncMetadata`, `LANSyncProtocol`). Semua item **OPEN** (belum di-fix). Mayoritas refactor/cleanup + 1 bug user-facing (TD2) + 1 UB latent (TD4). Bukan blocker fungsional.
+
+| # | Isu | Severity | Lokasi | Status |
+|---|-----|----------|--------|--------|
+| TD1 | Duplikasi `GetDeviceId()` / `GetLocalPeerId()` | Rendah | `SaveStateLANSync.cpp:706,711` · `LANSyncPairing.cpp:68,73` · `LANSyncConfig.cpp:44` | OPEN |
+| TD2 | **Bug:** `SyncWithAllPeers()` hanya sync 1 peer (flag `syncing_` global) | Medium | `SaveStateLANSync.cpp:362-378` | OPEN |
+| TD3 | 3 parser JSON manual berbeda (`ExtractJsonField`, `extractJsonStr`×2, `findField`) | Rendah | `SaveStateLANSync.cpp:~688` · `LANSyncPairing.cpp` · `LANSyncMetadata.cpp:~32` | OPEN |
+| TD4 | **UB:** `isdigit(data[pos])` tanpa cast `(unsigned char)` | Rendah (latent) | `LANSyncMetadata.cpp:42` | OPEN |
+| TD5 | HLC dihitung tapi tidak dipakai di `ResolveConflict` (masih murni `mtime`+checksum) | Low–Med | `LANSyncProtocol.h` · `SaveStateLANSync.cpp` (`ResolveConflict`) | OPEN |
+
+### TD1 — Duplikasi Device ID
+`SaveStateLANSync::GetDeviceId()` dan `PairingManager::GetLocalPeerId()` punya logika **identik**: `fp.size()>=8 → "PPSSPP-"+fp[0:8]`, else `mac.size()>=4 → "PPSSPP-"+mac[-4]`, else `"PPSSPP-Unknown"`. Total 4–5 tempat (termasuk `LANSyncConfig.cpp:44`).
+**Fix:** pindahkan ke `TLSContext::GetDeviceId()` (fingerprint sumbernya di sana), panggil dari kedua fungsi → satu sumber kebenaran.
+
+### TD2 — Race `syncing_` di `SyncWithAllPeers` (BUG USER-FACING)
+`syncing_` adalah `atomic<bool>` tunggal. `SyncWithPeer()` pakai `syncing_.exchange(true)` → kalau ≥2 peer, hanya peer pertama yang jalan; sisanya `return` diam-diam (tidak sync).
+`AutoSyncLoop()` menutupi karena busy-wait antar peer, tapi **"Sync All" manual (`SyncWithAllPeers`) tidak menunggu → cuma 1 device tersinkron, tanpa error**.
+**Fix (A, minimal):** `SyncWithAllPeers()` serialize seperti `AutoSyncLoop` (tunggu `syncing_` false tiap peer).
+**Fix (B, rekomendasi):** ganti `syncing_` dengan `std::set<std::string> syncingKeys_` (key = `host:port`) — izinkan sync konkuren antar peer beda, abaikan duplicate request ke peer sama. `IsSyncing()` → `!syncingKeys_.empty()`.
+
+### TD3 — Parser JSON Manual Berulang
+Tiga implementasi ad-hoc: `ExtractJsonField` (string+number), `extractJsonStr` λ (×2, string only, di `LANSyncPairing.cpp`), `findField` λ (`LANSyncMetadata.cpp`, string+number). Semua berhenti di `"` pertama (tidak handle `\"` escape) → rapuh kalau nilai mengandung `"`. Bukti historis: STATUS CR4 pernah kena double-escape PEM.
+**Fix:** satu helper `LANSync/LANSyncJson.h` (`JsonGetString` / `JsonGetNumber`) dipakai di ketiga lokasi. (Cek apakah PPSSPP punya lib JSON internal yg bisa dipakai — hindari duplikasi util.)
+
+### TD4 — `isdigit` UB (KOREKSI ATRIBUSI)
+⚠️ Klarifikasi: UB **bukan** di `ExtractJsonField` (sudah benar pakai `isdigit((unsigned char)json[pos])` di `SaveStateLANSync.cpp:696`). UB ada di **`LANSyncMetadata.cpp:42`**:
+```cpp
+while (pos < data.size() && (isdigit(data[pos]) || data[pos] == '-')) {  // data[pos] = char (signed) → byte >=0x80 negatif → UB
+```
+**Dampak:** rendah (field `hlc`/`originalMtime`/`peerId` ASCII/hex, tidak memicu praktis), tapi latent UB.
+**Fix:** `isdigit((unsigned char)data[pos])`.
+
+### TD5 — HLC Tidak Dipakai di Resolusi Konflik
+`HLC` (`HLC.h`) punya `Tick`/`Merge`/`operator<`/`ConflictsWith` untuk total ordering causal lintas-device, tapi di `DoSyncWithPeer`/`ResolveConflict` HLC hanya di-`Tick` lalu di-`Save` ke sidecar. Keputusan konflik murni `remote.mtime > local.mtime` + checksum tie-break. Kasus #8 (mtime sama, isi beda) ditangani checksum tapi pemenang **arbitrer** ("remote wins"), bukan deterministik via logical clock.
+**Catatan — butuh perubahan wire-format:** `SaveFileEntry` harus kirim HLC (`hlcPhysical`/`hlcLogical`); `HandleListSaveStates` kirim dari sidecar + `ParseSaveFileList` parse. Baru `ResolveConflict` bisa pakai `HLC::operator<`/`ConflictsWith`. Perlu dipertimbangkan break kompatibilitas peer lama.
+**Severity:** Low–Med.
+
+### Urutan Perbaikan yang Disarankan
+1. **TD2** (bug user-facing) — opsi B (per-peer set).
+2. **TD4** (1 baris, UB nyata).
+3. **TD1 + TD3** (refactor: satukan device-ID & JSON parser).
+4. **TD5** ( enhancements, butuh diskusi protocol change).
+
