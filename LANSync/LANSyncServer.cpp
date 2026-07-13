@@ -1,14 +1,18 @@
 #include "LANSync/LANSyncServer.h"
+#include "Common/Log.h"
 #include "Common/Net/SocketCompat.h"
 #include "Common/StringUtils.h"
 #include <openssl/ssl.h>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <chrono>
 #include <thread>
 #include <vector>
 
 namespace LANSync {
+
+constexpr long long kMaxUploadSize = 100LL * 1024 * 1024;  // 100 MB
 
 LANSyncServer::LANSyncServer() {}
 
@@ -110,6 +114,7 @@ void LANSyncServer::HandleConnection(int fd, SSL *ssl) {
     char buf[4096];
     bool headersDone = false;
     int contentLength = 0;
+    bool oversized = false;
 
     while (running_) {
         int n = ssl ? SSL_read(ssl, buf, sizeof(buf) - 1) : (int)recv(fd, buf, sizeof(buf) - 1, 0);
@@ -128,7 +133,12 @@ void LANSyncServer::HandleConnection(int fd, SSL *ssl) {
                 if (clPos != std::string::npos) {
                     clPos += 15;
                     while (clPos < headers.size() && headers[clPos] == ' ') clPos++;
-                    contentLength = atoi(headers.c_str() + clPos);
+                    long long cl = atoll(headers.c_str() + clPos);
+                    if (cl > kMaxUploadSize) {
+                        oversized = true;
+                        break;
+                    }
+                    contentLength = (int)cl;
                 }
 
                 size_t bodyStart = headerEnd + 4;
@@ -152,7 +162,10 @@ void LANSyncServer::HandleConnection(int fd, SSL *ssl) {
         }
     }
 
-    if (!rawRequest.empty()) {
+    if (oversized) {
+        WARN_LOG(Log::System, "LANSync: oversized request rejected (Content-Length %d)", contentLength);
+        SendResponse(fd, ssl, 413, "application/json", "{\"error\":\"payload_too_large\"}");
+    } else if (!rawRequest.empty()) {
         std::string method, path, body;
         if (ParseHTTP(rawRequest, method, path, body)) {
             std::string response = Dispatch(method, path, body);
@@ -215,6 +228,7 @@ void LANSyncServer::SendResponse(int fd, SSL *ssl, int statusCode, const std::st
         case 403: statusText = "Forbidden"; break;
         case 404: statusText = "Not Found"; break;
         case 405: statusText = "Method Not Allowed"; break;
+        case 413: statusText = "Payload Too Large"; break;
         case 500: statusText = "Internal Server Error"; break;
         default: statusText = "Unknown"; break;
     }
