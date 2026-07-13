@@ -2184,6 +2184,8 @@ endif()
 # [PPSSPP-FORK] LANSync: source files
 if(PPSSPP_LANSYNC)
 	list(APPEND CoreExtra
+		LANSync/ParseSaveFilename.h
+		LANSync/ParseSaveFilename.cpp
 		LANSync/HLC.h
 		LANSync/LANSyncProtocol.h
 		LANSync/LANSyncConfig.h
@@ -3112,6 +3114,7 @@ if(UNITTEST)
 		unittest/TestLoongArch64Emitter.cpp
 		unittest/TestSoftwareGPUJit.cpp
 		unittest/TestThreadManager.cpp
+		unittest/TestLANSync.cpp
 		unittest/JitHarness.cpp
 		Core/MIPS/ARM/ArmRegCache.cpp
 		Core/MIPS/ARM/ArmRegCacheFPU.cpp
@@ -3120,6 +3123,11 @@ if(UNITTEST)
 		target_sources(PPSSPPUnitTest PRIVATE
 			Windows/CaptureDevice.cpp
 			Windows/CaptureDevice.h
+		)
+	endif()
+	if(PPSSPP_LANSYNC)
+		target_sources(PPSSPPUnitTest PRIVATE
+			LANSync/ParseSaveFilename.cpp
 		)
 	endif()
 	target_link_libraries(PPSSPPUnitTest ${COCOA_LIBRARY} ${QUARTZ_CORE_LIBRARY} ${IOKIT_LIBRARY} ${LinkCommon} Common)
@@ -3142,6 +3150,9 @@ if(UNITTEST)
 	add_test(quick_texhash PPSSPPUnitTest QuickTexHash)
 	add_test(clz PPSSPPUnitTest CLZ)
 	add_test(shadergen PPSSPPUnitTest ShaderGenerators)
+	if(PPSSPP_LANSYNC)
+		add_test(lansync PPSSPPUnitTest LANSync)
+	endif()
 endif()
 
 if(ATLAS_TOOL)

@@ -8,6 +8,7 @@
 #include <atomic>
 #include "LANSync/LANSyncProtocol.h"
 #include "LANSync/LANSyncDiscovery.h"
+#include "LANSync/ParseSaveFilename.h"
 #include "Common/UI/Screen.h"
 #include "Common/File/Path.h"
 
@@ -18,8 +19,6 @@ class LANSyncClient;
 class LANSyncDiscovery;
 class PairingManager;
 class TLSContext;
-
-bool ParseSaveFilename(const std::string &base, std::string &gameId, int &slot);
 
 class SaveStateLANSync {
 public:

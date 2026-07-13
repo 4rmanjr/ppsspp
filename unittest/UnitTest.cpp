@@ -1337,6 +1337,7 @@ bool TestLoongArch64Emitter();
 bool TestShaderGenerators();
 bool TestSoftwareGPUJit();
 bool TestIRPassSimplify();
+bool TestLANSync();
 bool TestThreadManager();
 bool TestVFS();
 
@@ -1383,6 +1384,9 @@ TestItem availableTests[] = {
 	TEST_ITEM(VFS),
 	TEST_ITEM(Substitutions),
 	TEST_ITEM(IniFile),
+#if PPSSPP_LANSYNC
+	TEST_ITEM(LANSync),
+#endif
 	TEST_ITEM(ColorConv),
 	TEST_ITEM(CharQueue),
 	TEST_ITEM(Buffer),
