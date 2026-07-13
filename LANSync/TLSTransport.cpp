@@ -239,6 +239,14 @@ bool TLSContext::InitServer() {
     SSL_CTX_set_cipher_list(ctxServer_, "ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256");
     SSL_CTX_set_ecdh_auto(ctxServer_, 1);
 
+    // Request client cert for mutual TLS. Accept any cert — TOFU verification at app level.
+    SSL_CTX_set_verify(ctxServer_, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT,
+        [](int preverify_ok, X509_STORE_CTX *ctx) -> int {
+            (void)preverify_ok;
+            (void)ctx;
+            return 1;
+        });
+
     return true;
 }
 
@@ -247,6 +255,12 @@ bool TLSContext::InitClient() {
 
     ctxClient_ = SSL_CTX_new(TLS_client_method());
     if (!ctxClient_) return false;
+
+    // Load client cert + key so server can request it for mutual TLS
+    Path certPath = certDir_ / "sync_cert.pem";
+    Path keyPath = certDir_ / "sync_key.pem";
+    SSL_CTX_use_certificate_file(ctxClient_, certPath.ToString().c_str(), SSL_FILETYPE_PEM);
+    SSL_CTX_use_PrivateKey_file(ctxClient_, keyPath.ToString().c_str(), SSL_FILETYPE_PEM);
 
     SSL_CTX_set_verify(ctxClient_, SSL_VERIFY_NONE, nullptr);
     SSL_CTX_set_cipher_list(ctxClient_, "ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256");

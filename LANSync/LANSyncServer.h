@@ -23,6 +23,7 @@ public:
 
     void RegisterHandler(const std::string &pathPrefix, RequestHandler handler);
     void ClearHandlers();
+    SSL *GetCurrentSSL() const { return currentSSL_; }
 
 private:
     void AcceptLoop();
@@ -36,6 +37,7 @@ private:
     std::atomic<bool> running_{false};
     std::thread acceptThread_;
     TLSContext *tlsCtx_ = nullptr;
+    SSL *currentSSL_ = nullptr;
     std::map<std::string, RequestHandler, std::less<>> handlers_;
 };
 

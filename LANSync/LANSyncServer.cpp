@@ -104,6 +104,8 @@ void LANSyncServer::HandleConnection(int fd, SSL *ssl) {
         }
     }
 
+    currentSSL_ = ssl;
+
     std::string rawRequest;
     char buf[4096];
     bool headersDone = false;
@@ -154,7 +156,16 @@ void LANSyncServer::HandleConnection(int fd, SSL *ssl) {
         std::string method, path, body;
         if (ParseHTTP(rawRequest, method, path, body)) {
             std::string response = Dispatch(method, path, body);
-            SendResponse(fd, ssl, 200, "application/json", response);
+
+            // Map JSON error responses to HTTP status codes
+            int statusCode = 200;
+            if (response.find("\"error\"") != std::string::npos) {
+                if (response.find("forbidden") != std::string::npos) statusCode = 403;
+                else if (response.find("not_found") != std::string::npos) statusCode = 404;
+                else if (response.find("method_not_allowed") != std::string::npos) statusCode = 405;
+                else statusCode = 400;
+            }
+            SendResponse(fd, ssl, statusCode, "application/json", response);
         } else {
             SendResponse(fd, ssl, 400, "text/plain", "Bad Request");
         }
@@ -164,6 +175,7 @@ void LANSyncServer::HandleConnection(int fd, SSL *ssl) {
         SSL_shutdown(ssl);
         SSL_free(ssl);
     }
+    currentSSL_ = nullptr;
     closesocket(fd);
 }
 
@@ -200,7 +212,9 @@ void LANSyncServer::SendResponse(int fd, SSL *ssl, int statusCode, const std::st
     switch (statusCode) {
         case 200: statusText = "OK"; break;
         case 400: statusText = "Bad Request"; break;
+        case 403: statusText = "Forbidden"; break;
         case 404: statusText = "Not Found"; break;
+        case 405: statusText = "Method Not Allowed"; break;
         case 500: statusText = "Internal Server Error"; break;
         default: statusText = "Unknown"; break;
     }

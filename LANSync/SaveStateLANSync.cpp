@@ -181,11 +181,24 @@ void SaveStateLANSync::UpdateProgress(SyncProgress::Status status, const std::st
 
 // --- HTTP Handlers ---
 
+static bool IsPeerTrusted(LANSyncServer *server) {
+    SSL *ssl = server->GetCurrentSSL();
+    if (!ssl) return true;
+    std::string fp = TLSContext::GetPeerFingerprint(ssl);
+    if (fp.empty()) return false;
+    // TOFU: if no peers stored yet, accept any cert (first-use mode)
+    auto peers = PlatformKeyStore::LoadPeers();
+    return peers.empty() || PlatformKeyStore::IsTrusted(fp);
+}
+
 std::string SaveStateLANSync::HandleListSaveStates(const std::string &method, const std::string &path, const std::string &body) {
   (void)path;
   (void)body;
   if (method != "GET") {
     return "{\"error\":\"method_not_allowed\"}";
+  }
+  if (!IsPeerTrusted(server_.get())) {
+    return "{\"error\":\"forbidden\",\"message\":\"Pair this device first\"}";
   }
 
   std::vector<File::FileInfo> files;
@@ -239,6 +252,9 @@ std::string SaveStateLANSync::HandleGetSaveState(const std::string &method, cons
   if (method != "GET") {
     return "{\"error\":\"method_not_allowed\"}";
   }
+  if (!IsPeerTrusted(server_.get())) {
+    return "{\"error\":\"forbidden\",\"message\":\"Pair this device first\"}";
+  }
 
   std::string subpath = path.substr(8);
   size_t slash = subpath.find('/');
@@ -266,6 +282,9 @@ std::string SaveStateLANSync::HandleGetSaveState(const std::string &method, cons
 std::string SaveStateLANSync::HandlePutSaveState(const std::string &method, const std::string &path, const std::string &body) {
   if (method != "PUT") {
     return "{\"error\":\"method_not_allowed\"}";
+  }
+  if (!IsPeerTrusted(server_.get())) {
+    return "{\"error\":\"forbidden\",\"message\":\"Pair this device first\"}";
   }
 
   size_t queryStart = path.find('?');
