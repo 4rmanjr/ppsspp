@@ -577,6 +577,32 @@ void SaveStateLANSync::ResolveConflict(LANSyncClient &client, const std::string 
     std::string url = "/states/" + localEntry.gameId + "/" + std::to_string(localEntry.slot)
         + "?hlc=" + hlc.ToString() + "&peerId=" + GetDeviceId();
     client.UploadFile(url, localPath);
+  } else {
+    // mtime equal — compare checksums to detect divergence
+    if (remoteEntry.checksum.empty() || localEntry.checksum.empty()) {
+      WARN_LOG(Log::System, "LANSync: mtime tie but checksum unavailable for '%s' — skipping", key.c_str());
+    } else if (remoteEntry.checksum != localEntry.checksum) {
+      // Content diverged despite same timestamp → conflict, remote wins (LWW consistent)
+      Path conflictPath(localPath.ToString() + ".conflict");
+      if (!File::Rename(localPath, conflictPath)) {
+        WARN_LOG(Log::System, "LANSync: cannot create .conflict for '%s'", key.c_str());
+        return;
+      }
+      if (!client.DownloadFile("/states/" + remoteEntry.gameId + "/" + std::to_string(remoteEntry.slot),
+                               localPath)) {
+        File::Rename(conflictPath, localPath);
+        WARN_LOG(Log::System, "LANSync: download failed on tie for '%s'", key.c_str());
+        return;
+      }
+      time_t now;
+      time(&now);
+      HLC hlc;
+      hlc.Tick((uint64_t)now);
+      LANSyncMetadata::Save(localPath, hlc, remoteEntry.mtime, peerId);
+      WARN_LOG(Log::System, "LANSync: mtime tie, content differs for '%s' — conflict saved", key.c_str());
+    } else {
+      INFO_LOG(Log::System, "LANSync: mtime tie, content identical for '%s' — skipped", key.c_str());
+    }
   }
 }
 
