@@ -1,9 +1,17 @@
 package org.ppsspp.ppsspp;
 
+import android.app.Activity;
 import android.content.Context;
+import android.content.pm.PackageManager;
 import android.net.nsd.NsdManager;
 import android.net.nsd.NsdServiceInfo;
+import android.net.wifi.WifiManager;
 import android.util.Log;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 class LANSyncMDNSHelper {
 	private static final String TAG = "LANSyncMDNS";
@@ -11,8 +19,26 @@ class LANSyncMDNSHelper {
 	private static LANSyncMDNSHelper sInstance;
 
 	private final NsdManager mNsdManager;
+	private final WifiManager mWifiManager;
+	private final WifiManager.MulticastLock mMulticastLock;
+	private int mMulticastRefs = 0;
 	private NsdManager.DiscoveryListener mDiscoveryListener;
 	private NsdManager.RegistrationListener mRegistrationListener;
+
+	// Cache resolved peers so we can still report host/port/peerId on loss,
+	// since onServiceLost often arrives without that info populated.
+	private static class ResolvedPeer {
+		String host;
+		int port;
+		String peerId;
+	}
+	private final Map<String, ResolvedPeer> mResolvedCache = new HashMap<>();
+
+	// Activity reference (PpssppActivity) used to request runtime permissions
+	// for NSD/mDNS. Normal permissions (e.g. ACCESS_LOCAL_NETWORK on API 34+)
+	// are auto-granted; ACCESS_FINE_LOCATION (API 26-32) must be requested.
+	private Activity mActivity;
+	private static final int REQ_LANSYNC_PERMS = 0x4C41; // "LA"
 
 	private static native void nativeOnPeerFound(String name, String host, int port, String serviceType, String peerId);
 	private static native void nativeOnPeerLost(String name, String host, int port, String serviceType, String peerId);
@@ -20,6 +46,16 @@ class LANSyncMDNSHelper {
 
 	private LANSyncMDNSHelper(Context context) {
 		mNsdManager = (NsdManager) context.getSystemService(Context.NSD_SERVICE);
+		mWifiManager = (WifiManager) context.getSystemService(Context.WIFI_SERVICE);
+		if (context instanceof Activity) {
+			mActivity = (Activity) context;
+		}
+		WifiManager.MulticastLock lock = null;
+		if (mWifiManager != null) {
+			lock = mWifiManager.createMulticastLock("LANSync");
+			lock.setReferenceCounted(true);
+		}
+		mMulticastLock = lock;
 	}
 
 	public static void init(Context ctx) {
@@ -58,8 +94,84 @@ class LANSyncMDNSHelper {
 		return type;
 	}
 
+	// mDNS (NsdManager) requires a held MulticastLock to receive multicast
+	// packets on Wi-Fi; without it discovery finds nothing on most devices.
+	// Ref-counted across discovery + announce so the lock is held only while
+	// at least one of them is active.
+	private void acquireMulticastLock() {
+		if (mMulticastLock == null) return;
+		try {
+			if (mMulticastRefs == 0) mMulticastLock.acquire();
+			mMulticastRefs++;
+		} catch (SecurityException e) {
+			Log.w(TAG, "acquireMulticastLock failed: " + e.getMessage());
+		}
+	}
+
+	private void releaseMulticastLock() {
+		if (mMulticastLock == null) return;
+		if (mMulticastRefs > 0) mMulticastRefs--;
+		if (mMulticastRefs == 0) {
+			try {
+				mMulticastLock.release();
+			} catch (SecurityException e) {
+				Log.w(TAG, "releaseMulticastLock failed: " + e.getMessage());
+			}
+		}
+	}
+
+	// --- Runtime permission handling for NSD/mDNS ---
+	// ACCESS_LOCAL_NETWORK (API 34+) is a normal permission -> auto-granted.
+	// ACCESS_FINE_LOCATION (API 26-32) is REQUIRED at runtime for NSD; without
+	// it discoverServices() silently finds nothing.
+	private boolean ensurePermissionsGranted() {
+		if (mActivity == null) return true;
+		if (android.os.Build.VERSION.SDK_INT >= 34) {
+			return mActivity.checkSelfPermission("android.permission.ACCESS_LOCAL_NETWORK")
+				== PackageManager.PERMISSION_GRANTED;
+		}
+		if (android.os.Build.VERSION.SDK_INT >= 26 && android.os.Build.VERSION.SDK_INT <= 32) {
+			return mActivity.checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION)
+				== PackageManager.PERMISSION_GRANTED;
+		}
+		return true; // < API 26 or API 33: no runtime permission needed for NSD
+	}
+
+	private void maybeRequestPermissions() {
+		if (mActivity == null) return;
+		if (ensurePermissionsGranted()) return;
+		final Activity a = mActivity;
+		a.runOnUiThread(new Runnable() {
+			@Override public void run() { requestPermissionsInternal(a); }
+		});
+	}
+
+	// Call proactively (e.g. when the user enables LAN Sync) for a smoother
+	// first-time prompt. Non-blocking; discovery/announce retries after grant.
+	public static void ensurePermissions(Activity activity) {
+		if (sInstance != null) sInstance.requestPermissionsInternal(activity);
+	}
+
+	private void requestPermissionsInternal(Activity activity) {
+		if (activity == null) return;
+		List<String> needed = new ArrayList<>();
+		if (android.os.Build.VERSION.SDK_INT >= 34) {
+			needed.add("android.permission.ACCESS_LOCAL_NETWORK");
+		}
+		if (android.os.Build.VERSION.SDK_INT >= 26 && android.os.Build.VERSION.SDK_INT <= 32) {
+			needed.add(android.Manifest.permission.ACCESS_FINE_LOCATION);
+		}
+		if (needed.isEmpty()) return;
+		if (activity.isFinishing() || activity.isDestroyed()) return;
+		String[] arr = new String[needed.size()];
+		needed.toArray(arr);
+		activity.requestPermissions(arr, REQ_LANSYNC_PERMS);
+	}
+
 	private void startDiscoveryInternal(String serviceType) {
 		if (mNsdManager == null) return;
+		maybeRequestPermissions();
+		acquireMulticastLock();
 
 		mDiscoveryListener = new NsdManager.DiscoveryListener() {
 			@Override
@@ -90,6 +202,11 @@ class LANSyncMDNSHelper {
 						}
 						Log.d(TAG, "Resolved: " + resolvedInfo.getServiceName()
 							+ " @ " + host + ":" + resolvedInfo.getPort());
+					ResolvedPeer rp = new ResolvedPeer();
+					rp.host = host;
+					rp.port = resolvedInfo.getPort();
+					rp.peerId = peerId;
+					mResolvedCache.put(resolvedInfo.getServiceName(), rp);
 					nativeOnPeerFound(
 						resolvedInfo.getServiceName(),
 						host,
@@ -105,7 +222,28 @@ class LANSyncMDNSHelper {
 			@Override
 			public void onServiceLost(NsdServiceInfo info) {
 				Log.d(TAG, "Service lost: " + info.getServiceName());
-				nativeOnPeerLost(info.getServiceName(), "", 0, info.getServiceType(), "");
+				// Prefer the cached host/port/peerId from resolution; fall back
+				// to whatever the loss callback carries (often empty).
+				ResolvedPeer rp = mResolvedCache.remove(info.getServiceName());
+				String host;
+				int port;
+				String peerId;
+				if (rp != null) {
+					host = rp.host;
+					port = rp.port;
+					peerId = rp.peerId;
+				} else {
+					host = info.getHost() != null ? info.getHost().getHostAddress() : "";
+					port = info.getPort();
+					peerId = "";
+					if (android.os.Build.VERSION.SDK_INT >= 16) {
+						java.util.Map<String, byte[]> attrs = info.getAttributes();
+						if (attrs != null && attrs.containsKey("id")) {
+							peerId = new String(attrs.get("id"));
+						}
+					}
+				}
+				nativeOnPeerLost(info.getServiceName(), host, port, info.getServiceType(), peerId);
 			}
 
 			@Override
@@ -136,10 +274,13 @@ class LANSyncMDNSHelper {
 			Log.w(TAG, "stopServiceDiscovery: " + e.getMessage());
 		}
 		mDiscoveryListener = null;
+		releaseMulticastLock();
 	}
 
 	private void startAnnounceInternal(String serviceType, int port, String deviceName, String peerId) {
 		if (mNsdManager == null) return;
+		maybeRequestPermissions();
+		acquireMulticastLock();
 
 		NsdServiceInfo serviceInfo = new NsdServiceInfo();
 		serviceInfo.setServiceName(deviceName);
@@ -184,5 +325,6 @@ class LANSyncMDNSHelper {
 			Log.w(TAG, "unregisterService: " + e.getMessage());
 		}
 		mRegistrationListener = null;
+		releaseMulticastLock();
 	}
 }
