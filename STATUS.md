@@ -253,6 +253,8 @@ Hasil deep-dive alur kode LANSync (`SaveStateLANSync`, `LANSyncServer/Client`, `
 | TD3 | 4 parser JSON manual berbeda (`ExtractJsonField`, `extractJsonStr`×2, `findField`, inline) | Rendah | `SaveStateLANSync.cpp:~688` · `LANSyncPairing.cpp` · `LANSyncMetadata.cpp:~32` | **FIXED** |
 | TD4 | **UB:** `isdigit(data[pos])` tanpa cast `(unsigned char)` | Rendah (latent) | `LANSyncMetadata.cpp:42` | **FIXED** |
 | TD5 | HLC dihitung tapi tidak dipakai di `ResolveConflict` (butuh perubahan wire format) | Low–Med | `LANSyncProtocol.h` · `SaveStateLANSync.cpp` (`ResolveConflict`) | OPEN |
+| TD6 | Hint penolakan permission cuma tampil di `serverStatus_` text — tidak ada dialog popup sekali-pakai | Low | `LANSyncMDNSHelper.java` (`onPermissionResultInternal` → `nativeOnDiscoveryError`) · `LANSyncScreen.cpp` (`serverStatus_`) | OPEN |
+| TD7 | Pesan hint hardcoded English — tidak pakai sistem terjemahan PPSSPP | Low | `LANSyncMDNSHelper.java` (`buildPermissionHint`) | OPEN |
 
 ### TD1 — Duplikasi Device ID
 `SaveStateLANSync::GetDeviceId()` dan `PairingManager::GetLocalPeerId()` punya logika **identik**: `fp.size()>=8 → "PPSSPP-"+fp[0:8]`, else `mac.size()>=4 → "PPSSPP-"+mac[-4]`, else `"PPSSPP-Unknown"`. Total 4–5 tempat (termasuk `LANSyncConfig.cpp:44`).
@@ -280,6 +282,14 @@ while (pos < data.size() && (isdigit(data[pos]) || data[pos] == '-')) {  // data
 `HLC` (`HLC.h`) punya `Tick`/`Merge`/`operator<`/`ConflictsWith` untuk total ordering causal lintas-device, tapi di `DoSyncWithPeer`/`ResolveConflict` HLC hanya di-`Tick` lalu di-`Save` ke sidecar. Keputusan konflik murni `remote.mtime > local.mtime` + checksum tie-break. Kasus #8 (mtime sama, isi beda) ditangani checksum tapi pemenang **arbitrer** ("remote wins"), bukan deterministik via logical clock.
 **Catatan — butuh perubahan wire-format:** `SaveFileEntry` harus kirim HLC (`hlcPhysical`/`hlcLogical`); `HandleListSaveStates` kirim dari sidecar + `ParseSaveFileList` parse. Baru `ResolveConflict` bisa pakai `HLC::operator<`/`ConflictsWith`. Perlu dipertimbangkan break kompatibilitas peer lama.
 **Severity:** Low–Med.
+
+### TD6 — Hint penolakan permission tidak menonjol
+Pesan *"enable Nearby devices / Location / Local network in Settings…"* saat permission ditolak hanya muncul sebagai teks kecil di `serverStatus_` (`LANSyncScreen.cpp`). Konsisten dengan error discovery lain, tapi kurang menonjol sehingga user bisa kelewat.
+**Fix (bila dikerjakan):** tampilkan `AlertDialog` sekali-pakai di `LANSyncMDNSHelper`/`PpssppActivity` (atau dialog di UI PPSSPP) saat `nativeOnDiscoveryError` dipanggil — bukan cuma set `discoveryError_`.
+
+### TD7 — Hint belum dilokalisasi
+`buildPermissionHint()` (`LANSyncMDNSHelper.java`) mengembalikan string English literal. PPSSPP punya sistem terjemahan: sisi C++ via `GetSysString` / `lang/*.ini`, sisi Android via `res/values/strings.xml` + `getString()`.
+**Fix (bila dikerjakan):** ganti literal dengan key terjemahan. Karena pesan bervariasi per level API (33 / 26–32 / 34+ / fallback), butuh key terpisah per kasus — dan karena hint berasal dari Java lalu lewat JNI → C++ → `LANSyncScreen`, penempatan terjemahan perlu konsisten (lokalisasi di titik tampil, bukan di `buildPermissionHint`).
 
 ### Session 2026-07-13 (part 3) — Validasi TD1–TD5 + Implementasi Semua (Kecuali TD5)
 
