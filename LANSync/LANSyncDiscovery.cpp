@@ -37,6 +37,9 @@ bool LANSyncDiscovery::Start(DiscoveryCallback callback, const std::string &ourP
 
 	if (browser_) {
 		auto self = shared_from_this();
+		browser_->SetErrorCallback([self](const std::string &msg) {
+			self->SendError(msg);
+		});
 		if (!browser_->Start(kServiceType,
 				[self](const DiscoveredPeer &peer) { self->OnPeerFound(peer); },
 				[self](const DiscoveredPeer &peer) { self->OnPeerLost(peer); }))

@@ -103,8 +103,13 @@ class MDNSBrowserAndroid : public MDNSBrowser {
 public:
 	OnPeerFound onFound_;
 	OnPeerLost onLost_;
+	OnError onError_;
 
 	~MDNSBrowserAndroid() override { Stop(); }
+
+	void SetErrorCallback(OnError cb) override {
+		onError_ = std::move(cb);
+	}
 
 	bool Start(const std::string &serviceType, OnPeerFound onFound, OnPeerLost onLost) override {
 		onFound_ = std::move(onFound);
@@ -222,6 +227,22 @@ Java_org_ppsspp_ppsspp_LANSyncMDNSHelper_nativeOnAnnounceResult(
 	const char *msg = env->GetStringUTFChars(jMsg, nullptr);
 	INFO_LOG(Log::System, "mDNS: Announce result: %s - %s", jSuccess ? "success" : "fail", msg);
 	env->ReleaseStringUTFChars(jMsg, msg);
+}
+
+extern "C" void JNICALL
+Java_org_ppsspp_ppsspp_LANSyncMDNSHelper_nativeOnDiscoveryError(
+	JNIEnv *env, jclass, jstring jMsg)
+{
+	const char *msg = jMsg ? env->GetStringUTFChars(jMsg, nullptr) : nullptr;
+	std::string message(msg ? msg : "");
+	INFO_LOG(Log::System, "mDNS: discovery error from Java: %s", message.c_str());
+	{
+		std::lock_guard<std::mutex> lock(g_browserMutex);
+		if (g_activeBrowser && g_activeBrowser->onError_) {
+			g_activeBrowser->onError_(message);
+		}
+	}
+	if (msg) env->ReleaseStringUTFChars(jMsg, msg);
 }
 }  // namespace LANSync
 

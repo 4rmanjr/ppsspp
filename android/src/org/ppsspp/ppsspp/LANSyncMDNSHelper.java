@@ -53,6 +53,7 @@ class LANSyncMDNSHelper {
 	private static native void nativeOnPeerFound(String name, String host, int port, String serviceType, String peerId);
 	private static native void nativeOnPeerLost(String name, String host, int port, String serviceType, String peerId);
 	private static native void nativeOnAnnounceResult(boolean success, String msg);
+	private static native void nativeOnDiscoveryError(String msg);
 
 	private LANSyncMDNSHelper(Context context) {
 		mNsdManager = (NsdManager) context.getSystemService(Context.NSD_SERVICE);
@@ -140,11 +141,15 @@ class LANSyncMDNSHelper {
 			return mActivity.checkSelfPermission("android.permission.ACCESS_LOCAL_NETWORK")
 				== PackageManager.PERMISSION_GRANTED;
 		}
+		if (android.os.Build.VERSION.SDK_INT == 33) {
+			return mActivity.checkSelfPermission(android.Manifest.permission.NEARBY_WIFI_DEVICES)
+				== PackageManager.PERMISSION_GRANTED;
+		}
 		if (android.os.Build.VERSION.SDK_INT >= 26 && android.os.Build.VERSION.SDK_INT <= 32) {
 			return mActivity.checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION)
 				== PackageManager.PERMISSION_GRANTED;
 		}
-		return true; // < API 26 or API 33: no runtime permission needed for NSD
+		return true; // < API 26: no runtime permission needed for NSD
 	}
 
 	private void maybeRequestPermissions() {
@@ -167,8 +172,9 @@ class LANSyncMDNSHelper {
 		List<String> needed = new ArrayList<>();
 		if (android.os.Build.VERSION.SDK_INT >= 34) {
 			needed.add("android.permission.ACCESS_LOCAL_NETWORK");
-		}
-		if (android.os.Build.VERSION.SDK_INT >= 26 && android.os.Build.VERSION.SDK_INT <= 32) {
+		} else if (android.os.Build.VERSION.SDK_INT == 33) {
+			needed.add(android.Manifest.permission.NEARBY_WIFI_DEVICES);
+		} else if (android.os.Build.VERSION.SDK_INT >= 26 && android.os.Build.VERSION.SDK_INT <= 32) {
 			needed.add(android.Manifest.permission.ACCESS_FINE_LOCATION);
 		}
 		if (needed.isEmpty()) return;
@@ -176,6 +182,19 @@ class LANSyncMDNSHelper {
 		String[] arr = new String[needed.size()];
 		needed.toArray(arr);
 		activity.requestPermissions(arr, REQ_LANSYNC_PERMS);
+	}
+
+	private String buildPermissionHint() {
+		if (android.os.Build.VERSION.SDK_INT == 33) {
+			return "LAN Sync needs the 'Nearby devices' permission. Enable it in Settings > Apps > PPSSPP > Permissions, then restart LAN Sync.";
+		}
+		if (android.os.Build.VERSION.SDK_INT >= 26 && android.os.Build.VERSION.SDK_INT <= 32) {
+			return "LAN Sync needs Location permission to find devices over Wi-Fi. Enable it in Settings, then restart LAN Sync.";
+		}
+		if (android.os.Build.VERSION.SDK_INT >= 34) {
+			return "LAN Sync needs Local network access. Enable it in Settings, then restart LAN Sync.";
+		}
+		return "LAN Sync discovery failed. Check Wi-Fi and firewall (UDP 5353).";
 	}
 
 	// --- Deferred start: remember intent, request perm if needed, replay on grant ---
@@ -212,7 +231,10 @@ class LANSyncMDNSHelper {
 		for (int r : grantResults) {
 			if (r != PackageManager.PERMISSION_GRANTED) { granted = false; break; }
 		}
-		if (!granted) return;
+		if (!granted) {
+			nativeOnDiscoveryError(buildPermissionHint());
+			return;
+		}
 		// Replay any discovery/announce that was deferred on the missing permission.
 		if (mDiscoveryPending) {
 			mDiscoveryPending = false;

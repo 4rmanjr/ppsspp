@@ -305,6 +305,23 @@ while (pos < data.size() && (isdigit(data[pos]) || data[pos] == '-')) {  // data
 - `onServiceResolved`: perbaiki indentasi blok `ResolvedPeer rp` / `rp.host` / `rp.port` / `rp.peerId` / `mResolvedCache.put` ke 7 tab (sejajar method body).
 - `stopDiscoveryInternal`/`stopAnnounceInternal` sudah clear pending flag (replay aman, idempoten).
 
+### Session 2026-07-14 (part 2) — Android 13 NSD permission + denial UX
+
+**Root cause:** `targetSdk = 37` (`android/build.gradle.kts:131`) mengaktifkan aturan Android 13: `NsdManager` (discovery/announce) wajib `NEARBY_WIFI_DEVICES` runtime permission. Manifest tidak mendeklarasikannya, dan `LANSyncMDNSHelper.ensurePermissionsGranted()` untuk API 33 masuk `return true` (tidak mengecek apa pun) → discovery gagal **diam-diam** di Android 13. Android 14+ aman (pakai `ACCESS_LOCAL_NETWORK`).
+
+**Fix (4 file C++/Java + manifest):**
+- `AndroidManifest.xml`: tambah `NEARBY_WIFI_DEVICES` dengan `android:maxSdkVersion="33"` + `tools:usesPermissionFlags="neverForLocation"` (flag wajib agar tidak menarik prerequisite `ACCESS_FINE_LOCATION`).
+- `LANSyncMDNSHelper.java`:
+  - `ensurePermissionsGranted()`: branch eksplisit API 33 → cek `NEARBY_WIFI_DEVICES`. Matrix: 26–32 `ACCESS_FINE_LOCATION`, **33 `NEARBY_WIFI_DEVICES`**, 34+ `ACCESS_LOCAL_NETWORK`, <26 bebas.
+  - `requestPermissionsInternal()`: request permission sesuai matrix di atas (satu perm per level API).
+  - `onPermissionResultInternal` (denied): panggil `nativeOnDiscoveryError(buildPermissionHint())` → hint user-visible.
+  - `buildPermissionHint()`: pesan spesifik per API level ("enable Nearby devices / Location / Local network in Settings…").
+- `MDNS.h`: tambah `MDNSBrowser::OnError` typedef + virtual `SetErrorCallback` (default no-op → Linux tidak terdampak).
+- `MDNS_Android.cpp`: `MDNSBrowserAndroid` simpan `onError_`, override `SetErrorCallback`, implement JNI `nativeOnDiscoveryError` → panggil `g_activeBrowser->onError_`.
+- `LANSyncDiscovery.cpp`: `Start()` pasang `browser_->SetErrorCallback([self]{ self->SendError(msg); })` → `DiscoveryEvent::ERROR` → `LANSyncScreen.discoveryError_` → `serverStatus_->SetText()` (UI sudah render ERROR, tidak ada perubahan di `LANSyncScreen.cpp`).
+
+**Verifikasi:** build Android (`assembleNormalDebug`); cek merged manifest `NEARBY_WIFI_DEVICES` + `neverForLocation`; lint tanpa `MissingPermission` baru; device test Android 13 (grant → peer muncul; deny → hint tampil) + regresi Android 14+. Linux 43/43 tidak terdampak.
+
 ### Urutan Perbaikan yang Disarankan (Updated)
 1. ~~**TD2** (bug user-facing) — opsi B (per-peer set).~~ ✅ FIXED
 2. ~~**TD4** (1 baris, UB nyata).~~ ✅ FIXED
