@@ -183,6 +183,16 @@ void SaveStateLANSync::UpdateProgress(SyncProgress::Status status, const std::st
   }
 }
 
+// --- Helpers ---
+
+// Validate gameId extracted from URL path — reject path traversal and JSON-unsafe chars.
+static bool IsValidGameId(const std::string &gameId) {
+    if (gameId.empty() || gameId == "..")
+        return false;
+    // Reject characters that could break path traversal or JSON encoding.
+    return gameId.find_first_of("/\\\"\'") == std::string::npos;
+}
+
 // --- HTTP Handlers ---
 
 static bool IsPeerTrusted(LANSyncServer *server) {
@@ -240,7 +250,7 @@ std::string SaveStateLANSync::HandleListSaveStates(const std::string &method, co
     char buf[512];
     snprintf(buf, sizeof(buf),
         "{\"gameId\":\"%s\",\"slot\":%d,\"checksum\":\"%s\",\"mtime\":%llu,\"size\":%lld}",
-        gameId.c_str(), slot, checksum.c_str(),
+        JsonEscape(gameId).c_str(), slot, checksum.c_str(),
         (unsigned long long)mtime, (long long)file.size);
     json += buf;
   }
@@ -267,6 +277,10 @@ std::string SaveStateLANSync::HandleGetSaveState(const std::string &method, cons
   std::string gameId = subpath.substr(0, slash);
   std::string slotStr = subpath.substr(slash + 1);
   int slot = std::atoi(slotStr.c_str());
+
+  if (!IsValidGameId(gameId)) {
+    return "{\"error\":\"invalid_game_id\"}";
+  }
 
   Path savePath = stateDir_ / (gameId + "_" + std::to_string(slot) + ".ppst");
   if (!File::Exists(savePath)) {
@@ -302,6 +316,10 @@ std::string SaveStateLANSync::HandlePutSaveState(const std::string &method, cons
   std::string gameId = subpath.substr(0, slash);
   std::string slotStr = subpath.substr(slash + 1);
   int slot = std::atoi(slotStr.c_str());
+
+  if (!IsValidGameId(gameId)) {
+    return "{\"error\":\"invalid_game_id\"}";
+  }
 
   std::string hlcStr;
   std::string peerId;

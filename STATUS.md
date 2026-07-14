@@ -338,3 +338,122 @@ Pesan *"enable Nearby devices / Location / Local network in Settings…"* saat p
 3. ~~**TD1 + TD3** (refactor: satukan device-ID & JSON parser).~~ ✅ FIXED
 4. **TD5** (enhancement, butuh diskusi protocol change) — masih OPEN.
 
+---
+
+## 🐛 Code Review Findings — Bug, Race, Memory, Security (2026-07-14)
+
+Hasil review mendalam terhadap **seluruh 34 file** di direktori `LANSync/` — fokus pada security, race condition, memory leak, dan logic bug. Menemukan **9 isu** (~~2 critical~~ 0 critical, 2 high, 3 medium, 2 low). SR1: FALSE POSITIVE, SR2: FIXED.
+
+| # | Severity | Isu | Lokasi | Status |
+|---|----------|-----|--------|--------|
+| SR1 | ~~🔴 **Critical**~~ | ~~**Directory traversal**~~ — **FALSE POSITIVE**: `gameId` di-extract via `subpath.substr(0, find('/'))` → selalu segment tunggal. Concat `gameId + "_" + slot + ".ppst"` → flat filename, bukan path component. | `SaveStateLANSync.cpp` | **FALSE POSITIVE** |
+| SR2 | ~~🔴 **Critical**~~ | ~~**JSON injection**~~ — **FIXED**: `HandleListSaveStates` pakai `JsonEscape(gameId)`. `IsValidGameId()` di GET/PUT. `LANSyncMetadata::Save` escape `peerId`. | `SaveStateLANSync.cpp`, `LANSyncMetadata.cpp` | **FIXED** |
+| SR3 | 🟠 **High** | **Data race `confirmPin_`** — ditulis di bawah `dialogMutex_` (via `ConfirmPin()`) tapi dibaca di bawah `mutex_` (via thread `PairWithPeer()`). Undefined behavior | `LANSyncPairing.cpp` (`PairWithPeer:~200`, `ConfirmPin:~280`) | **OPEN** |
+| SR4 | 🟠 **High** | **`currentSSL_` race** — `LANSyncServer` menyimpan SSL koneksi saat ini di `currentSSL_` (member). Dengan banyak koneksi concurrent, handler bisa membaca SSL dari koneksi BERBEDA → verifikasi TOFU fingerprint salah sasaran | `LANSyncServer.h/.cpp` (`currentSSL_`) | **OPEN** |
+| SR5 | 🟡 **Medium** | **Non-blocking flag leak** — `SSLHandshakeWithTimeout()` set fd ke NONBLOCK sebelum handshake, tapi hanya restore blocking di success path. Jika handshake gagal (`return false`), fd tetap NONBLOCK → I/O selanjutnya unpredictable | `TLSTransport.cpp` (`SSLHandshakeWithTimeout:~150`) | **OPEN** |
+| SR6 | 🟡 **Medium** | **OpenSSL return value unchecked** — `SSL_CTX_use_certificate_file()`, `SSL_CTX_use_PrivateKey_file()`, `SSL_set_fd()` dipanggil tanpa cek return value. Jika file cert corrupt/tak terbaca, eksekusi berlanjut seolah sukses | `TLSTransport.cpp` (`InitServer:~175`, `InitClient:~200`) · `LANSyncClient.cpp` (`Connect:~50`) | **OPEN** |
+| SR7 | 🟡 **Medium** | **Non-portable `uint64_t` cast** — `HLC::FromString()` menggunakan `sscanf(..., "%llu", (unsigned long long *)&h.physical)`. `uint64_t` bisa `unsigned long` (ILP64) → type-punning UB via cast. Juga return value `sscanf` tidak dicek | `HLC.h` (`FromString:~57`) | **OPEN** |
+| SR8 | 🟢 **Low** | **Busy-wait di `AutoSyncLoop()`** — loop 10 iterasi/detik (`sleep_for(100ms) × interval×10`) padahal cukup `sleep_for(seconds(interval))` sekali. Juga tidak cek `IsSyncing()` sebelum trigger sync baru → potensi duplikasi sync ke peer sama | `SaveStateLANSync.cpp` (`AutoSyncLoop:~280`) | **OPEN** |
+| SR9 | 🟢 **Low** | **`probeThread_` handle tidak direset** — `Stop()` melakukan `join()` tapi `probeThread_` tetap menyimpan handle lama. Aman karena `joinable()` return false setelah join, tapi tidak idiomatic | `LANSyncDiscovery.cpp` (`Stop:~65`) | **OPEN** |
+
+### Detail Temuan
+
+#### SR1 — Directory Traversal — **FALSE POSITIVE**
+Validasi (Session 2026-07-14): `gameId` di-extract via `subpath.substr(0, subpath.find('/'))` → selalu segment tunggal sebelum `/` pertama. Path: `stateDir_ / (gameId + "_" + slot + ".ppst")` → flat filename. Test: `/states/../../etc/passwd/0` → gameId=`".."`, filename=`.._0.ppst` (aman).
+
+#### SR2 — JSON Injection — **FIXED**
+**Fix (Session 2026-07-14):**
+1. `HandleListSaveStates`: `JsonEscape(gameId)` di `snprintf` response
+2. `IsValidGameId()` validation di `HandleGetSaveState` + `HandlePutSaveState` — tolak `/`, `\`, `"`, `'`, `..`
+3. `LANSyncMetadata::Save`: `JsonEscape(peerId)` di sidecar JSON
+Build + 43/43 tests pass.
+
+#### SR3 — Data Race `confirmPin_`
+```cpp
+// PairWithPeer thread (LANSyncPairing.cpp:~200):
+{
+    std::lock_guard<std::mutex> l(mutex_);          // ⬅️ mutex_
+    enteredPin = pending_ ? confirmPin_ : "";        // ⬅️ READ
+}
+
+// UI thread - ConfirmPin (LANSyncPairing.cpp:~280):
+{
+    std::lock_guard<std::mutex> lk(dialogMutex_);   // ⬅️ dialogMutex_ (BEDA!)
+    confirmPin_ = pin;                                // ⬅️ WRITE
+}
+```
+**Fix:** Akses `confirmPin_` hanya di bawah satu mutex, atau ganti ke `std::atomic<std::string>`.
+
+#### SR4 — `currentSSL_` Race Condition
+```cpp
+// LANSyncServer.cpp - HandleConnection (per thread koneksi):
+currentSSL_ = ssl;     // write — di-overwrite koneksi lain!
+// ... processing ...
+currentSSL_ = nullptr;
+
+// IsPeerTrusted di SaveStateLANSync.cpp:
+SSL *ssl = server->GetCurrentSSL();  // bisa dari koneksi LAIN!
+```
+**Dampak:** Verifikasi TOFU fingerprint bisa mengecek cert peer A pada request peer B → bypass keamanan.
+**Fix:** Jangan simpan `currentSSL_` sebagai member. Parse fingerprint langsung di `HandleConnection` dan pass hasilnya ke handler via closure.
+
+#### SR5 — Non-blocking Flag Leak
+```cpp
+// TLSTransport.cpp - SSLHandshakeWithTimeout
+bool wasBlocking = ...;
+if (wasBlocking) fd_util::SetNonBlocking(fd, true);
+// ... handshake logic ...
+if (ret == 1) {
+    if (wasBlocking) fd_util::SetNonBlocking(fd, false);  // ✅ restore
+    return true;
+}
+if (err != SSL_ERROR_WANT_READ && err != SSL_ERROR_WANT_WRITE)
+    return false;  // ❌ LEAK: fd tetap NONBLOCK!
+```
+**Fix:** RAII / lambda scope-exit guard untuk restore blocking di semua return path.
+
+#### SR6 — OpenSSL Return Value Unchecked
+```cpp
+// TLSTransport.cpp - InitServer
+SSL_CTX_use_certificate_file(ctxServer_, ..., SSL_FILETYPE_PEM);  // return value ignored
+SSL_CTX_use_PrivateKey_file(ctxServer_, ..., SSL_FILETYPE_PEM);   // return value ignored
+```
+**Fix:** Selalu cek `<= 0` dan panggil `ERR_print_errors_fp`.
+
+#### SR7 — Non-portable `uint64_t` Cast
+```cpp
+// HLC.h - FromString
+sscanf(s.c_str(), "%llu:%u",
+    (unsigned long long *)&h.physical,  // ⚠️ uint64_t != unsigned long long di ILP64
+    &h.logical);
+```
+**Fix:** `std::strtoull()` + assignment, atau `std::from_chars` (C++17).
+
+#### SR8 — AutoSyncLoop Busy-wait
+```cpp
+// SaveStateLANSync.cpp
+for (int i = 0; i < interval * 10 && autoSyncRunning_; i++) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+}
+```
+**Fix:** `std::this_thread::sleep_for(std::chrono::seconds(interval))` langsung. Tambah cek `IsSyncing()` sebelum trigger sync baru.
+
+#### SR9 — Thread Handle Tidak Direset
+```cpp
+// LANSyncDiscovery.cpp - Stop
+probeCv_.notify_all();
+if (probeThread_.joinable())
+    probeThread_.join();
+// probeThread_ tetap menyimpan handle lama (sudah selesai)
+```
+**Fix:** `probeThread_ = std::thread();` setelah join untuk clarity.
+
+---
+
+### Urutan Prioritas Perbaikan
+1. ~~🔴 **SR1 + SR2** (directory traversal + JSON injection)~~ — SR1: FALSE POSITIVE; SR2: **FIXED**
+2. 🟠 **SR4** (`currentSSL_` race) — bypass TOFU verification antar koneksi
+3. 🟠 **SR3** (data race `confirmPin_`) — UB, bisa menyebabkan pairing gagal
+4. 🟡 **SR5 + SR6 + SR7** (TLS/HLC hardening) — stabilitas dan portabilitas
+5. 🟢 **SR8 + SR9** (busy-wait + handle cleanup) — housekeeping
+

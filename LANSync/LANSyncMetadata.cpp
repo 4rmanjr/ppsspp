@@ -1,5 +1,6 @@
 #include "LANSync/LANSyncMetadata.h"
 #include "LANSync/LANSyncJson.h"
+#include "LANSync/TLSTransport.h"
 #include "Common/File/FileUtil.h"
 #include "Common/File/Path.h"
 #include <cstdio>
@@ -38,7 +39,7 @@ bool LANSyncMetadata::Save(const Path &ppstPath, const HLC &hlc, uint64_t origin
         "{\"hlc\":\"%s\",\"originalMtime\":%llu,\"peerId\":\"%s\"}\n",
         hlc.ToString().c_str(),
         (unsigned long long)originalMtime,
-        peerId.c_str());
+        LANSync::JsonEscape(peerId).c_str());
     if (n < 0 || (size_t)n >= sizeof(buf))
         return false;
     return File::WriteStringToFile(false, std::string(buf, n), sidecar);
