@@ -283,6 +283,7 @@ public class PpssppActivity extends AppCompatActivity implements SensorEventList
 	@Override
 	public void onRequestPermissionsResult(int requestCode, @NonNull String [] permissions, @NonNull int[] grantResults) {
 		super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+		LANSyncMDNSHelper.onRequestPermissionsResult(requestCode, permissions, grantResults);
 		switch (requestCode) {
 			case REQUEST_CODE_STORAGE_PERMISSION:
 				if (permissionsGranted(permissions, grantResults)) {

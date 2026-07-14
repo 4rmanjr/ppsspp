@@ -40,6 +40,16 @@ class LANSyncMDNSHelper {
 	private Activity mActivity;
 	private static final int REQ_LANSYNC_PERMS = 0x4C41; // "LA"
 
+	// Pending discovery/announce state, replayed after the runtime permission
+	// is granted (onRequestPermissionsResult).
+	private String mPendingDiscoveryType;
+	private boolean mDiscoveryPending = false;
+	private String mPendingAnnounceType;
+	private int mPendingAnnouncePort;
+	private String mPendingAnnounceName;
+	private String mPendingAnnouncePeerId;
+	private boolean mAnnouncePending = false;
+
 	private static native void nativeOnPeerFound(String name, String host, int port, String serviceType, String peerId);
 	private static native void nativeOnPeerLost(String name, String host, int port, String serviceType, String peerId);
 	private static native void nativeOnAnnounceResult(boolean success, String msg);
@@ -73,7 +83,7 @@ class LANSyncMDNSHelper {
 	}
 
 	public static void startDiscovery(String serviceType) {
-		if (sInstance != null) sInstance.startDiscoveryInternal(serviceType);
+		if (sInstance != null) sInstance.startDiscoveryGuarded(serviceType);
 	}
 
 	public static void stopDiscovery() {
@@ -81,7 +91,7 @@ class LANSyncMDNSHelper {
 	}
 
 	public static void startAnnounce(String serviceType, int port, String deviceName, String peerId) {
-		if (sInstance != null) sInstance.startAnnounceInternal(serviceType, port, deviceName, peerId);
+		if (sInstance != null) sInstance.startAnnounceGuarded(serviceType, port, deviceName, peerId);
 	}
 
 	public static void stopAnnounce() {
@@ -168,9 +178,52 @@ class LANSyncMDNSHelper {
 		activity.requestPermissions(arr, REQ_LANSYNC_PERMS);
 	}
 
+	// --- Deferred start: remember intent, request perm if needed, replay on grant ---
+	private void startDiscoveryGuarded(String serviceType) {
+		mPendingDiscoveryType = serviceType;
+		mDiscoveryPending = true;
+		if (ensurePermissionsGranted()) {
+			startDiscoveryInternal(serviceType);
+		} else if (mActivity != null) {
+			maybeRequestPermissions();
+		}
+	}
+
+	private void startAnnounceGuarded(String serviceType, int port, String deviceName, String peerId) {
+		mPendingAnnounceType = serviceType;
+		mPendingAnnouncePort = port;
+		mPendingAnnounceName = deviceName;
+		mPendingAnnouncePeerId = peerId;
+		mAnnouncePending = true;
+		if (ensurePermissionsGranted()) {
+			startAnnounceInternal(serviceType, port, deviceName, peerId);
+		} else if (mActivity != null) {
+			maybeRequestPermissions();
+		}
+	}
+
+	public static void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+		if (sInstance != null) sInstance.onPermissionResultInternal(requestCode, grantResults);
+	}
+
+	private void onPermissionResultInternal(int requestCode, int[] grantResults) {
+		if (requestCode != REQ_LANSYNC_PERMS) return;
+		boolean granted = (grantResults != null && grantResults.length > 0 &&
+			grantResults[0] == PackageManager.PERMISSION_GRANTED);
+		if (!granted) return;
+		// Replay any discovery/announce that was deferred on the missing permission.
+		if (mDiscoveryPending) {
+			mDiscoveryPending = false;
+			startDiscoveryInternal(mPendingDiscoveryType);
+		}
+		if (mAnnouncePending) {
+			mAnnouncePending = false;
+			startAnnounceInternal(mPendingAnnounceType, mPendingAnnouncePort, mPendingAnnounceName, mPendingAnnouncePeerId);
+		}
+	}
+
 	private void startDiscoveryInternal(String serviceType) {
 		if (mNsdManager == null) return;
-		maybeRequestPermissions();
 		acquireMulticastLock();
 
 		mDiscoveryListener = new NsdManager.DiscoveryListener() {
@@ -275,11 +328,11 @@ class LANSyncMDNSHelper {
 		}
 		mDiscoveryListener = null;
 		releaseMulticastLock();
+		mDiscoveryPending = false;
 	}
 
 	private void startAnnounceInternal(String serviceType, int port, String deviceName, String peerId) {
 		if (mNsdManager == null) return;
-		maybeRequestPermissions();
 		acquireMulticastLock();
 
 		NsdServiceInfo serviceInfo = new NsdServiceInfo();
@@ -326,5 +379,6 @@ class LANSyncMDNSHelper {
 		}
 		mRegistrationListener = null;
 		releaseMulticastLock();
+		mAnnouncePending = false;
 	}
 }
