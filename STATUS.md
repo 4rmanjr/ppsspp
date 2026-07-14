@@ -296,6 +296,15 @@ while (pos < data.size() && (isdigit(data[pos]) || data[pos] == '-')) {  // data
 
 **PEM JSON Escaping Note**: CR4 (session 2026-07-10) removed `JsonEscape` from transport because old custom parsers didn't handle escape sequences → double-escape. Sekarang dengan gason (`JsonGetString`) yang handle escape sequences dengan benar, `JsonEscape` dipakai di transport. Flow: `PairWithPeer` escape → kirim → `HandlePairBegin` gason decode → simpan raw → `SavePeer` escape untuk file. Single-escaping, no double-escape.
 
+### Session 2026-07-14 — Android mDNS permission auto-restart + minor cleanup
+
+**Commit `17d999b324` (fix Android mDNS):** `LANSyncMDNSHelper` guarded start (`startDiscoveryGuarded`/`startAnnounceGuarded`) menyimpan pending state (`mPendingDiscoveryType`, `mDiscoveryPending`, `mPendingAnnounceType/Port/Name/PeerId`, `mAnnouncePending`) → request permission → replay di `onPermissionResultInternal` setelah grant. `PpssppActivity.onRequestPermissionsResult` forward ke `LANSyncMDNSHelper.onRequestPermissionsResult`.
+
+**Minor fixes (post-review):**
+- `onPermissionResultInternal`: ganti cek `grantResults[0]` → loop semua `grantResults` (robust kalau 2 permission di-bundle).
+- `onServiceResolved`: perbaiki indentasi blok `ResolvedPeer rp` / `rp.host` / `rp.port` / `rp.peerId` / `mResolvedCache.put` ke 7 tab (sejajar method body).
+- `stopDiscoveryInternal`/`stopAnnounceInternal` sudah clear pending flag (replay aman, idempoten).
+
 ### Urutan Perbaikan yang Disarankan (Updated)
 1. ~~**TD2** (bug user-facing) — opsi B (per-peer set).~~ ✅ FIXED
 2. ~~**TD4** (1 baris, UB nyata).~~ ✅ FIXED

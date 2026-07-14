@@ -208,8 +208,10 @@ class LANSyncMDNSHelper {
 
 	private void onPermissionResultInternal(int requestCode, int[] grantResults) {
 		if (requestCode != REQ_LANSYNC_PERMS) return;
-		boolean granted = (grantResults != null && grantResults.length > 0 &&
-			grantResults[0] == PackageManager.PERMISSION_GRANTED);
+		boolean granted = (grantResults != null && grantResults.length > 0);
+		for (int r : grantResults) {
+			if (r != PackageManager.PERMISSION_GRANTED) { granted = false; break; }
+		}
 		if (!granted) return;
 		// Replay any discovery/announce that was deferred on the missing permission.
 		if (mDiscoveryPending) {
@@ -255,11 +257,11 @@ class LANSyncMDNSHelper {
 						}
 						Log.d(TAG, "Resolved: " + resolvedInfo.getServiceName()
 							+ " @ " + host + ":" + resolvedInfo.getPort());
-					ResolvedPeer rp = new ResolvedPeer();
-					rp.host = host;
-					rp.port = resolvedInfo.getPort();
-					rp.peerId = peerId;
-					mResolvedCache.put(resolvedInfo.getServiceName(), rp);
+						ResolvedPeer rp = new ResolvedPeer();
+						rp.host = host;
+						rp.port = resolvedInfo.getPort();
+						rp.peerId = peerId;
+						mResolvedCache.put(resolvedInfo.getServiceName(), rp);
 					nativeOnPeerFound(
 						resolvedInfo.getServiceName(),
 						host,
