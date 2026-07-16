@@ -9,13 +9,13 @@
 #include <atomic>
 #include "LANSync/LANSyncProtocol.h"
 #include "LANSync/LANSyncDiscovery.h"
+#include "LANSync/LANSyncServer.h"
 #include "LANSync/ParseSaveFilename.h"
 #include "Common/UI/Screen.h"
 #include "Common/File/Path.h"
 
 namespace LANSync {
 
-class LANSyncServer;
 class LANSyncClient;
 class LANSyncDiscovery;
 class PairingManager;
@@ -56,9 +56,9 @@ public:
   TLSContext *GetTLSContext() const { return tlsCtx_.get(); }
 
 private:
-  std::string HandleListSaveStates(const std::string &method, const std::string &path, const std::string &body);
-  std::string HandleGetSaveState(const std::string &method, const std::string &path, const std::string &body);
-  std::string HandlePutSaveState(const std::string &method, const std::string &path, const std::string &body);
+  std::string HandleListSaveStates(const std::string &method, const std::string &path, const std::string &body, const LANSyncServer::ConnectionCtx &ctx);
+  std::string HandleGetSaveState(const std::string &method, const std::string &path, const std::string &body, const LANSyncServer::ConnectionCtx &ctx);
+  std::string HandlePutSaveState(const std::string &method, const std::string &path, const std::string &body, const LANSyncServer::ConnectionCtx &ctx);
 
   void DoSyncWithPeer(const DiscoveredPeer &peer);
 

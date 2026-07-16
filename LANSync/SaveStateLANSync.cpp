@@ -81,14 +81,14 @@ bool SaveStateLANSync::StartServer() {
   int port = config.iPort;
 
   server_->RegisterHandler("/states",
-      [this](const std::string &method, const std::string &path, const std::string &body) -> std::string {
+      [this](const std::string &method, const std::string &path, const std::string &body, const LANSyncServer::ConnectionCtx &ctx) -> std::string {
         if (path == "/states" || path == "/states/") {
-          return HandleListSaveStates(method, path, body);
+          return HandleListSaveStates(method, path, body, ctx);
         }
         if (method == "GET") {
-          return HandleGetSaveState(method, path, body);
+          return HandleGetSaveState(method, path, body, ctx);
         } else if (method == "PUT") {
-          return HandlePutSaveState(method, path, body);
+          return HandlePutSaveState(method, path, body, ctx);
         }
         return "{\"error\":\"method_not_allowed\"}";
       });
@@ -195,23 +195,23 @@ static bool IsValidGameId(const std::string &gameId) {
 
 // --- HTTP Handlers ---
 
-static bool IsPeerTrusted(LANSyncServer *server) {
-    SSL *ssl = server->GetCurrentSSL();
-    if (!ssl) return true;
-    std::string fp = TLSContext::GetPeerFingerprint(ssl);
-    if (fp.empty()) return false;
+// [PPSSPP-FORK] SR4: trust gate now receives the peer's certificate
+// fingerprint directly (computed per-connection in LANSyncServer::HandleConnection)
+// instead of reading a shared member that concurrent connections could clobber.
+static bool IsPeerTrusted(const std::string &peerFingerprint) {
+    if (peerFingerprint.empty()) return false;
     // TOFU: if no peers stored yet, accept any cert (first-use mode)
     auto peers = PlatformKeyStore::LoadPeers();
-    return peers.empty() || PlatformKeyStore::IsTrusted(fp);
+    return peers.empty() || PlatformKeyStore::IsTrusted(peerFingerprint);
 }
 
-std::string SaveStateLANSync::HandleListSaveStates(const std::string &method, const std::string &path, const std::string &body) {
+std::string SaveStateLANSync::HandleListSaveStates(const std::string &method, const std::string &path, const std::string &body, const LANSyncServer::ConnectionCtx &ctx) {
   (void)path;
   (void)body;
   if (method != "GET") {
     return "{\"error\":\"method_not_allowed\"}";
   }
-  if (!IsPeerTrusted(server_.get())) {
+  if (!IsPeerTrusted(ctx.peerFingerprint)) {
     return "{\"error\":\"forbidden\",\"message\":\"Pair this device first\"}";
   }
 
@@ -247,11 +247,12 @@ std::string SaveStateLANSync::HandleListSaveStates(const std::string &method, co
     if (!first) json += ",";
     first = false;
 
-    char buf[512];
+    char buf[640];
     snprintf(buf, sizeof(buf),
-        "{\"gameId\":\"%s\",\"slot\":%d,\"checksum\":\"%s\",\"mtime\":%llu,\"size\":%lld}",
+        "{\"gameId\":\"%s\",\"slot\":%d,\"checksum\":\"%s\",\"mtime\":%llu,\"size\":%lld,\"hlcPhysical\":%llu,\"hlcLogical\":%u}",
         JsonEscape(gameId).c_str(), slot, checksum.c_str(),
-        (unsigned long long)mtime, (long long)file.size);
+        (unsigned long long)mtime, (long long)file.size,
+        (unsigned long long)hlc.physical, hlc.logical);
     json += buf;
   }
 
@@ -259,12 +260,12 @@ std::string SaveStateLANSync::HandleListSaveStates(const std::string &method, co
   return json;
 }
 
-std::string SaveStateLANSync::HandleGetSaveState(const std::string &method, const std::string &path, const std::string &body) {
+std::string SaveStateLANSync::HandleGetSaveState(const std::string &method, const std::string &path, const std::string &body, const LANSyncServer::ConnectionCtx &ctx) {
   (void)body;
   if (method != "GET") {
     return "{\"error\":\"method_not_allowed\"}";
   }
-  if (!IsPeerTrusted(server_.get())) {
+  if (!IsPeerTrusted(ctx.peerFingerprint)) {
     return "{\"error\":\"forbidden\",\"message\":\"Pair this device first\"}";
   }
 
@@ -295,11 +296,11 @@ std::string SaveStateLANSync::HandleGetSaveState(const std::string &method, cons
   return data;
 }
 
-std::string SaveStateLANSync::HandlePutSaveState(const std::string &method, const std::string &path, const std::string &body) {
+std::string SaveStateLANSync::HandlePutSaveState(const std::string &method, const std::string &path, const std::string &body, const LANSyncServer::ConnectionCtx &ctx) {
   if (method != "PUT") {
     return "{\"error\":\"method_not_allowed\"}";
   }
-  if (!IsPeerTrusted(server_.get())) {
+  if (!IsPeerTrusted(ctx.peerFingerprint)) {
     return "{\"error\":\"forbidden\",\"message\":\"Pair this device first\"}";
   }
 
@@ -447,8 +448,12 @@ void SaveStateLANSync::AutoSyncLoop() {
     }
 
     int interval = config.iAutoSyncInterval > 0 ? config.iAutoSyncInterval : 60;
-    for (int i = 0; i < interval * 10 && autoSyncRunning_; i++) {
-      std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    // [PPSSPP-FORK] SR8: sleep the full interval once instead of busy-waiting
+    // in 100ms steps. The loop still wakes every second so shutdown (via
+    // autoSyncRunning_) is responsive, and duplicate-peer guarding already
+    // happens inside SyncWithPeer via activeSyncKeys_.
+    for (int i = 0; i < interval && autoSyncRunning_; i++) {
+      std::this_thread::sleep_for(std::chrono::seconds(1));
     }
   }
 }
@@ -576,6 +581,13 @@ void SaveStateLANSync::ResolveConflict(LANSyncClient &client, const std::string 
                                         const std::string &peerId) {
   Path localPath = stateDir_ / (key + ".ppst");
 
+  // [PPSSPP-FORK] TD5 (preparatory, still OPEN): conflict resolution here
+  // uses mtime + checksum LWW only. The HLC fields on SaveFileEntry
+  // (hlcPhysical/hlcLogical, carried since protocol v2) are NOT yet used
+  // for ordering, to remain compatible with peers still on protocol v1.
+  // When v1 peers are no longer supported, switch this to HLC::operator<
+  // for deterministic, causal conflict resolution.
+
   if (remoteEntry.mtime > localEntry.mtime) {
     Path conflictPath(localPath.ToString() + ".conflict");
     if (!File::Rename(localPath, conflictPath)) return;
@@ -695,6 +707,10 @@ std::vector<SaveFileEntry> SaveStateLANSync::ParseSaveFileList(const std::string
     entry.checksum = JsonGetString(obj, "checksum");
     entry.mtime = (uint64_t)JsonGetInt64(obj, "mtime");
     entry.size = JsonGetInt64(obj, "size");
+    // [PPSSPP-FORK] TD5 (preparatory): parse HLC if present; absent
+    // (older peers / protocol v1) leaves it at 0 — fully backward compatible.
+    entry.hlcPhysical = (uint64_t)JsonGetInt64(obj, "hlcPhysical");
+    entry.hlcLogical = (uint32_t)JsonGetInt64(obj, "hlcLogical");
 
     result.push_back(entry);
     pos = objEnd + 1;

@@ -76,6 +76,9 @@ void LANSyncDiscovery::Stop() {
 	probeCv_.notify_all();
 	if (probeThread_.joinable())
 		probeThread_.join();
+	// [PPSSPP-FORK] SR9: reset the handle after join so it is no longer
+	// joinable (idiomatic; avoids holding a stale thread object).
+	probeThread_ = std::thread();
 
 	callback_ = DiscoveryCallback();
 }

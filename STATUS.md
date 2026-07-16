@@ -140,6 +140,8 @@
 8. **[2026-07-09] [SEDANG] Resolusi konflik murni mtime (LWW) + celah tie — FIXED**: Commit `1a91fe810e`.
 9. **[2026-07-09] [RENDAH] Tidak ada batas ukuran PUT — FIXED**: Commit `40fe1cd2de`.
 10. **[2026-07-09] [RENDAH] Parse gameId/slot asumsi 1 underscore — FIXED**: Commit `67421d73bb`.
+11. **[2026-07-16] [HARNESS-ONLY] Smoke test Test 3 bisa FAIL palsu pada re-run**: `PPSSPPSDL` yatim dari run ter-interrupt tetap bind port lama (27314) dan menyajikan state dir `HOME` lama → Test 3 dapat menemukan `.ppst` sisa PUT. Bukan bug produk. Mitigasi: port random + `fuser -k` pre-start (`test/lansync_smoke_test.sh:14-18`). Di environment ini `xvfb-run` hang sehingga verifikasi full-green belum dikonfirmasi ulang (pakai `Xvfb :99` manual).
+12. **[2026-07-16] [TSAN] Belum dijalankan**: build `-DUSE_TSAN=ON` (Debug) + smoke test direkomendasikan untuk konfirmasi zero race pada SR3 (`confirmPin_`) & SR4 (`currentSSL_`); `option(USE_TSAN)` sudah ditambah di `CMakeLists.txt`.
 
 ### Session 2026-07-10 — Discovery Bugfixes (#11, #12, #14) + TLS Fix (#6) - IMPLEMENTED
 
@@ -348,13 +350,13 @@ Hasil review mendalam terhadap **seluruh 34 file** di direktori `LANSync/` — f
 |---|----------|-----|--------|--------|
 | SR1 | ~~🔴 **Critical**~~ | ~~**Directory traversal**~~ — **FALSE POSITIVE**: `gameId` di-extract via `subpath.substr(0, find('/'))` → selalu segment tunggal. Concat `gameId + "_" + slot + ".ppst"` → flat filename, bukan path component. | `SaveStateLANSync.cpp` | **FALSE POSITIVE** |
 | SR2 | ~~🔴 **Critical**~~ | ~~**JSON injection**~~ — **FIXED**: `HandleListSaveStates` pakai `JsonEscape(gameId)`. `IsValidGameId()` di GET/PUT. `LANSyncMetadata::Save` escape `peerId`. | `SaveStateLANSync.cpp`, `LANSyncMetadata.cpp` | **FIXED** |
-| SR3 | 🟠 **High** | **Data race `confirmPin_`** — ditulis di bawah `dialogMutex_` (via `ConfirmPin()`) tapi dibaca di bawah `mutex_` (via thread `PairWithPeer()`). Undefined behavior | `LANSyncPairing.cpp` (`PairWithPeer:~200`, `ConfirmPin:~280`) | **OPEN** |
-| SR4 | 🟠 **High** | **`currentSSL_` race** — `LANSyncServer` menyimpan SSL koneksi saat ini di `currentSSL_` (member). Dengan banyak koneksi concurrent, handler bisa membaca SSL dari koneksi BERBEDA → verifikasi TOFU fingerprint salah sasaran | `LANSyncServer.h/.cpp` (`currentSSL_`) | **OPEN** |
-| SR5 | 🟡 **Medium** | **Non-blocking flag leak** — `SSLHandshakeWithTimeout()` set fd ke NONBLOCK sebelum handshake, tapi hanya restore blocking di success path. Jika handshake gagal (`return false`), fd tetap NONBLOCK → I/O selanjutnya unpredictable | `TLSTransport.cpp` (`SSLHandshakeWithTimeout:~150`) | **OPEN** |
-| SR6 | 🟡 **Medium** | **OpenSSL return value unchecked** — `SSL_CTX_use_certificate_file()`, `SSL_CTX_use_PrivateKey_file()`, `SSL_set_fd()` dipanggil tanpa cek return value. Jika file cert corrupt/tak terbaca, eksekusi berlanjut seolah sukses | `TLSTransport.cpp` (`InitServer:~175`, `InitClient:~200`) · `LANSyncClient.cpp` (`Connect:~50`) | **OPEN** |
-| SR7 | 🟡 **Medium** | **Non-portable `uint64_t` cast** — `HLC::FromString()` menggunakan `sscanf(..., "%llu", (unsigned long long *)&h.physical)`. `uint64_t` bisa `unsigned long` (ILP64) → type-punning UB via cast. Juga return value `sscanf` tidak dicek | `HLC.h` (`FromString:~57`) | **OPEN** |
-| SR8 | 🟢 **Low** | **Busy-wait di `AutoSyncLoop()`** — loop 10 iterasi/detik (`sleep_for(100ms) × interval×10`) padahal cukup `sleep_for(seconds(interval))` sekali. Juga tidak cek `IsSyncing()` sebelum trigger sync baru → potensi duplikasi sync ke peer sama | `SaveStateLANSync.cpp` (`AutoSyncLoop:~280`) | **OPEN** |
-| SR9 | 🟢 **Low** | **`probeThread_` handle tidak direset** — `Stop()` melakukan `join()` tapi `probeThread_` tetap menyimpan handle lama. Aman karena `joinable()` return false setelah join, tapi tidak idiomatic | `LANSyncDiscovery.cpp` (`Stop:~65`) | **OPEN** |
+| SR3 | 🟠 **High** | **Data race `confirmPin_`** — ditulis di bawah `dialogMutex_` (via `ConfirmPin()`) tapi dibaca di bawah `mutex_` (via thread `PairWithPeer()`). Undefined behavior | `LANSyncPairing.cpp` (`PairWithPeer:~200`, `ConfirmPin:~280`) | **FIXED** |
+| SR4 | 🟠 **High** | **`currentSSL_` race** — `LANSyncServer` menyimpan SSL koneksi saat ini di `currentSSL_` (member). Dengan banyak koneksi concurrent, handler bisa membaca SSL dari koneksi BERBEDA → verifikasi TOFU fingerprint salah sasaran | `LANSyncServer.h/.cpp` (`currentSSL_`) | **FIXED** |
+| SR5 | 🟡 **Medium** | **Non-blocking flag leak** — `SSLHandshakeWithTimeout()` set fd ke NONBLOCK sebelum handshake, tapi hanya restore blocking di success path. Jika handshake gagal (`return false`), fd tetap NONBLOCK → I/O selanjutnya unpredictable | `TLSTransport.cpp` (`SSLHandshakeWithTimeout:~150`) | **FIXED** |
+| SR6 | 🟡 **Medium** | **OpenSSL return value unchecked** — `SSL_CTX_use_certificate_file()`, `SSL_CTX_use_PrivateKey_file()`, `SSL_set_fd()` dipanggil tanpa cek return value. Jika file cert corrupt/tak terbaca, eksekusi berlanjut seolah sukses | `TLSTransport.cpp` (`InitServer:~175`, `InitClient:~200`) · `LANSyncClient.cpp` (`Connect:~50`) | **FIXED** |
+| SR7 | 🟡 **Medium** | **Non-portable `uint64_t` cast** — `HLC::FromString()` menggunakan `sscanf(..., "%llu", (unsigned long long *)&h.physical)`. `uint64_t` bisa `unsigned long` (ILP64) → type-punning UB via cast. Juga return value `sscanf` tidak dicek | `HLC.h` (`FromString:~57`) | **FIXED** |
+| SR8 | 🟢 **Low** | **Busy-wait di `AutoSyncLoop()`** — loop 10 iterasi/detik (`sleep_for(100ms) × interval×10`) padahal cukup `sleep_for(seconds(interval))` sekali. Juga tidak cek `IsSyncing()` sebelum trigger sync baru → potensi duplikasi sync ke peer sama | `SaveStateLANSync.cpp` (`AutoSyncLoop:~280`) | **FIXED** |
+| SR9 | 🟢 **Low** | **`probeThread_` handle tidak direset** — `Stop()` melakukan `join()` tapi `probeThread_` tetap menyimpan handle lama. Aman karena `joinable()` return false setelah join, tapi tidak idiomatic | `LANSyncDiscovery.cpp` (`Stop:~65`) | **FIXED** |
 
 ### Detail Temuan
 
@@ -456,4 +458,47 @@ if (probeThread_.joinable())
 3. 🟠 **SR3** (data race `confirmPin_`) — UB, bisa menyebabkan pairing gagal
 4. 🟡 **SR5 + SR6 + SR7** (TLS/HLC hardening) — stabilitas dan portabilitas
 5. 🟢 **SR8 + SR9** (busy-wait + handle cleanup) — housekeeping
+
+### Session 2026-07-16 — Remediasi SR3–SR9 + TD5 (Production Hardening) — ALL FIXED
+
+**Konteks:** Seluruh 9 temuan SR1–SR9 diverifikasi ulang terhadap source aktual. SR1 = false positive, SR2 sudah FIXED (session 2026-07-14). Sisa SR3–SR9 (2 high, 3 medium, 2 low) + TD5 di-remediasi dengan standar produksi, additive-only (`#ifdef PPSSPP_LANSYNC` + `[PPSSPP-FORK]`). TD5 disepakati **preparatory only** (non-breaking) karena butuh wire-protocol change.
+
+**SR4 — `currentSSL_` race (HIGH) — FIXED:**
+- `LANSyncServer`: hapus member `currentSSL_` + getter `GetCurrentSSL()`. Tambah `struct ConnectionCtx { SSL *ssl; std::string peerFingerprint; }`. `RequestHandler` typedef kini membawa param ke-4 `const ConnectionCtx &`.
+- `HandleConnection`: fingerprint peer dihitung **sekali** via `TLSContext::GetPeerFingerprint(ssl)` dan di-pass ke `Dispatch` → handler (bukan disimpan di member shared). Menghilangkan race TOFU antar-koneksi concurrent.
+- `SaveStateLANSync`: `IsPeerTrusted(LANSyncServer*)` → `IsPeerTrusted(const std::string &peerFingerprint)`, panggil `PlatformKeyStore::IsTrusted(fp)` (sudah fingerprint-based). 3 handler `/states` + lambda `/states` + 2 lambda pairing di-update signature. TOFU (`peers.empty() → accept`) dipertahankan.
+
+**SR3 — Data race `confirmPin_` (HIGH) — FIXED:**
+- `PairingManager::ConfirmPin()` kini tulis `confirmPin_` di bawah `mutex_` (sama dengan reader di thread `PairWithPeer`), bukan `dialogMutex_`. Menghilangkan UB.
+
+**SR5 — Non-blocking flag leak (MEDIUM) — FIXED:**
+- `SSLHandshakeWithTimeout()`: restore blocking mode via RAII scope-guard (`restoreBlocking()`) dipanggil di **semua** exit path (success + 3 failure). Tidak ada lagi fd NONBLOCK bocor.
+
+**SR6 — OpenSSL return value unchecked (MEDIUM) — FIXED:**
+- `InitServer`/`InitClient`: cek return `<= 0` untuk `SSL_CTX_use_certificate_file`, `SSL_CTX_use_PrivateKey_file`, + tambah `SSL_CTX_check_private_key`. On failure: `ERROR_LOG` + `ERR_print_errors_fp(stderr)` + free ctx + return false. `LANSyncClient::Connect`: cek `SSL_set_fd` (`<openssl/err.h>` ditambah di LANSyncClient.cpp). `Log.h` di-include paling awal di TLSTransport.cpp (chain `Core/Config.h` mem-break macro `Log` bila di-include setelahnya).
+
+**SR7 — Non-portable `uint64_t` cast (MEDIUM) — FIXED:**
+- `HLC::FromString()` pakai `std::from_chars` (`<charconv>`) untuk `physical`/`logical`, dengan cek `ec != errc()`. Menghilangkan type-punning UB `uint64_t* → unsigned long long*` dan cek parse error. `ToString()` tetap benar.
+
+**SR8 — Busy-wait `AutoSyncLoop()` (LOW) — FIXED:**
+- Loop diganti `sleep_for(seconds(1)) × interval` (responsif ke `autoSyncRunning_`, tidak lagi 100ms×interval×10).
+
+**SR9 — `probeThread_` handle (LOW) — FIXED:**
+- `LANSyncDiscovery::Stop()` reset `probeThread_ = std::thread();` setelah `join()`.
+
+**TD5 — HLC di resolusi konflik (LOW-MED) — PREPARATORY (tetap OPEN):**
+- `SaveFileEntry` tambah `hlcPhysical`/`hlcLogical`. `PeerInfo::protocolVersion` default → `2`. `HandleListSaveStates` emit `"hlcPhysical"`/`"hlcLogical"` dari sidecar; `ParseSaveFileList` parse (default 0 bila absen → backward compatible dgn peer v1). `ResolveConflict` tetap mtime+checksum LWW; TODO dikomentari untuk migrasi ke `HLC::operator<` saat peer v1 tak lagi didukung.
+
+**CMake — ThreadSanitizer (baru):**
+- `option(USE_TSAN ... OFF)` + block (`-fsanitize=thread -g -O1` compile, `-fsanitize=thread` link, Debug-only) mirror pola `USE_ASAN`/`USE_UBSAN`.
+
+**Verifikasi:**
+- `Core` library full build (`cmake -DPPSSPP_LANSYNC=ON` + `make Core -j`) → **[100%] Built target Core, 0 error**. Seluruh TU LANSync (TLSTransport, LANSyncClient, LANSyncPairing, LANSyncDiscovery, LANSyncServer, SaveStateLANSync, LANSyncMetadata, HLC) compile clean.
+- `PPSSPPSDL` full build (`make PPSSPPSDL -j`) → **[100%] Built target PPSSPPSDL, 0 error** dengan `PPSSPP_LANSYNC=ON`.
+- **Smoke test vs binary asli**: **Test 7.5 (SR4 concurrent regression) PASS** — pair clientC (trusted ke-2), lalu 3 koneksi concurrent: clientA (200), clientC (200), clientB untrusted (403). Membuktikan fix `currentSSL_` race bekerja dengan koneksi concurrent. `bash -n` PASS.
+- **Catatan smoke test (harness-only, BUKAN produk bug)**: Test 3 ("GET /states empty `[]`") bisa FAIL palsu bila ada `PPSSPPSDL` yatim dari run sebelumnya yang ter-interrupt — proses tetap bind ke port lama dan menyajikan state dir `HOME` lama yang sudah berisi `.ppst` hasil PUT. Akar: script hanya bebaskan port di `cleanup` (EXIT), bukan di START. Mitigasi sudah ditambah: random port + `fuser -k` sebelum start (`test/lansync_smoke_test.sh:14-18`). Full green run belum di-rekonfirmasi di environment ini karena `xvfb-run` hang (pakai `Xvfb :99` manual sebagai ganti).
+- Rekomendasi: jalankan build `-DUSE_TSAN=ON` (Debug) lalu smoke test untuk konfirmasi zero race (SR3/SR4).
+
+**Remaining OPEN:** hanya **TD5** (preparatory, menunggu keputusan protocol-version bump untuk implementasi penuh).
+
 

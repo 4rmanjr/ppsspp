@@ -108,7 +108,11 @@ void LANSyncServer::HandleConnection(int fd, SSL *ssl) {
         }
     }
 
-    currentSSL_ = ssl;
+    ConnectionCtx connCtx;
+    connCtx.ssl = ssl;
+    if (ssl) {
+        connCtx.peerFingerprint = TLSContext::GetPeerFingerprint(ssl);
+    }
 
     std::string rawRequest;
     char buf[4096];
@@ -168,7 +172,7 @@ void LANSyncServer::HandleConnection(int fd, SSL *ssl) {
     } else if (!rawRequest.empty()) {
         std::string method, path, body;
         if (ParseHTTP(rawRequest, method, path, body)) {
-            std::string response = Dispatch(method, path, body);
+            std::string response = Dispatch(method, path, body, connCtx);
 
             // Map JSON error responses to HTTP status codes
             int statusCode = 200;
@@ -188,7 +192,6 @@ void LANSyncServer::HandleConnection(int fd, SSL *ssl) {
         SSL_shutdown(ssl);
         SSL_free(ssl);
     }
-    currentSSL_ = nullptr;
     closesocket(fd);
 }
 
@@ -211,10 +214,10 @@ bool LANSyncServer::ParseHTTP(const std::string &raw, std::string &method, std::
     return true;
 }
 
-std::string LANSyncServer::Dispatch(const std::string &method, const std::string &path, const std::string &body) {
+std::string LANSyncServer::Dispatch(const std::string &method, const std::string &path, const std::string &body, const ConnectionCtx &ctx) {
     for (const auto &[prefix, handler] : handlers_) {
         if (path.compare(0, prefix.size(), prefix) == 0) {
-            return handler(method, path, body);
+            return handler(method, path, body, ctx);
         }
     }
     return "{\"error\":\"not_found\"}";

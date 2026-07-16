@@ -71,12 +71,14 @@ std::string PairingManager::GetLocalPeerId() {
 
 void PairingManager::RegisterHandlers(LANSyncServer *server) {
     server->RegisterHandler("/pair/begin",
-        [this](const std::string &method, const std::string &path, const std::string &body) {
+        [this](const std::string &method, const std::string &path, const std::string &body, const LANSyncServer::ConnectionCtx &ctx) {
+            (void)ctx;
             return HandlePairBegin(method, path, body);
         });
 
     server->RegisterHandler("/pair/verify",
-        [this](const std::string &method, const std::string &path, const std::string &body) {
+        [this](const std::string &method, const std::string &path, const std::string &body, const LANSyncServer::ConnectionCtx &ctx) {
+            (void)ctx;
             return HandlePairVerify(method, path, body);
         });
 }
@@ -307,8 +309,13 @@ void PairingManager::CancelPairing() {
 void PairingManager::ConfirmPin(const std::string &pin) {
     {
         std::lock_guard<std::mutex> lk(dialogMutex_);
-        confirmPin_ = pin;
         pendingDialog_.reset();
+    }
+    // [PPSSPP-FORK] SR3: write confirmPin_ under the same mutex_ that the
+    // PairWithPeer worker thread reads it under, so the two never race.
+    {
+        std::lock_guard<std::mutex> l(mutex_);
+        confirmPin_ = pin;
     }
     dialogCv_.notify_one();
 }

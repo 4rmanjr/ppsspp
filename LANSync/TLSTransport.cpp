@@ -1,3 +1,7 @@
+// [PPSSPP-FORK] Log.h must be included before LANSync/TLSTransport.h /
+// Core/Config.h: the Config chain transitively breaks the Log macros/enum
+// visibility if Log.h is pulled in after them.
+#include "Common/Log.h"
 #include "LANSync/TLSTransport.h"
 #include "Core/Config.h"
 #include "Core/Util/PathUtil.h"
@@ -212,27 +216,40 @@ bool SSLHandshakeWithTimeout(SSL *ssl, int fd, int timeoutSec, bool asServer) {
     if (wasBlocking)
         fd_util::SetNonBlocking(fd, true);
 
+    // [PPSSPP-FORK] SR5: restore blocking mode on EVERY exit path. Previously
+    // a failed/timeout handshake leaked the non-blocking flag on the fd, making
+    // all subsequent I/O on that socket unpredictable.
+    auto restoreBlocking = [&]() {
+        if (wasBlocking)
+            fd_util::SetNonBlocking(fd, false);
+    };
+
     auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(timeoutSec);
 
     while (true) {
         int ret = asServer ? SSL_accept(ssl) : SSL_connect(ssl);
         if (ret == 1) {
-            if (wasBlocking)
-                fd_util::SetNonBlocking(fd, false);
+            restoreBlocking();
             return true;
         }
 
         int err = SSL_get_error(ssl, ret);
-        if (err != SSL_ERROR_WANT_READ && err != SSL_ERROR_WANT_WRITE)
+        if (err != SSL_ERROR_WANT_READ && err != SSL_ERROR_WANT_WRITE) {
+            restoreBlocking();
             return false;
+        }
 
-        if (std::chrono::steady_clock::now() >= deadline)
+        if (std::chrono::steady_clock::now() >= deadline) {
+            restoreBlocking();
             return false;
+        }
 
         double remaining = std::chrono::duration<double>(deadline - std::chrono::steady_clock::now()).count();
         bool forWrite = (err == SSL_ERROR_WANT_WRITE);
-        if (!fd_util::WaitUntilReady(fd, remaining, forWrite))
+        if (!fd_util::WaitUntilReady(fd, remaining, forWrite)) {
+            restoreBlocking();
             return false;
+        }
     }
 }
 
@@ -245,8 +262,30 @@ bool TLSContext::InitServer() {
     Path certPath = certDir_ / "sync_cert.pem";
     Path keyPath = certDir_ / "sync_key.pem";
 
-    SSL_CTX_use_certificate_file(ctxServer_, certPath.ToString().c_str(), SSL_FILETYPE_PEM);
-    SSL_CTX_use_PrivateKey_file(ctxServer_, keyPath.ToString().c_str(), SSL_FILETYPE_PEM);
+    // [PPSSPP-FORK] SR6: check every OpenSSL load return value. A corrupt or
+    // unreadable cert/key must abort instead of silently continuing with a
+    // half-initialised context.
+    if (SSL_CTX_use_certificate_file(ctxServer_, certPath.ToString().c_str(), SSL_FILETYPE_PEM) <= 0) {
+        WARN_LOG(Log::System, "LANSync: failed to load server cert %s", certPath.ToString().c_str());
+        ERR_print_errors_fp(stderr);
+        SSL_CTX_free(ctxServer_);
+        ctxServer_ = nullptr;
+        return false;
+    }
+    if (SSL_CTX_use_PrivateKey_file(ctxServer_, keyPath.ToString().c_str(), SSL_FILETYPE_PEM) <= 0) {
+        WARN_LOG(Log::System, "LANSync: failed to load server key %s", keyPath.ToString().c_str());
+        ERR_print_errors_fp(stderr);
+        SSL_CTX_free(ctxServer_);
+        ctxServer_ = nullptr;
+        return false;
+    }
+    if (!SSL_CTX_check_private_key(ctxServer_)) {
+        WARN_LOG(Log::System, "LANSync: server cert/key mismatch");
+        ERR_print_errors_fp(stderr);
+        SSL_CTX_free(ctxServer_);
+        ctxServer_ = nullptr;
+        return false;
+    }
 
     SSL_CTX_set_cipher_list(ctxServer_, "ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256");
     SSL_CTX_set_ecdh_auto(ctxServer_, 1);
@@ -271,8 +310,27 @@ bool TLSContext::InitClient() {
     // Load client cert + key so server can request it for mutual TLS
     Path certPath = certDir_ / "sync_cert.pem";
     Path keyPath = certDir_ / "sync_key.pem";
-    SSL_CTX_use_certificate_file(ctxClient_, certPath.ToString().c_str(), SSL_FILETYPE_PEM);
-    SSL_CTX_use_PrivateKey_file(ctxClient_, keyPath.ToString().c_str(), SSL_FILETYPE_PEM);
+    if (SSL_CTX_use_certificate_file(ctxClient_, certPath.ToString().c_str(), SSL_FILETYPE_PEM) <= 0) {
+        WARN_LOG(Log::System, "LANSync: failed to load client cert %s", certPath.ToString().c_str());
+        ERR_print_errors_fp(stderr);
+        SSL_CTX_free(ctxClient_);
+        ctxClient_ = nullptr;
+        return false;
+    }
+    if (SSL_CTX_use_PrivateKey_file(ctxClient_, keyPath.ToString().c_str(), SSL_FILETYPE_PEM) <= 0) {
+        WARN_LOG(Log::System, "LANSync: failed to load client key %s", keyPath.ToString().c_str());
+        ERR_print_errors_fp(stderr);
+        SSL_CTX_free(ctxClient_);
+        ctxClient_ = nullptr;
+        return false;
+    }
+    if (!SSL_CTX_check_private_key(ctxClient_)) {
+        WARN_LOG(Log::System, "LANSync: client cert/key mismatch");
+        ERR_print_errors_fp(stderr);
+        SSL_CTX_free(ctxClient_);
+        ctxClient_ = nullptr;
+        return false;
+    }
 
     SSL_CTX_set_verify(ctxClient_, SSL_VERIFY_NONE, nullptr);
     SSL_CTX_set_cipher_list(ctxClient_, "ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256");

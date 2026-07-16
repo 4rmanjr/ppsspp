@@ -11,7 +11,11 @@ if [ ! -f "$PPSSPP_BIN" ]; then
     echo "Build first: cmake -B build -DPPSSPP_LANSYNC=ON && cmake --build build"
     exit 1
 fi
-PORT=${LANSYNC_PORT:-27314}
+PORT=${LANSYNC_PORT:-$((27314 + (RANDOM % 1000)))}
+# [PPSSPP-FORK] Free any leftover server from a previously interrupted run so
+# we don't talk to a stale PPSSPPSDL serving an old HOME state dir.
+fuser -k "${PORT}/tcp" 2>/dev/null || true
+sleep 1
 TMP_HOME=$(mktemp -d)
 STATE_DIR="$TMP_HOME/.config/ppsspp/PSP/PPSSPP_STATE"
 mkdir -p "$STATE_DIR"
@@ -33,6 +37,14 @@ openssl req -new -x509 -key "$CERT_DIR/clientA_key.pem" -out "$CERT_DIR/clientA_
 openssl ecparam -genkey -name prime256v1 -out "$CERT_DIR/clientB_key.pem" 2>/dev/null
 openssl req -new -x509 -key "$CERT_DIR/clientB_key.pem" -out "$CERT_DIR/clientB_cert.pem" -days 3650 \
     -subj '/CN=PPSSPP Evil Client B' -addext 'subjectAltName=DNS:localhost,IP:127.0.0.1' 2>/dev/null
+
+# Client cert C (a SECOND trusted client, for SR4 concurrent-verification test)
+openssl ecparam -genkey -name prime256v1 -out "$CERT_DIR/clientC_key.pem" 2>/dev/null
+openssl req -new -x509 -key "$CERT_DIR/clientC_key.pem" -out "$CERT_DIR/clientC_cert.pem" -days 3650 \
+    -subj '/CN=PPSSPP Test Client C' -addext 'subjectAltName=DNS:localhost,IP:127.0.0.1' 2>/dev/null
+
+# Read clientC cert PEM, escape newlines for valid JSON
+CLIENT_C_PEM=$(sed ':a;N;$!ba;s/\n/\\n/g' "$CERT_DIR/clientC_cert.pem")
 
 # Read clientA cert PEM, escape newlines for valid JSON
 # PEM_read_bio_X509 handles \n escape sequences via gason's decoder
@@ -254,6 +266,41 @@ if echo "$PUT_B" | grep -q "403\|forbidden"; then
 else
   fail "expected 403 for untrusted PUT, got: $PUT_B"
 fi
+
+# =================================================
+echo "--- Test 7.5 (SR4): concurrent connections — trusted peers pass, untrusted rejected ---"
+# Pair a SECOND trusted client (clientC) exactly like clientA was paired in Test 2.
+# Then fire 3 concurrent TLS connections (clientA trusted, clientC trusted,
+# clientB untrusted) and assert the trust gate is evaluated PER-CONNECTION
+# (the old shared currentSSL_ member could let an untrusted peer pass if a
+# trusted peer's handshake happened to populate it last).
+
+BEGIN_C_BODY="{\"certPEM\":\"$CLIENT_C_PEM\"}"
+BEGIN_C_RESP=$(https_post "/pair/begin" "$BEGIN_C_BODY")
+NONCE_C=$(echo "$BEGIN_C_RESP" | grep -o '"nonce":"[^"]*"' | cut -d'"' -f4)
+PIN_C_HEX=$(printf '%s' "$NONCE_C" | openssl dgst -sha256 | cut -d' ' -f2 | cut -c1-6)
+PIN_C_DEC=$((16#${PIN_C_HEX:0:2} << 16 | 16#${PIN_C_HEX:2:2} << 8 | 16#${PIN_C_HEX:4:2}))
+PIN_C_PAD=$(printf "%06d" $((PIN_C_DEC % 1000000)))
+VERIFY_C_BODY="{\"nonce\":\"$NONCE_C\",\"pin\":\"$PIN_C_PAD\",\"peerId\":\"PPSSPP-TEST-C\"}"
+VERIFY_C_RESP="$(https_post "/pair/verify" "$VERIFY_C_BODY")"
+if echo "$VERIFY_C_RESP" | grep -q '"success":true'; then
+  pass
+else
+  fail "failed to pair second trusted client clientC: $(echo "$VERIFY_C_RESP" | tail -1)"
+fi
+
+# Fire 3 concurrent GET /states: clientA (trusted), clientC (trusted), clientB (untrusted)
+RESP_A=$(https_get "/states" "$CERT_DIR/clientA") &
+RESP_C=$(https_get "/states" "$CERT_DIR/clientC") &
+RESP_B=$(https_get "/states" "$CERT_DIR/clientB") &
+wait
+STATUS_A=$(get_status "$RESP_A")
+STATUS_C=$(get_status "$RESP_C")
+STATUS_B=$(get_status "$RESP_B")
+
+if echo "$STATUS_A" | grep -q "200"; then pass; else fail "trusted clientA should get 200, got: $STATUS_A"; fi
+if echo "$STATUS_C" | grep -q "200"; then pass; else fail "trusted clientC should get 200, got: $STATUS_C"; fi
+if echo "$STATUS_B" | grep -q "403"; then pass; else fail "untrusted clientB should get 403, got: $STATUS_B"; fi
 
 # =================================================
 echo "--- Test 8: PUT payload too large (413) ---"

@@ -12,7 +12,7 @@ struct PeerInfo {
     std::string deviceName;
     std::string version;
     std::string peerId;
-    int protocolVersion = 1;
+    int protocolVersion = 2;
 };
 
 struct SaveFileEntry {
@@ -21,6 +21,13 @@ struct SaveFileEntry {
     std::string checksum;
     uint64_t mtime = 0;
     int64_t size = 0;
+    // [PPSSPP-FORK] TD5 (preparatory, non-breaking): hybrid logical
+    // clock carried on the wire so conflict resolution can eventually use a
+    // causal ordering instead of pure mtime + checksum. Not yet used by
+    // ResolveConflict (still mtime+LWW) to stay compatible with peers on
+    // protocol version 1. Populated from the .sync.json sidecar when present.
+    uint64_t hlcPhysical = 0;
+    uint32_t hlcLogical = 0;
 };
 
 struct SyncResponse {

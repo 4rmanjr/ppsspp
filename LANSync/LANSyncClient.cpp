@@ -8,6 +8,7 @@
 #include <unistd.h>
 #include <atomic>
 #include <openssl/ssl.h>
+#include <openssl/err.h>
 
 namespace LANSync {
 
@@ -40,7 +41,15 @@ bool LANSyncClient::Connect(const std::string &host, int port, int timeoutSec) {
             fd_ = -1;
             return false;
         }
-        SSL_set_fd(ssl, fd_);
+        // [PPSSPP-FORK] SR6: check SSL_set_fd return value.
+        if (SSL_set_fd(ssl, fd_) <= 0) {
+            WARN_LOG(Log::System, "LANSync: SSL_set_fd failed");
+            ERR_print_errors_fp(stderr);
+            SSL_free(ssl);
+            closesocket(fd_);
+            fd_ = -1;
+            return false;
+        }
 
         if (!SSLHandshakeWithTimeout(ssl, fd_, timeoutSec, false)) {
             SSL_free(ssl);
