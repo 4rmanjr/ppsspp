@@ -186,15 +186,15 @@ class LANSyncMDNSHelper {
 
 	private String buildPermissionHint() {
 		if (android.os.Build.VERSION.SDK_INT == 33) {
-			return "LAN Sync needs the 'Nearby devices' permission. Enable it in Settings > Apps > PPSSPP > Permissions, then restart LAN Sync.";
+			return "LANSyncPermNearby";
 		}
 		if (android.os.Build.VERSION.SDK_INT >= 26 && android.os.Build.VERSION.SDK_INT <= 32) {
-			return "LAN Sync needs Location permission to find devices over Wi-Fi. Enable it in Settings, then restart LAN Sync.";
+			return "LANSyncPermLocation";
 		}
 		if (android.os.Build.VERSION.SDK_INT >= 34) {
-			return "LAN Sync needs Local network access. Enable it in Settings, then restart LAN Sync.";
+			return "LANSyncPermLocalNet";
 		}
-		return "LAN Sync discovery failed. Check Wi-Fi and firewall (UDP 5353).";
+		return "LANSyncPermGeneric";
 	}
 
 	// --- Deferred start: remember intent, request perm if needed, replay on grant ---

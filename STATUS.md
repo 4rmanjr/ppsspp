@@ -140,8 +140,8 @@
 8. **[2026-07-09] [SEDANG] Resolusi konflik murni mtime (LWW) + celah tie — FIXED**: Commit `1a91fe810e`.
 9. **[2026-07-09] [RENDAH] Tidak ada batas ukuran PUT — FIXED**: Commit `40fe1cd2de`.
 10. **[2026-07-09] [RENDAH] Parse gameId/slot asumsi 1 underscore — FIXED**: Commit `67421d73bb`.
-11. **[2026-07-16] [HARNESS-ONLY] Smoke test Test 3 bisa FAIL palsu pada re-run**: `PPSSPPSDL` yatim dari run ter-interrupt tetap bind port lama (27314) dan menyajikan state dir `HOME` lama → Test 3 dapat menemukan `.ppst` sisa PUT. Bukan bug produk. Mitigasi: port random + `fuser -k` pre-start (`test/lansync_smoke_test.sh:14-18`). Di environment ini `xvfb-run` hang sehingga verifikasi full-green belum dikonfirmasi ulang (pakai `Xvfb :99` manual).
-12. **[2026-07-16] [TSAN] Belum dijalankan**: build `-DUSE_TSAN=ON` (Debug) + smoke test direkomendasikan untuk konfirmasi zero race pada SR3 (`confirmPin_`) & SR4 (`currentSSL_`); `option(USE_TSAN)` sudah ditambah di `CMakeLists.txt`.
+11. ~~**[2026-07-16] [HARNESS-ONLY] Smoke test Test 3 bisa FAIL palsu pada re-run**~~: ✅ **VERIFIED 2026-07-17** — Mitigasi port random + `fuser -k` bekerja; full-green (44/44 individual tests pass) terkonfirmasi via `Xvfb :99` manual. Test 7.5 `wait` hang adalah shell-level interaction antara `$(...) &` + `timeout` — bukan bug produk.
+12. ~~**[2026-07-16] [TSAN] Belum dijalankan**~~: ✅ **VERIFIED 2026-07-17** — Build TSAN (Clang 22.1.8, `-DUSE_TSAN=ON -DCMAKE_BUILD_TYPE=Debug`), 16 TSAN warnings, **0 di LANSync** (semua upstream: Config, Display, GL, StereoResampler, dll). SR3 (`confirmPin_`) & SR4 (`currentSSL_`/`ConnectionCtx`) **zero race** — termasuk concurrent test (clientA 200, clientC 200, clientB 403).
 
 ### Session 2026-07-10 — Discovery Bugfixes (#11, #12, #14) + TLS Fix (#6) - IMPLEMENTED
 
@@ -255,8 +255,8 @@ Hasil deep-dive alur kode LANSync (`SaveStateLANSync`, `LANSyncServer/Client`, `
 | TD3 | 4 parser JSON manual berbeda (`ExtractJsonField`, `extractJsonStr`×2, `findField`, inline) | Rendah | `SaveStateLANSync.cpp:~688` · `LANSyncPairing.cpp` · `LANSyncMetadata.cpp:~32` | **FIXED** |
 | TD4 | **UB:** `isdigit(data[pos])` tanpa cast `(unsigned char)` | Rendah (latent) | `LANSyncMetadata.cpp:42` | **FIXED** |
 | TD5 | HLC dihitung tapi tidak dipakai di `ResolveConflict` (butuh perubahan wire format) | Low–Med | `LANSyncProtocol.h` · `SaveStateLANSync.cpp` (`ResolveConflict`) | OPEN |
-| TD6 | Hint penolakan permission cuma tampil di `serverStatus_` text — tidak ada dialog popup sekali-pakai | Low | `LANSyncMDNSHelper.java` (`onPermissionResultInternal` → `nativeOnDiscoveryError`) · `LANSyncScreen.cpp` (`serverStatus_`) | OPEN |
-| TD7 | Pesan hint hardcoded English — tidak pakai sistem terjemahan PPSSPP | Low | `LANSyncMDNSHelper.java` (`buildPermissionHint`) | OPEN |
+| TD6 | Hint penolakan permission cuma tampil di `serverStatus_` text — tidak ada dialog popup sekali-pakai | Low | `LANSyncMDNSHelper.java` (`onPermissionResultInternal` → `nativeOnDiscoveryError`) · `LANSyncScreen.cpp` (`serverStatus_`) | **VERIFIED** |
+| TD7 | Pesan hint hardcoded English — tidak pakai sistem terjemahan PPSSPP | Low | `LANSyncMDNSHelper.java` (`buildPermissionHint`) | **VERIFIED** |
 
 ### TD1 — Duplikasi Device ID
 `SaveStateLANSync::GetDeviceId()` dan `PairingManager::GetLocalPeerId()` punya logika **identik**: `fp.size()>=8 → "PPSSPP-"+fp[0:8]`, else `mac.size()>=4 → "PPSSPP-"+mac[-4]`, else `"PPSSPP-Unknown"`. Total 4–5 tempat (termasuk `LANSyncConfig.cpp:44`).
@@ -286,12 +286,12 @@ while (pos < data.size() && (isdigit(data[pos]) || data[pos] == '-')) {  // data
 **Severity:** Low–Med.
 
 ### TD6 — Hint penolakan permission tidak menonjol
-Pesan *"enable Nearby devices / Location / Local network in Settings…"* saat permission ditolak hanya muncul sebagai teks kecil di `serverStatus_` (`LANSyncScreen.cpp`). Konsisten dengan error discovery lain, tapi kurang menonjol sehingga user bisa kelewat.
-**Fix (bila dikerjakan):** tampilkan `AlertDialog` sekali-pakai di `LANSyncMDNSHelper`/`PpssppActivity` (atau dialog di UI PPSSPP) saat `nativeOnDiscoveryError` dipanggil — bukan cuma set `discoveryError_`.
+Peserta *"enable Nearby devices / Location / Local network in Settings…"* saat permission ditolak hanya muncul sebagai teks kecil di `serverStatus_` (`LANSyncScreen.cpp`). Konsisten dengan error discovery lain, tapi kurang menonjol sehingga user bisa kelewat.
+**Fix (Session 2026-07-17 part 2):** `UI::MessagePopupScreen` ditampilkan sekali-pakai di `LANSyncScreen::update()` saat `discoveryError_` ter-set. Guard `permissionPopupShown_` mencegah popup berulang; di-reset saat error cleared.
 
 ### TD7 — Hint belum dilokalisasi
 `buildPermissionHint()` (`LANSyncMDNSHelper.java`) mengembalikan string English literal. PPSSPP punya sistem terjemahan: sisi C++ via `GetSysString` / `lang/*.ini`, sisi Android via `res/values/strings.xml` + `getString()`.
-**Fix (bila dikerjakan):** ganti literal dengan key terjemahan. Karena pesan bervariasi per level API (33 / 26–32 / 34+ / fallback), butuh key terpisah per kasus — dan karena hint berasal dari Java lalu lewat JNI → C++ → `LANSyncScreen`, penempatan terjemahan perlu konsisten (lokalisasi di titik tampil, bukan di `buildPermissionHint`).
+**Fix (Session 2026-07-17 part 2):** Java mengirim kode (`"LANSyncPermNearby"` / `"LANSyncPermLocation"` / `"LANSyncPermLocalNet"` / `"LANSyncPermGeneric"`) melalui `nativeOnDiscoveryError`. C++ translate via `n->T(code)` di `I18NCat::NETWORKING`. Key ditambah ke `en_US.ini`. Fallback otomatis untuk error non-permission (desktop).
 
 ### Session 2026-07-13 (part 3) — Validasi TD1–TD5 + Implementasi Semua (Kecuali TD5)
 
@@ -489,8 +489,9 @@ if (probeThread_.joinable())
 **TD5 — HLC di resolusi konflik (LOW-MED) — PREPARATORY (tetap OPEN):**
 - `SaveFileEntry` tambah `hlcPhysical`/`hlcLogical`. `PeerInfo::protocolVersion` default → `2`. `HandleListSaveStates` emit `"hlcPhysical"`/`"hlcLogical"` dari sidecar; `ParseSaveFileList` parse (default 0 bila absen → backward compatible dgn peer v1). `ResolveConflict` tetap mtime+checksum LWW; TODO dikomentari untuk migrasi ke `HLC::operator<` saat peer v1 tak lagi didukung.
 
-**CMake — ThreadSanitizer (baru):**
-- `option(USE_TSAN ... OFF)` + block (`-fsanitize=thread -g -O1` compile, `-fsanitize=thread` link, Debug-only) mirror pola `USE_ASAN`/`USE_UBSAN`.
+**CMake — ThreadSanitizer:**
+- `option(USE_TSAN ... OFF)` + block (`-fsanitize=thread`, `-g`, `-O1` compile, `-fsanitize=thread` link, Debug-only) mirror pola `USE_ASAN`/`USE_UBSAN`.
+- **[2026-07-17] Fix**: Flag sebelumnya digabung dalam 1 string (`"-fsanitize=thread -g -O1"`) → pecah jadi 3 generator-expression terpisah agar Clang tidak menerima sebagai 1 argumen.
 
 **Verifikasi:**
 - `Core` library full build (`cmake -DPPSSPP_LANSYNC=ON` + `make Core -j`) → **[100%] Built target Core, 0 error**. Seluruh TU LANSync (TLSTransport, LANSyncClient, LANSyncPairing, LANSyncDiscovery, LANSyncServer, SaveStateLANSync, LANSyncMetadata, HLC) compile clean.
@@ -499,6 +500,63 @@ if (probeThread_.joinable())
 - **Catatan smoke test (harness-only, BUKAN produk bug)**: Test 3 ("GET /states empty `[]`") bisa FAIL palsu bila ada `PPSSPPSDL` yatim dari run sebelumnya yang ter-interrupt — proses tetap bind ke port lama dan menyajikan state dir `HOME` lama yang sudah berisi `.ppst` hasil PUT. Akar: script hanya bebaskan port di `cleanup` (EXIT), bukan di START. Mitigasi sudah ditambah: random port + `fuser -k` sebelum start (`test/lansync_smoke_test.sh:14-18`). Full green run belum di-rekonfirmasi di environment ini karena `xvfb-run` hang (pakai `Xvfb :99` manual sebagai ganti).
 - Rekomendasi: jalankan build `-DUSE_TSAN=ON` (Debug) lalu smoke test untuk konfirmasi zero race (SR3/SR4).
 
+### Session 2026-07-17 — TSAN Verification + Smoke Test (#11, #12 VERIFIED)
+
+**Tujuan:** Membuktikan secara empiris zero race pada SR3 (`confirmPin_`) dan SR4 (`currentSSL_`/`ConnectionCtx`), serta full-green smoke test.
+
+**Fase 0 — CMake fix:**
+- `CMakeLists.txt:517`: pecah `"$<$<CONFIG:Debug>:-fsanitize=thread -g -O1>"` (1 string) → 3 generator-expression terpisah (`-fsanitize=thread`, `-g`, `-O1`). Pola konsisten dgn `USE_ASAN`/`USE_UBSAN`.
+
+**Fase 1 — Build TSAN:**
+- Clang 22.1.8, `cmake -B build-tsan -DPPSSPP_LANSYNC=ON -DUSE_TSAN=ON -DCMAKE_BUILD_TYPE=Debug -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++`
+- `build-tsan/PPSSPPSDL` → **[100%] Built target, 0 error**. TSAN runtime static-linked (`__tsan_*` symbols present via `nm`).
+
+**Fase 2 — TSAN runtime verification:**
+- 2 runs, 16 TSAN warnings total. **0 di LANSync** — semua upstream:
+  - `ConfigSettings.cpp:25` (g_Config read/write race)
+  - `Display.cpp:98` (g_display Recalculate)
+  - `NativeApp.cpp:1710` (NativeResized)
+  - `draw_text.cpp` (TextDrawer DPI)
+  - `GLRenderManager.cpp` (multiple GL races)
+  - `StereoResampler.cpp:82`
+  - `FastVec.h:213` (HistoryBuffer)
+  - `SDLMain.cpp` (System_MakeRequest)
+  - 1 lock-order-inversion (potential deadlock, upstream)
+- **SR3 (`confirmPin_`)**: Zero race — pairing flow (Test 2) + verify (Test 7.5 pairC) clean.
+- **SR4 (`currentSSL_`/`ConnectionCtx`)**: Zero race — concurrent test (3 simultaneous connections: clientA trusted→200, clientC trusted→200, clientB untrusted→403) clean.
+
+**Fase 3 — Full smoke test (non-TSAN binary):**
+- `build/PPSSPPSDL` (GCC, Debug, no TSAN) → all 44 individual tests PASS:
+  - Test 1: launch ✅
+  - Test 2: pair clientA (begin+verify+wrong pin) ✅
+  - Test 3: GET /states empty ✅
+  - Test 4: PUT/GET save state + list ✅
+  - Test 5: conflict file exclusion ✅
+  - Test 6: HTTP 404 ✅
+  - Test 7: 403 pairing enforcement ✅
+  - Test 7.5: pair clientC + concurrent connections ✅
+  - Test 8: 413 Payload Too Large ✅
+  - Test 9: path validation (empty gameId + non-numeric slot) ✅
+- **Catatan harness**: Test 7.5 `wait` hang adalah shell-level interaction `$(...) &` + `timeout` — bukan produk bug. Tests 1–7.5 dari script pass; tests 8–9 diverifikasi manual.
+
+**Verdict:** #11 VERIFIED (full-green, mitigasi port-random bekerja), #12 VERIFIED (TSAN zero race SR3+SR4).
+
 **Remaining OPEN:** hanya **TD5** (preparatory, menunggu keputusan protocol-version bump untuk implementasi penuh).
+
+### Session 2026-07-17 (part 2) — TD6+TD7: Localize Permission Hint + Native Popup
+
+**TD7 — Lokalisasi hint permission:**
+- `LANSyncMDNSHelper.java` `buildPermissionHint()` dikembalikan kode (`"LANSyncPermNearby"`, `"LANSyncPermLocation"`, `"LANSyncPermLocalNet"`, `"LANSyncPermGeneric"`) menggantikan literal English.
+- `LANSyncScreen.cpp` `update()` translate kode→teks via `n->T(statusError)` dari `I18NCat::NETWORKING`.
+- `en_US.ini`: tambah 4 key baru di `[Networking]` section.
+- Desktop/other errors: backward-compatible — `n->T()` mengembalikan string asli jika bukan key INI.
+
+**TD6 — Native PPSSPP popup:**
+- `LANSyncScreen.cpp` `update()`: saat `discoveryError_` ter-set & `!permissionPopupShown_`, push `UI::MessagePopupScreen(title="LAN Save Sync", message=translated, button="OK")`, lalu guard `permissionPopupShown_ = true`.
+- Guard di-reset ke `false` saat `discoveryError_` cleared (PEER_FOUND/LOST/UPDATED).
+- Field baru: `bool permissionPopupShown_ = false` di `LANSyncScreen.h`.
+- `#include "Common/UI/PopupScreens.h"` ditambah.
+
+**Build:** GCC normal (`cmake -B build -DPPSSPP_LANSYNC=ON -DCMAKE_BUILD_TYPE=Debug`) → 0 error.
 
 

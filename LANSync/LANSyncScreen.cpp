@@ -27,6 +27,7 @@
 #include "Common/UI/View.h"
 #include "Common/UI/Context.h"
 #include "Common/UI/ScrollView.h"
+#include "Common/UI/PopupScreens.h"
 
 extern LANSync::SaveStateLANSync g_LANSync;
 
@@ -133,19 +134,30 @@ void LANSyncScreen::update() {
   }
 
   {
+    auto n = GetI18NCategory(I18NCat::NETWORKING);
     std::string statusText;
     if (!statusError.empty()) {
-      statusText = statusError;
-    } else if (g_LANSync.IsSyncing()) {
-      statusText = "Syncing in progress...";
-    } else if (discoveryActive_) {
-      statusText = "Discovery active - scanning for peers";
+      statusText = n->T(statusError);
+      // [PPSSPP-FORK] TD6: show permission hint popup once per error
+      if (!permissionPopupShown_) {
+        permissionPopupShown_ = true;
+        auto di = GetI18NCategory(I18NCat::DIALOG);
+        screenManager()->push(new UI::MessagePopupScreen(
+            n->T("LAN Save Sync"), statusText, di->T("OK"), "", nullptr));
+      }
     } else {
-      statusText = "Server ready on port 27314";
-    }
-    if (g_Config.bLANSyncAutoSync && discoveryActive_) {
-      statusText += "\nAuto-sync enabled (every ";
-      statusText += std::to_string(g_Config.iLANSyncAutoSyncInterval) + "s)";
+      permissionPopupShown_ = false;
+      if (g_LANSync.IsSyncing()) {
+        statusText = "Syncing in progress...";
+      } else if (discoveryActive_) {
+        statusText = "Discovery active - scanning for peers";
+      } else {
+        statusText = "Server ready on port 27314";
+      }
+      if (g_Config.bLANSyncAutoSync && discoveryActive_) {
+        statusText += "\nAuto-sync enabled (every ";
+        statusText += std::to_string(g_Config.iLANSyncAutoSyncInterval) + "s)";
+      }
     }
     serverStatus_->SetText(statusText);
   }

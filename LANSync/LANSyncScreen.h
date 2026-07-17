@@ -67,4 +67,5 @@ private:
   LANSync::SyncProgress currentProgress_;
   mutable std::mutex progressMutex_;
   std::string discoveryError_;
+  bool permissionPopupShown_ = false;
 };
