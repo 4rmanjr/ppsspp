@@ -559,4 +559,40 @@ if (probeThread_.joinable())
 
 **Build:** GCC normal (`cmake -B build -DPPSSPP_LANSYNC=ON -DCMAKE_BUILD_TYPE=Debug`) → 0 error.
 
+### Session 2026-07-17 (part 3) — Code Review Findings (TD6 refinement + SR4)
+
+Post-implementation review of `a7a58b9` (TD6+TD7) + `3fc87ac` (SR3–SR9 + TD5).
+Build bersih (GCC normal + TSAN Clang, 0 error). Tidak ada bug/crash/regresi di
+normal path. Dua observasi low-severity + satu limitasi pra-existing.
+
+**TD6/TD7 — log-spam pada translate (OBSERVASI, BELUM DI-FIX):**
+`LANSyncScreen::update()` memanggil `n->T(statusError)` **tanpa guard** (LANSyncScreen.cpp:140).
+Untuk error discovery non-permission (raw string desktop), `I18n::T` mengembalikan
+string apa adanya tapi men-log `Missing translation` (DEBUG_LOG) di setiap pass.
+Akar: implementasi menyimpang dari rencana awal yang menyatakan "hanya translate
+jika key diawali `LANSyncPerm`". Perbaikan (deferred): ganti dengan prefix-guard
+`if (statusError.rfind("LANSyncPerm", 0) == 0) statusText = n->T(statusError); else
+statusText = statusError;`. Tidak ada perubahan behavior bagi user — murni menghilangkan
+noise log. Status: **OPEN (deferred)**.
+
+**SR4 — fail-closed pada fingerprint kosong (KEPUTUSAN: SIMPAN, JANGAN UBAH KODE):**
+`IsPeerTrusted(const std::string &peerFingerprint)` kini return `false` (HTTP 403)
+bila `peerFingerprint.empty()` (LANSyncServer.cpp via ConnectionCtx, SaveStateLANSync.cpp:201).
+Ini berbeda dari pra-SR4: `IsPeerTrusted(LANSyncServer*)` dengan `GetCurrentSSL()==nullptr`
+return `true` (serve). Artinya di degraded path (TLS init gagal → `ssl` null di
+`HandleConnection` → fingerprint kosong), seluruh request kini 403 alih-alih dilayani.
+**Keputusan:** pertahankan fail-closed sebagai hardening intent (filosofi SR3–SR9).
+Normal path tidak terdampak karena `SaveStateLANSync::StartServer` selalu init TLS duluan
+(SaveStateLANSync.cpp:39-40, 98) → `ssl` non-null, fingerprint terisi. Degraded path
+(cert corrupt) kini reject alih-alih serve tanpa enkripsi. Tidak ada perubahan kode.
+
+**Popup reachability (LIMITASI PRA-EXISTING, BUKAN REGRESI):**
+Popup permission hanya fire bila discovery-callback chain live (`g_activeBrowser->onError_`
+ter-set di MDNS_Android.cpp:241). Bila user menolak permission SEBELUM discovery start,
+error di-drop (silent) — sama persis dengan reachability teks `serverStatus_` lama.
+Bukan regresi; dicatat agar tidak dikira bug baru.
+
+**Verdict:** aman untuk ship apa adanya. Dua item di atas adalah polish, bukan blocker
+correctness. TD6 log-spam guard + komentar fail-closed di `IsPeerTrusted` ditunda ke
+sesi perbaikan berikutnya.
 
