@@ -48,11 +48,21 @@
 
 ---
 
+## Next Priority
+
+**TD5 — HLC Conflict Resolution**
+- Preparatory done (`hlcPhysical`/`hlcLogical` on wire), actual resolution logic not implemented.
+- Belum ada race condition karena field di-ignore di versi lama. Tapi harus diselesaikan untuk fitur HLC berjalan penuh.
+- **Approach:** Replace mtime+checksum LWW di `ResolveConflict()` dengan perbandingan HLC.
+
+---
+
 ## Remaining
 
 | # | Severity | Issue | Status |
 |---|----------|-------|--------|
 | TD5 | Med | HLC conflict resolution | **OPEN** — preparatory done (hlcPhysical/hlcLogical on wire), actual resolution logic not implemented |
+| TD6/7 log-spam | Low | `n->T(statusError)` logs "Missing translation" untuk non-permission errors | **DEFERRED** — fix: prefix-guard `rfind("LansyncPerm",0)==0` |
 
 ---
 
