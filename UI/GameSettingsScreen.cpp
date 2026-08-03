@@ -524,10 +524,6 @@ void GameSettingsScreen::CreateGraphicsSettings(UI::ViewGroup *graphicsSettings)
 		hwTransform->SetDisabledPtr(&g_Config.bSoftwareRendering);
 	}
 
-	CheckBox *swSkin = graphicsSettings->Add(new CheckBox(&g_Config.bSoftwareSkinning, gr->T("Software Skinning")));
-	swSkin->SetDisabledPtr(&g_Config.bSoftwareRendering);
-	graphicsSettings->Add(new SettingHint(gr->T("SoftwareSkinning Tip", "Combine skinned model draws on the CPU, faster in most games"), swSkin));
-
 	graphicsSettings->Add(new ItemHeader(gr->T("Texture upscaling")));
 
 	if (GetGPUBackend() == GPUBackend::VULKAN) {
@@ -1299,6 +1295,11 @@ void GameSettingsScreen::CreateSystemSettings(UI::ViewGroup *systemSettings) {
 	SavePathInOtherChoice->SetEnabled(false);
 	SavePathInOtherChoice->OnClick.Handle(this, &GameSettingsScreen::OnMemoryStickOther);
 	const bool myDocsExists = W32Util::UserDocumentsPath().size() != 0;
+
+	if (!System_GetPropertyBool(SYSPROP_CAN_GET_FREE_SPACE_FAST)) {
+		// It might be slow, so use an option.
+		systemSettings->Add(new CheckBox(&g_Config.bReportAccurateFreeStorageSpace, sy->T("Report free storage space accurately")));
+	}
 
 	const Path &PPSSPPpath = File::GetExeDirectory();
 	const Path installedFile = PPSSPPpath / "installed.txt";

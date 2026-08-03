@@ -88,17 +88,19 @@ public:
 	// Separate kind of functionality from InstallZipOnThread, so doesn't re-use the task struct.
 	bool UninstallGameOnThread(const std::string &name);
 
+	// Extracts the contents of an open zip archive into dest. Exposed for testing.
+	// maxTotalSize limits the total decompressed size (zip bomb protection).
+	bool ExtractZipContents(struct zip *z, const Path &dest, const ZipFileInfo &info, bool allowRoot, size_t maxTotalSize = 0x100000000);
+
 private:
 	void InstallZipContents(ZipFileTask task);
-
-	bool ExtractZipContents(struct zip *z, const Path &dest, const ZipFileInfo &info, bool allowRoot);
 	bool InstallMemstickZip(const Path &zipFile, const Path &dest, const ZipFileInfo &info);
 	bool InstallZippedISO(struct zip *z, int isoFileIndex, const Path &destDir);
 	void UninstallGame(const std::string &name);
 
 	void InstallDone();
 
-	bool ExtractFile(struct zip *z, int file_index, const Path &outFilename, size_t *bytesCopied, size_t allBytes);
+	bool ExtractFile(struct zip *z, int file_index, const Path &outFilename, size_t *bytesCopied, size_t allBytes, size_t maxTotalSize = 0x100000000);
 	bool DetectTexturePackDest(struct zip *z, int iniIndex, Path &dest);
 	void SetInstallError(std::string_view err);
 

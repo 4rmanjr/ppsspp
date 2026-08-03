@@ -28,47 +28,9 @@ public:
 	virtual bool InitGraphics(std::string *error_message, GraphicsContext **ctx, GPUCore core) {return false;}
 	virtual void ShutdownGraphics() {}
 
-	virtual void SendDebugOutput(const std::string &output) {
-		if (!writeDebugOutput_)
-			return;
-		if (output.find('\n') != output.npos) {
-			FlushDebugOutput();
-			fwrite(output.data(), sizeof(char), output.length(), stdout);
-		} else {
-			debugOutputBuffer_ += output;
-		}
-	}
-	void FlushDebugOutput() {
-		if (!debugOutputBuffer_.empty()) {
-			fwrite(debugOutputBuffer_.data(), sizeof(char), debugOutputBuffer_.length(), stdout);
-			debugOutputBuffer_.clear();
-		}
-	}
-
-	void SetWriteDebugOutput(bool flag) {
-		writeDebugOutput_ = flag;
-	}
-
-	void SetComparisonScreenshot(const Path &filename, double maxError) {
-		comparisonScreenshot_ = filename;
-		maxScreenshotError_ = maxError;
-	}
-	void SetWriteFailureScreenshot(bool flag) {
-		writeFailureScreenshot_ = flag;
-	}
-
-	void SendDebugScreenshot(const u8 *pixbuf, u32 w, u32 h);
-
 	virtual void SwapBuffers() {}
 
 protected:
-	void SendAndCollectOutput(const std::string &output);
-
-	Path comparisonScreenshot_;
-	double maxScreenshotError_ = 0.0;
-	std::string debugOutputBuffer_;
 	GPUCore gpuCore_;
 	GraphicsContext *gfx_ = nullptr;
-	bool writeFailureScreenshot_ = true;
-	bool writeDebugOutput_ = true;
 };

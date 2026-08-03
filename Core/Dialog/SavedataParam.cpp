@@ -30,6 +30,7 @@
 #include "Core/Dialog/SavedataParam.h"
 #include "Core/Dialog/PSPSaveDialog.h"
 #include "Core/FileSystems/MetaFileSystem.h"
+#include "Core/Util/PathUtil.h"
 #include "Core/HLE/sceIo.h"
 #include "Core/HLE/sceKernelMemory.h"
 #include "Core/HLE/sceChnnlsv.h"
@@ -543,7 +544,7 @@ int SavedataParam::Save(SceUtilitySavedataParam* param, const std::string &saveD
 
 	// Calc SFO hash for PSP.
 	if (cryptedData != 0 || (subWrite && wasCrypted)) {
-		int offset = sfoFile->GetDataOffset(sfoData, "SAVEDATA_PARAMS");
+		int offset = sfoFile->GetDataOffset(sfoData, sfoSize, "SAVEDATA_PARAMS");
 		if (offset >= 0)
 			UpdateHash(sfoData, (int)sfoSize, offset, DetermineCryptMode(param));
 	}
@@ -1547,6 +1548,13 @@ int SavedataParam::SetPspParam(SceUtilitySavedataParam *param) {
 		// Get number of fileName in array
 		saveDataListCount = 0;
 		while (saveNameListData[saveDataListCount][0] != 0) {
+			// saveName entries become part of host filesystem paths; reject
+			// path separators and bare dot components (path traversal).
+			const std::string_view entry = StringViewFromFixedSizeField(saveNameListData[saveDataListCount]);
+			if (HasPathTraversal(entry)) {
+				ERROR_LOG(Log::sceUtility, "SavedataParam: invalid saveName in list: %s", std::string(entry).c_str());
+				return SCE_ERROR_UTILITY_INVALID_PARAM_SIZE;
+			}
 			saveDataListCount++;
 		}
 

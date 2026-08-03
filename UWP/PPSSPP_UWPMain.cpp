@@ -30,6 +30,7 @@
 #include "Core/System.h"
 #include "Core/Loaders.h"
 #include "Core/Config.h"
+#include "Core/CmdLine.h"
 
 #include "Windows/InputDevice.h"
 #include "Windows/XinputDevice.h"
@@ -100,7 +101,7 @@ PPSSPP_UWPMain::~PPSSPP_UWPMain() {
 	g_InputManager.Shutdown();
 
 	ctx_->GetDrawContext()->HandleEvent(Draw::Event::LOST_BACKBUFFER, 0, 0, nullptr);
-	NativeShutdownGraphics();
+	NativeShutdownGraphics(ctx_.get());
 	NativeShutdown();
 	g_VFS.Clear();
 
@@ -313,7 +314,7 @@ UWPGraphicsContext::UWPGraphicsContext(std::shared_ptr<DX::DeviceResources> reso
 	_assert_(success);
 }
 
-void UWPGraphicsContext::Shutdown() {
+void UWPGraphicsContext::ShutdownAPI() {
 	delete draw_;
 }
 
@@ -415,6 +416,9 @@ std::vector<std::string> System_GetPropertyStringVec(SystemProperty prop) {
 	}
 }
 
+bool System_SendDebugOutput(std::string_view data) { return false; }
+void System_SendDebugScreenshot(const uint8_t *data, int width, int height) {}
+
 extern AudioBackend *g_audioBackend;
 
 int64_t System_GetPropertyInt(SystemProperty prop) {
@@ -508,6 +512,8 @@ bool System_GetPropertyBool(SystemProperty prop) {
 	case SYSPROP_DEBUGGER_PRESENT:
 		return IsDebuggerPresent();
 	case SYSPROP_OK_BUTTON_LEFT:
+		return true;
+	case SYSPROP_CAN_GET_FREE_SPACE_FAST:
 		return true;
 	default:
 		return false;
@@ -669,6 +675,11 @@ void System_LaunchUrl(LaunchUrlType urlType, std::string_view url) {
 	} catch (const winrt::hresult_error &e) {
 		ERROR_LOG(Log::System, "System_LaunchUrl: invalid URI: %s", winrt::to_string(e.message()).c_str());
 	}
+}
+
+// Stub
+std::vector<std::string> System_GetCameraDeviceList() {
+	return std::vector<std::string>();
 }
 
 void System_Vibrate(int length_ms) {

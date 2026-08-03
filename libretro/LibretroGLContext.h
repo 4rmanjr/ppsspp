@@ -16,7 +16,9 @@ public:
 		hw_render_.bottom_left_origin = true;
 	}
 
-	bool Init() override;
+   bool NeedsSeparateEmuThread() const override { return true; }
+
+	bool InitAPI(void *wnd, std::string *deviceName, std::string *error_message) override;
 	void CreateDrawContext() override;
 	void DestroyDrawContext() override;
 	void SetRenderTarget() override {

@@ -415,6 +415,9 @@ bool System_GetPropertyBool(SystemProperty prop) {
 		case SYSPROP_CAN_RESTRICT_ORIENTATION:
 			return true;
 
+		case SYSPROP_CAN_GET_FREE_SPACE_FAST:
+			return false;
+
 		default:
 			return false;
 	}
@@ -648,6 +651,9 @@ AudioBackend *System_CreateAudioBackend() {
 	// Use legacy mechanisms.
 	return nullptr;
 }
+
+bool System_SendDebugOutput(std::string_view data) { return false; }
+void System_SendDebugScreenshot(const uint8_t *data, int width, int height) {}
 
 int main(int argc, char *argv[]) {
 	version = [[[UIDevice currentDevice] systemVersion] UTF8String];

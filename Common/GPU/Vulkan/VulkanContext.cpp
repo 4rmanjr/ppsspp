@@ -9,6 +9,7 @@
 #include "Common/System/Display.h"
 #include "Common/Log.h"
 #include "Common/GPU/Shader.h"
+#include "Common/GPU/MiscTypes.h"
 #include "Common/GPU/Vulkan/VulkanContext.h"
 #include "Common/GPU/Vulkan/VulkanDebug.h"
 #include "Common/StringUtils.h"
@@ -204,8 +205,9 @@ VkResult VulkanContext::CreateInstance(const CreateInfo &info) {
 
 	// Validate that all the instance extensions we ask for are actually available.
 	for (auto ext : instance_extensions_enabled_) {
-		if (!IsInstanceExtensionAvailable(ext))
+		if (!IsInstanceExtensionAvailable(ext)) {
 			WARN_LOG(Log::G3D, "WARNING: Does not seem that instance extension '%s' is available. Trying to proceed anyway.", ext);
+		}
 	}
 
 	VkApplicationInfo app_info{ VK_STRUCTURE_TYPE_APPLICATION_INFO };
@@ -286,6 +288,17 @@ VkResult VulkanContext::CreateInstance(const CreateInfo &info) {
 
 	if (extensionsLookup_.KHR_get_physical_device_properties2 && vkGetPhysicalDeviceProperties2) {
 		for (uint32_t i = 0; i < gpu_count; i++) {
+			// Now, we need to do a special check for vkGetPhysicalDeviceProperties2. Unfortunately, it is not valid to call it
+			// if the *device* is below 1.1.
+
+			VkPhysicalDeviceProperties tempProps{};
+			vkGetPhysicalDeviceProperties(physical_devices_[i], &tempProps);
+			if (tempProps.apiVersion < VK_API_VERSION_1_1) {
+				// This device is too old to support vkGetPhysicalDeviceProperties2, so we will just use the old function.
+				vkGetPhysicalDeviceProperties(physical_devices_[i], &physicalDeviceProperties_[i].properties);
+				continue;
+			}
+
 			VkPhysicalDeviceProperties2 props2{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2};
 			VkPhysicalDevicePushDescriptorPropertiesKHR pushProps{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PUSH_DESCRIPTOR_PROPERTIES_KHR};
 			VkPhysicalDeviceExternalMemoryHostPropertiesEXT extHostMemProps{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTERNAL_MEMORY_HOST_PROPERTIES_EXT};
@@ -903,13 +916,15 @@ VkResult VulkanContext::InitDebugUtilsCallback() {
 	return res;
 }
 
-bool VulkanContext::CreateInstanceAndDevice(const CreateInfo &info) {
+bool VulkanContext::CreateInstanceAndDevice(const CreateInfo &info, std::string *deviceName) {
 	VkResult res = CreateInstance(info);
 	if (res != VK_SUCCESS) {
 		ERROR_LOG(Log::G3D, "Failed to create vulkan context: %s", InitError().c_str());
 		VulkanSetAvailable(false);
 		return false;
 	}
+
+	// TODO: Take the device name into account.
 
 	int physicalDevice = GetBestPhysicalDevice();
 	if (physicalDevice < 0) {
@@ -965,8 +980,8 @@ VkResult VulkanContext::ReinitSurface() {
 	{
 		VkWin32SurfaceCreateInfoKHR win32{ VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR };
 		win32.flags = 0;
-		win32.hwnd = (HWND)winsysData2_;
 		win32.hinstance = (HINSTANCE)winsysData1_;
+		win32.hwnd = (HWND)winsysData2_;
 		retval = vkCreateWin32SurfaceKHR(instance_, &win32, nullptr, &surface_);
 		break;
 	}
@@ -1382,23 +1397,13 @@ bool VulkanContext::InitSwapchain(VkPresentModeKHR desiredPresentMode) {
 	}
 
 	VkExtent2D currentExtent{ surfCapabilities_.currentExtent };
-	// https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VkSurfaceCapabilitiesKHR.html
-	// currentExtent is the current width and height of the surface, or the special value (0xFFFFFFFF, 0xFFFFFFFF) indicating that the surface size will be determined by the extent of a swapchain targeting the surface.
-	if (currentExtent.width == 0xFFFFFFFFu || currentExtent.height == 0xFFFFFFFFu
-#if PPSSPP_PLATFORM(IOS)
-		|| currentExtent.width == 0 || currentExtent.height == 0
-#endif
-		) {
-		_dbg_assert_((bool)cbGetDrawSize_);
-		if (cbGetDrawSize_) {
-			currentExtent = cbGetDrawSize_();
-		}
-	}
+
+	INFO_LOG(Log::G3D, "surfCapabilities_.current: %dx%d", currentExtent.width, currentExtent.height);
 
 	swapChainExtent_.width = clamp(currentExtent.width, surfCapabilities_.minImageExtent.width, surfCapabilities_.maxImageExtent.width);
 	swapChainExtent_.height = clamp(currentExtent.height, surfCapabilities_.minImageExtent.height, surfCapabilities_.maxImageExtent.height);
 
-	INFO_LOG(Log::G3D, "surfCapabilities_.current: %dx%d min: %dx%d max: %dx%d computed: %dx%d",
+	INFO_LOG(Log::G3D, "surfCapabilities_.current after clamp: %dx%d min: %dx%d max: %dx%d computed: %dx%d cbdraw",
 		currentExtent.width, currentExtent.height,
 		surfCapabilities_.minImageExtent.width, surfCapabilities_.minImageExtent.height,
 		surfCapabilities_.maxImageExtent.width, surfCapabilities_.maxImageExtent.height,
@@ -1566,10 +1571,6 @@ bool VulkanContext::InitSwapchain(VkPresentModeKHR desiredPresentMode) {
 		INFO_LOG(Log::G3D, "Destroyed old swapchain.");
 	}
 	return true;
-}
-
-void VulkanContext::SetCbGetDrawSize(std::function<VkExtent2D()> cb) {
-	cbGetDrawSize_ = cb;
 }
 
 VkFence VulkanContext::CreateFence(bool presignalled) {

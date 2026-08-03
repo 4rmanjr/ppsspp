@@ -23,16 +23,14 @@
 
 struct GPUDebugBuffer;
 
-extern bool teamCityMode;
 extern std::string currentTestName;
-void TeamCityPrint(const char *fmt, ...);
 void GitHubActionsPrint(const char *type, const char *fmt, ...);
 
 Path ExpectedFromFilename(const Path &bootFilename);
 Path ExpectedScreenshotFromFilename(const Path &bootFilename);
 std::string GetTestName(const Path &bootFilename);
 
-bool CompareOutput(const Path &bootFilename, const std::string &output, bool verbose);
+bool CompareOutput(const Path &bootFilename, const std::string &output, bool verbose, bool printEqualLines);
 std::vector<u32> TranslateDebugBufferToCompare(const GPUDebugBuffer *buffer, u32 stride, u32 h);
 
 class ScreenshotComparer {

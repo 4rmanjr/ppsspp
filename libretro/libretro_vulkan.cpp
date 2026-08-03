@@ -29,14 +29,15 @@ static struct {
 } vk_init_info;
 static bool DEDICATED_ALLOCATION;
 
-#define VULKAN_MAX_SWAPCHAIN_IMAGES 8
+struct VkSwapchainImage {
+	VkImage handle;
+	VkDeviceMemory memory;
+	retro_vulkan_image retro_image;
+};
+
 struct VkSwapchainKHR_T {
 	uint32_t count;
-	struct {
-		VkImage handle;
-		VkDeviceMemory memory;
-		retro_vulkan_image retro_image;
-	} images[VULKAN_MAX_SWAPCHAIN_IMAGES];
+	std::vector<VkSwapchainImage> images;
 	std::mutex mutex;
 	std::condition_variable condVar;
 	int current_index;
@@ -110,27 +111,32 @@ static VKAPI_ATTR VkResult VKAPI_CALL vkCreateDevice_libretro(VkPhysicalDevice p
    newInfo.enabledExtensionCount = (uint32_t)enabledExtensionNames.size();
    newInfo.ppEnabledExtensionNames = newInfo.enabledExtensionCount ? enabledExtensionNames.data() : nullptr;
 
-   // Then check for VkPhysicalDeviceFeatures2 chaining or pEnabledFeatures to enable required features. Note that when both
-   // structs are present Features2 takes precedence. vkCreateDevice parameters don't give us a simple way to detect
-   // VK_KHR_get_physical_device_properties2 usage so we'll always try both paths.
+   // Add required features through VkPhysicalDeviceFeatures2 when it is present.
+   // Vulkan requires pEnabledFeatures to be NULL in that case.
    std::unordered_map<VkPhysicalDeviceFeatures *, VkPhysicalDeviceFeatures> originalFeaturePointers;
    VkPhysicalDeviceFeatures placeholderEnabledFeatures{};
+   bool has_features2 = false;
 
    for (const VkBaseOutStructure *next = (const VkBaseOutStructure *)pCreateInfo->pNext; next != nullptr;) {
       if (next->sType == VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2) {
          VkPhysicalDeviceFeatures *enabledFeatures = &((VkPhysicalDeviceFeatures2 *)next)->features;
          originalFeaturePointers.try_emplace(enabledFeatures, *enabledFeatures);
+         has_features2 = true;
       }
 
       next = (const VkBaseOutStructure *)next->pNext;
    }
 
-   if (newInfo.pEnabledFeatures) {
-      placeholderEnabledFeatures = *newInfo.pEnabledFeatures;
-   }
+   if (!has_features2) {
+      if (newInfo.pEnabledFeatures) {
+         placeholderEnabledFeatures = *newInfo.pEnabledFeatures;
+      }
 
-   newInfo.pEnabledFeatures = &placeholderEnabledFeatures;
-   originalFeaturePointers.try_emplace((VkPhysicalDeviceFeatures *)newInfo.pEnabledFeatures, *newInfo.pEnabledFeatures);
+      newInfo.pEnabledFeatures = &placeholderEnabledFeatures;
+      originalFeaturePointers.try_emplace((VkPhysicalDeviceFeatures *)newInfo.pEnabledFeatures, *newInfo.pEnabledFeatures);
+   } else {
+      newInfo.pEnabledFeatures = nullptr;
+   }
 
    for (const auto& pair : originalFeaturePointers) {
       for (uint32_t i = 0; i < sizeof(VkPhysicalDeviceFeatures) / sizeof(VkBool32); i++) {
@@ -204,7 +210,7 @@ static VKAPI_ATTR VkResult VKAPI_CALL vkCreateSwapchainKHR_libretro(VkDevice dev
 		chain.count++;
 		swapchain_mask >>= 1;
 	}
-	assert(chain.count <= VULKAN_MAX_SWAPCHAIN_IMAGES);
+	chain.images.resize(chain.count);
 
 	for (uint32_t i = 0; i < chain.count; i++) {
 		{
@@ -324,7 +330,7 @@ static VKAPI_ATTR void VKAPI_CALL vkDestroySwapchainKHR_libretro(VkDevice device
 		vkFreeMemory(device, chain.images[i].memory, pAllocator);
 	}
 
-	memset(&chain.images, 0x00, sizeof(chain.images));
+	chain.images.clear();
 	chain.count = 0;
 	chain.current_index = -1;
 	chain.ever_presented = false;

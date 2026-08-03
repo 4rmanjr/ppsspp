@@ -54,7 +54,7 @@ void GLRenderManager::ThreadStart(Draw::DrawContext *draw) {
 	renderThreadId = std::this_thread::get_id();
 
 	if (newInflightFrames_ != -1) {
-		INFO_LOG(Log::G3D, "Updating inflight frames to %d", newInflightFrames_);
+		INFO_LOG(Log::G3D, "OpenGL: Updating inflight frames to %d", newInflightFrames_);
 		inflightFrames_ = newInflightFrames_;
 		newInflightFrames_ = -1;
 	}
@@ -161,16 +161,6 @@ bool GLRenderManager::ThreadFrame(bool waitIfEmpty) {
 	};
 
 	return true;
-}
-
-void GLRenderManager::StartThread() {
-	// There's not really a lot to do here anymore.
-	INFO_LOG(Log::G3D, "GLRenderManager::StartThread()");
-	if (!runCompileThread_) {
-		runCompileThread_ = true;
-	} else {
-		INFO_LOG(Log::G3D, "GL submission thread was already running.");
-	}
 }
 
 std::string GLRenderManager::GetGpuProfileString() const {

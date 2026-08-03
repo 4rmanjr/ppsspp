@@ -25,15 +25,12 @@
 
 #include "Common/CommonWindows.h"
 
-class WindowsHeadlessHost : public HeadlessHost
-{
+class WindowsHeadlessHost : public HeadlessHost {
 public:
 	bool InitGraphics(std::string *error_message, GraphicsContext **ctx, GPUCore core) override;
 	void ShutdownGraphics() override;
 
 	void SwapBuffers() override;
-
-	void SendDebugOutput(const std::string &output) override;
 
 protected:
 	enum class RenderThreadState {
@@ -51,4 +48,5 @@ protected:
 	HDC hDC;
 	HGLRC hRC;
 	volatile RenderThreadState threadState_ = RenderThreadState::IDLE;
+	std::thread renderThread_;
 };

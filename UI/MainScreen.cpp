@@ -331,7 +331,6 @@ void MainScreen::CreateMainButtons(UI::ViewGroup *parent, bool portrait) {
 			if (!g_Config.Save("MainScreen::OnExit")) {
 				System_Toast("Failed to save settings!\nCheck permissions, or try to restart the device.");
 			}
-
 			UpdateUIState(UISTATE_EXIT);
 			// Request the framework to exit cleanly.
 			System_ExitApp();
@@ -870,8 +869,8 @@ void UmdReplaceScreen::CreateViews() {
 }
 
 void UmdReplaceScreen::update() {
+	UIBaseDialogScreen::update();
 	UpdateUIState(UISTATE_PAUSEMENU);
-	UIScreen::update();
 }
 
 void UmdReplaceScreen::OnGameSelected(UI::EventParams &e) {

@@ -46,7 +46,7 @@
 // and use the same render pass configuration (clear to black). However, we can later change this so we switch
 // to a non-clearing render pass in buffered mode, which might be a tiny bit faster.
 
-#include <crtdbg.h>
+#include "Common/DbgNew.h"
 #include <sstream>
 
 #include "Core/Config.h"
@@ -59,9 +59,9 @@
 #include "Common/GPU/thin3d.h"
 #include "Common/GPU/thin3d_create.h"
 #include "Common/GPU/Vulkan/VulkanRenderManager.h"
+#include "Common/GPU/Vulkan/VulkanGraphicsContext.h"
 #include "Common/Data/Text/Parsers.h"
 #include "GPU/Vulkan/VulkanUtil.h"
-#include "Windows/GPU/WindowsVulkanContext.h"
 
 #ifdef _DEBUG
 static const bool g_validate_ = true;
@@ -69,11 +69,12 @@ static const bool g_validate_ = true;
 static const bool g_validate_ = false;
 #endif
 
-bool WindowsVulkanContext::Init(HINSTANCE hInst, HWND hWnd, std::string *error_message) {
-	*error_message = "N/A";
+bool VulkanGraphicsContext::InitAPI(void *wnd, std::string *deviceName, std::string *errorMessage) {
+	*errorMessage = "N/A";
+	_dbg_assert_(deviceName);
 
 	if (vulkan_) {
-		*error_message = "Already initialized";
+		*errorMessage = "Already initialized";
 		return false;
 	}
 
@@ -83,12 +84,10 @@ bool WindowsVulkanContext::Init(HINSTANCE hInst, HWND hWnd, std::string *error_m
 	g_LogOptions.breakOnWarning = true;
 	g_LogOptions.msgBoxOnError = false;
 
-	Version gitVer(PPSSPP_GIT_VERSION);
-
 	std::string errorStr;
 	if (!VulkanLoad(&errorStr)) {
-		*error_message = "Failed to load Vulkan driver library: ";
-		(*error_message) += errorStr;
+		*errorMessage = "Failed to load Vulkan driver library: ";
+		(*errorMessage) += errorStr;
 		return false;
 	}
 
@@ -97,26 +96,30 @@ bool WindowsVulkanContext::Init(HINSTANCE hInst, HWND hWnd, std::string *error_m
 	VulkanContext::CreateInfo info{};
 	InitVulkanCreateInfoFromConfig(&info);
 	if (VK_SUCCESS != vulkan_->CreateInstance(info)) {
-		*error_message = vulkan_->InitError();
+		*errorMessage = vulkan_->InitError();
 		delete vulkan_;
 		vulkan_ = nullptr;
 		return false;
 	}
-	int deviceNum = vulkan_->GetPhysicalDeviceByName(g_Config.sVulkanDevice);
+	int deviceNum = vulkan_->GetPhysicalDeviceByName(*deviceName);
 	if (deviceNum < 0) {
 		deviceNum = vulkan_->GetBestPhysicalDevice();
-		if (!g_Config.sVulkanDevice.empty())
-			g_Config.sVulkanDevice = vulkan_->GetPhysicalDeviceProperties(deviceNum).properties.deviceName;
+		if (!deviceName->empty()) {
+			*deviceName = vulkan_->GetPhysicalDeviceProperties(deviceNum).properties.deviceName;
+		}
 	}
 
 	if (vulkan_->CreateDevice(deviceNum) != VK_SUCCESS) {
-		*error_message = vulkan_->InitError();
+		*errorMessage = vulkan_->InitError();
 		delete vulkan_;
 		vulkan_ = nullptr;
 		return false;
 	}
+	return true;
+}
 
-	vulkan_->InitSurface(WINDOWSYSTEM_WIN32, (void *)hInst, (void *)hWnd);
+bool VulkanGraphicsContext::InitSurface(WindowSystem winsys, void *data1, void *data2, std::string *errorMessage) {
+	vulkan_->InitSurface(winsys, data1, data2);
 
 	bool useMultiThreading = g_Config.bRenderMultiThreading;
 	if (g_Config.iInflightFrames == 1) {
@@ -134,12 +137,11 @@ bool WindowsVulkanContext::Init(HINSTANCE hInst, HWND hWnd, std::string *error_m
 #endif
 
 	if (!vulkan_->InitSwapchain(presentMode)) {
-		*error_message = vulkan_->InitError();
-		Shutdown();
+		*errorMessage = vulkan_->InitError();
 		return false;
 	}
 
-	SetGPUBackend(GPUBackend::VULKAN, vulkan_->GetPhysicalDeviceProperties(deviceNum).properties.deviceName);
+	SetGPUBackend(GPUBackend::VULKAN, vulkan_->GetPhysicalDeviceProperties().properties.deviceName);
 	bool success = draw_->CreatePresets();
 	_assert_msg_(success, "Failed to compile preset shaders");
 	draw_->HandleEvent(Draw::Event::GOT_BACKBUFFER, vulkan_->GetBackbufferWidth(), vulkan_->GetBackbufferHeight());
@@ -147,15 +149,17 @@ bool WindowsVulkanContext::Init(HINSTANCE hInst, HWND hWnd, std::string *error_m
 	renderManager_ = (VulkanRenderManager *)draw_->GetNativeObject(Draw::NativeObject::RENDER_MANAGER);
 	renderManager_->SetInflightFrames(g_Config.iInflightFrames);
 	if (!renderManager_->HasBackbuffers()) {
-		Shutdown();
+		// WTF?
+		_dbg_assert_(false);
 		return false;
 	}
 	return true;
 }
 
-void WindowsVulkanContext::Shutdown() {
-	if (draw_)
+void VulkanGraphicsContext::ShutdownSurface() {
+	if (draw_) {
 		draw_->HandleEvent(Draw::Event::LOST_BACKBUFFER, vulkan_->GetBackbufferWidth(), vulkan_->GetBackbufferHeight());
+	}
 
 	delete draw_;
 	draw_ = nullptr;
@@ -163,6 +167,9 @@ void WindowsVulkanContext::Shutdown() {
 	vulkan_->WaitUntilQueueIdle();
 	vulkan_->DestroySwapchain();
 	vulkan_->DestroySurface();
+}
+
+void VulkanGraphicsContext::ShutdownAPI() {
 	vulkan_->DestroyDevice();
 	vulkan_->DestroyInstance();
 
@@ -173,7 +180,7 @@ void WindowsVulkanContext::Shutdown() {
 	finalize_glslang();
 }
 
-void WindowsVulkanContext::Resize() {
+void VulkanGraphicsContext::Resize() {
 	draw_->HandleEvent(Draw::Event::LOST_BACKBUFFER, vulkan_->GetBackbufferWidth(), vulkan_->GetBackbufferHeight());
 	VkPresentModeKHR presentMode = ConfigPresentModeToVulkan(draw_);
 
@@ -187,7 +194,7 @@ void WindowsVulkanContext::Resize() {
 	draw_->HandleEvent(Draw::Event::GOT_BACKBUFFER, vulkan_->GetBackbufferWidth(), vulkan_->GetBackbufferHeight());
 }
 
-void WindowsVulkanContext::Poll() {
+void VulkanGraphicsContext::Poll() {
 	// Check for existing swapchain to avoid issues during shutdown.
 	if (vulkan_->IsSwapchainInited() && renderManager_->NeedsSwapchainRecreate()) {
 		Resize();
@@ -197,6 +204,6 @@ void WindowsVulkanContext::Poll() {
 	}
 }
 
-void *WindowsVulkanContext::GetAPIContext() {
+void *VulkanGraphicsContext::GetAPIContext() {
 	return vulkan_;
 }

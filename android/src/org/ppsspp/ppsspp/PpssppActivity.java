@@ -1115,16 +1115,20 @@ public class PpssppActivity extends AppCompatActivity implements SensorEventList
 			joinRenderLoopThread();
 			Log.i(TAG, "Joined render thread");
 		} else if (mGLSurfaceView != null) {
+			Log.i(TAG, "mGLSurfaceView.onPause...");
 			mGLSurfaceView.onPause();
 		}
 
+		Log.i(TAG, "mSensorManager.unregisterListener...");
 		mSensorManager.unregisterListener(this);
 
 		loseAudioFocus(this.audioManager, this.audioFocusChangeListener);
 		sizeManager.onPause();
+		Log.i(TAG, "Calling NativeApp.pause...");
 		NativeApp.pause();
 		NativeApp.sendMessageFromJava("lansync_pause", "");
 		if (mCameraHelper != null) {
+			Log.i(TAG, "Calling mCameraHelper.pause");
 			mCameraHelper.pause();
 		}
 		Log.i(TAG, "onPause end");
@@ -1209,9 +1213,11 @@ public class PpssppActivity extends AppCompatActivity implements SensorEventList
 		}
 		if (NativeApp.queryConfig("audioMixWithOthers").equals("0")) {
 			// Shouldn't mix with others - take over.
+			Log.i(TAG, "Taking audio focus");
 			audioManager.requestAudioFocus(focusChangeListener, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN);
 		} else {
 			// Mix with others - abandon focus so we don't kick others out.
+			Log.i(TAG, "Abandoning audio focus");
 			audioManager.abandonAudioFocus(focusChangeListener);
 		}
 	}
@@ -1220,6 +1226,7 @@ public class PpssppActivity extends AppCompatActivity implements SensorEventList
 	// instantiate NativeAudioPlayer
 	public static void loseAudioFocus(AudioManager audioManager, AudioFocusChangeListener focusChangeListener) {
 		if (audioManager != null) {
+			Log.i(TAG, "Abandoning audio focus");
 			audioManager.abandonAudioFocus(focusChangeListener);
 		}
 	}

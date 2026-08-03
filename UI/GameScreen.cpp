@@ -113,7 +113,9 @@ public:
 
 		Draw::DrawContext *draw = dc.GetDrawContext();
 
-		std::vector<u8> frame(width_ * height_ * 4);
+		// Dimensions are capped by pmf_init, but use size_t arithmetic anyway
+		// so a regression can't overflow the allocation.
+		std::vector<u8> frame((size_t)width_ * (size_t)height_ * 4);
 		if (pmf_update(player_, startTime_.ElapsedSeconds(), frame.data())) {
 			if (curFrame_) {
 				curFrame_->Release();
@@ -181,7 +183,7 @@ template <typename I> std::string int2hexstr(I w, size_t hex_len = sizeof(I) << 
 }
 
 void GameScreen::update() {
-	UIScreen::update();
+	UITwoPaneBaseDialogScreen::update();
 
 	GameInfoFlags hasFlags;
 	g_gameInfoCache->GetInfo(NULL, gamePath_, g_desiredFlags, &hasFlags);

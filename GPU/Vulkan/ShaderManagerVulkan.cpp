@@ -177,7 +177,6 @@ ShaderManagerVulkan::ShaderManagerVulkan(Draw::DrawContext *draw)
 
 	static_assert(sizeof(uniforms_->ub_base) <= 512, "ub_base grew too big");
 	static_assert(sizeof(uniforms_->ub_lights) <= 512, "ub_lights grew too big");
-	static_assert(sizeof(uniforms_->ub_bones) <= 384, "ub_bones grew too big");
 }
 
 ShaderManagerVulkan::~ShaderManagerVulkan() {
@@ -213,26 +212,18 @@ void ShaderManagerVulkan::Clear() {
 
 void ShaderManagerVulkan::ClearShaders() {
 	Clear();
-	DirtyLastShader();
+	lastFSID_.set_invalid();
+	lastVSID_.set_invalid();
 	gstate_c.Dirty(DIRTY_ALL_UNIFORMS | DIRTY_VERTEXSHADER_STATE | DIRTY_FRAGMENTSHADER_STATE);
 }
 
-void ShaderManagerVulkan::DirtyLastShader() {
-	// Forget the last shader ID
-	lastFSID_.set_invalid();
-	lastVSID_.set_invalid();
-	gstate_c.Dirty(DIRTY_VERTEXSHADER_STATE | DIRTY_FRAGMENTSHADER_STATE);
-}
-
-uint64_t ShaderManagerVulkan::UpdateUniforms(bool useBufferedRendering) {
+uint64_t ShaderManagerVulkan::UpdateUniforms(bool useBufferedRendering, bool pixelMapped) {
 	uint64_t dirty = gstate_c.GetDirtyUniforms();
 	if (dirty != 0) {
 		if (dirty & DIRTY_BASE_UNIFORMS)
-			BaseUpdateUniforms(&uniforms_->ub_base, dirty, useBufferedRendering);
+			BaseUpdateUniforms(&uniforms_->ub_base, dirty, useBufferedRendering, pixelMapped);
 		if (dirty & DIRTY_LIGHT_UNIFORMS)
 			LightUpdateUniforms(&uniforms_->ub_lights, dirty);
-		if (dirty & DIRTY_BONE_UNIFORMS)
-			BoneUpdateUniforms(&uniforms_->ub_bones, dirty);
 	}
 	gstate_c.CleanUniforms();
 	return dirty;
@@ -278,14 +269,14 @@ const VulkanFragmentShader *ShaderManagerVulkan::GetFragmentShaderFromID(FShader
 	return fs;
 }
 
-void ShaderManagerVulkan::GetShaderIDs(int prim, u32 vertexType, VShaderID *vshader, FShaderID *fshader, const ComputedPipelineState &pipelineState, bool useHWTransform, bool weightsAsFloat, bool useSkinInDecode, ClipInfoFlags clipInfoFlags) {
+void ShaderManagerVulkan::GetShaderIDs(int prim, u32 vertexType, VShaderID *vshader, FShaderID *fshader, const ComputedPipelineState &pipelineState, bool useHWTransform, ClipInfoFlags clipInfoFlags) {
 	VulkanContext *vulkan = (VulkanContext *)draw_->GetNativeObject(Draw::NativeObject::CONTEXT);
 
 	bool recomputedVS = false;
 	VShaderID VSID;
 	if (gstate_c.IsDirty(DIRTY_VERTEXSHADER_STATE)) {
 		gstate_c.Clean(DIRTY_VERTEXSHADER_STATE);
-		ComputeVertexShaderID(&VSID, vertexType, useHWTransform, weightsAsFloat, useSkinInDecode, clipInfoFlags);
+		ComputeVertexShaderID(&VSID, vertexType, useHWTransform, clipInfoFlags);
 		lastVSID_ = VSID;
 		*vshader = VSID;
 		recomputedVS = true;

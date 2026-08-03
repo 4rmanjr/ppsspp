@@ -84,6 +84,7 @@
 #include "Common/File/VFS/VFS.h"
 #include "Common/File/VFS/DirectoryReader.h"
 #include "Common/Math/fast/fast_matrix.h"
+#include "Core/CmdLine.h"
 #include "Core/FileSystems/ISOFileSystem.h"
 #include "Core/MemMap.h"
 #include "Core/KeyMap.h"
@@ -124,6 +125,18 @@ void System_RunOnMainThread(std::function<void()>) {}
 void System_AudioGetDebugStats(char *buf, size_t bufSize) { if (buf) buf[0] = '\0'; }
 void System_AudioClear() {}
 void System_AudioPushSamples(const s32 *audio, int numSamples, float volume) {}
+bool System_SendDebugOutput(std::string_view data) { return false; }
+void System_SendDebugScreenshot(const uint8_t *data, int width, int height) {}
+std::vector<std::string> System_GetCameraDeviceList() { return std::vector<std::string>(); }
+
+// Temporary hacks around annoying linking errors.  Copied from Headless.
+void NativeFrame(GraphicsContext *graphicsContext) {}
+void NativeResized() {}
+
+bool System_MakeRequest(SystemRequestType type, int requestId, const std::string &param1, const std::string &param2, int64_t param3, int64_t param4) { return false; }
+void System_InputBoxGetString(const std::string &title, const std::string &defaultValue, std::function<void(bool, const std::string &)> cb) { cb(false, ""); }
+void System_AskForPermission(SystemPermission permission) {}
+PermissionStatus System_GetPermissionStatus(SystemPermission permission) { return PERMISSION_STATUS_GRANTED; }
 
 // TODO: To avoid having to define these here, these should probably be turned into system "requests".
 // To clear the secret entirely, just save an empty string.
@@ -1310,6 +1323,44 @@ bool TestFriendlyPath() {
 	return true;
 }
 
+bool TestCmdLine() {
+	{
+		const char *argv[] = {
+			"ppsspp",
+			"--fullscreen",
+			"--graphics=d3d11",
+			"--pause-menu-exit",
+			"--timeout=3",
+			"My_Game.iso"
+		};
+		int argc = ARRAY_SIZE(argv);
+		CommandLineOptions options;
+		options.Parse(argc, argv, CmdLineMode::Application);
+		EXPECT_TRUE(options.fullscreen.value_or(false));
+		if (options.bootFilenames.empty()) {
+			EXPECT_TRUE(false);
+			return false;
+		}
+		EXPECT_EQ_STR(options.bootFilenames[0], std::string("My_Game.iso"));
+		EXPECT_TRUE(options.gpuBackend.has_value());
+		EXPECT_EQ_INT((int)options.gpuBackend.value_or((GPUBackend)-1), (int)GPUBackend::DIRECT3D11);
+		EXPECT_EQ_INT(options.timeout.value_or(0), 3);
+		EXPECT_TRUE(options.pauseMenuExit.value_or(false));
+	}
+	// Test GL version override
+	{
+		const char *argv[] = {
+			"ppsspp",
+			"--graphics=gles3.3",
+		};
+		int argc = ARRAY_SIZE(argv);
+		CommandLineOptions options;
+		options.Parse(argc, argv);
+		EXPECT_EQ_INT(options.force_gl_version, 33);
+	}
+	return true;
+}
+
 // Check that RTTI is working.
 bool TestLang() {
 	struct Base { virtual ~Base() = default; };
@@ -1340,6 +1391,8 @@ bool TestIRPassSimplify();
 bool TestLANSync();
 bool TestThreadManager();
 bool TestVFS();
+bool TestZipSlip();
+bool TestLzrc();
 
 TestItem availableTests[] = {
 #if PPSSPP_ARCH(ARM64) || PPSSPP_ARCH(AMD64) || PPSSPP_ARCH(X86)
@@ -1397,6 +1450,9 @@ TestItem availableTests[] = {
 	TEST_ITEM(FriendlyPath),
 	TEST_ITEM(LinAlg),
 	TEST_ITEM(Lang),
+	TEST_ITEM(CmdLine),
+	TEST_ITEM(ZipSlip),
+	TEST_ITEM(Lzrc),
 };
 
 int main(int argc, const char *argv[]) {

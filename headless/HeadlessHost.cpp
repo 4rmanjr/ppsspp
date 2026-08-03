@@ -24,38 +24,3 @@
 #include "headless/Compare.h"
 #include "headless/HeadlessHost.h"
 
-void HeadlessHost::SendDebugScreenshot(const u8 *pixbuf, u32 w, u32 h) {
-	// Only if we're actually comparing.
-	if (comparisonScreenshot_.empty()) {
-		return;
-	}
-
-	// We ignore the current framebuffer parameters and just grab the full screen.
-	const static u32 FRAME_STRIDE = 512;
-	const static u32 FRAME_WIDTH = 480;
-	const static u32 FRAME_HEIGHT = 272;
-
-	GPUDebugBuffer buffer;
-	gpu->GetCurrentFramebuffer(buffer, GPU_DBG_FRAMEBUF_DISPLAY);
-	const std::vector<u32> pixels = TranslateDebugBufferToCompare(&buffer, 512, 272);
-
-	ScreenshotComparer comparer(pixels, FRAME_STRIDE, FRAME_WIDTH, FRAME_HEIGHT);
-	double errors = comparer.Compare(comparisonScreenshot_);
-	if (errors < 0)
-		SendAndCollectOutput(comparer.GetError() + "\n");
-
-	if (errors > maxScreenshotError_)
-		SendAndCollectOutput(StringFromFormat("Screenshot MSE: %f\n", errors));
-
-	if (errors > maxScreenshotError_ && writeFailureScreenshot_) {
-		if (comparer.SaveActualBitmap(Path("__testfailure.bmp")))
-			SendAndCollectOutput("Actual output written to: __testfailure.bmp\n");
-		comparer.SaveVisualComparisonPNG(Path("__testcompare.png"));
-	}
-}
-
-void HeadlessHost::SendAndCollectOutput(const std::string &output) {
-	SendDebugOutput(output);
-	if (PSP_CoreParameter().collectDebugOutput)
-		*PSP_CoreParameter().collectDebugOutput += output;
-}

@@ -213,6 +213,16 @@ public:
 	// Core
 	bool bIgnoreBadMemAccess;
 
+	// ExceptionAction enum: 0 = default (obey bIgnoreBadMemAccess), 1 = log, 2 = break, 3 = exit
+	int iExceptionActionMemRead;  // this also includes alignment and other odd memory exceptions.
+	int iExceptionActionMemWrite;
+	int iExceptionActionBreak;
+
+	// If true, log a best-effort native stack trace (Windows only) when a genuinely
+	// unhandled access violation is about to crash the process. Diagnostic only, off by
+	// default - see --log-native-crashes in Core/CmdLine.cpp.
+	bool bLogNativeCrashStackTraces;
+
 	bool bFastMemory;
 	int iCpuCore;
 	bool bCheckForNewVersion;
@@ -285,7 +295,6 @@ public:
 	bool bSoftwareRendering;
 	bool bSoftwareRenderingJit;
 	bool bHardwareTransform;
-	bool bSoftwareSkinning;
 	bool bVendorBugChecksEnabled;
 
 	// Speedhacks (more will be moved here):
@@ -353,11 +362,13 @@ public:
 	bool bEnableCheats;
 	bool bReloadCheats;
 	bool bEnablePlugins;
+	bool bEnableFileHandlerPlugins;
 	int iCwCheatRefreshIntervalMs;
 	float fCwCheatScrollPosition;
 	float fGameListScrollPosition;
 	float fHomebrewScrollPosition;
 	float fRemoteScrollPosition;
+	bool bReportAccurateFreeStorageSpace;
 	int iBloomHack; //0 = off, 1 = safe, 2 = balanced, 3 = aggressive
 	int iSkipGPUReadbackMode;  // 0 = off, 1 = skip, 2 = to texture
 	int iSplineBezierQuality; // 0 = low , 1 = Intermediate , 2 = High

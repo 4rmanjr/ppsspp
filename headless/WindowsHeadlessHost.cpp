@@ -29,6 +29,7 @@
 #include "Common/Log.h"
 #include "Common/File/FileUtil.h"
 #include "Common/TimeUtil.h"
+#include "Common/Thread/ThreadUtil.h"
 
 #include "Core/CoreParameter.h"
 #include "Core/System.h"
@@ -38,7 +39,7 @@
 #include "Windows/GPU/WindowsGLContext.h"
 #endif
 #include "Windows/GPU/D3D11Context.h"
-#include "Windows/GPU/WindowsVulkanContext.h"
+#include "Common/GPU/Vulkan/VulkanGraphicsContext.h"
 
 const bool WINDOW_VISIBLE = false;
 const int WINDOW_WIDTH = 480;
@@ -65,12 +66,6 @@ HWND CreateHiddenWindow() {
 	return CreateWindowEx(0, L"PPSSPPHeadless", L"PPSSPPHeadless", style, CW_USEDEFAULT, CW_USEDEFAULT, WINDOW_WIDTH, WINDOW_HEIGHT, NULL, NULL, NULL, NULL);
 }
 
-void WindowsHeadlessHost::SendDebugOutput(const std::string &output) {
-	if (writeDebugOutput_)
-		fwrite(output.data(), sizeof(char), output.length(), stdout);
-	OutputDebugStringUTF8(output.c_str());
-}
-
 bool WindowsHeadlessHost::InitGraphics(std::string *error_message, GraphicsContext **ctx, GPUCore core) {
 	hWnd = CreateHiddenWindow();
 	gpuCore_ = core;
@@ -80,14 +75,12 @@ bool WindowsHeadlessHost::InitGraphics(std::string *error_message, GraphicsConte
 		SetFocus(hWnd);
 	}
 
-	WindowsGraphicsContext *graphicsContext = nullptr;
-	bool needRenderThread = false;
+	GraphicsContext *graphicsContext = nullptr;
 	switch (gpuCore_) {
 	case GPUCORE_GLES:
 #if PPSSPP_API(ANY_GL)
 	case GPUCORE_SOFTWARE:
 		graphicsContext = new WindowsGLContext();
-		needRenderThread = true;
 		break;
 #endif
 	case GPUCORE_DIRECTX11:
@@ -95,16 +88,15 @@ bool WindowsHeadlessHost::InitGraphics(std::string *error_message, GraphicsConte
 		break;
 
 	case GPUCORE_VULKAN:
-		graphicsContext = new WindowsVulkanContext();
+		graphicsContext = new VulkanGraphicsContext();
 		break;
 	default:
 		_assert_(false);
 		break;
 	}
 
-	if (graphicsContext->Init(NULL, hWnd, error_message)) {
-		*ctx = graphicsContext;
-		gfx_ = graphicsContext;
+	if (graphicsContext->InitAPI(hWnd, nullptr, error_message)) {
+		// Success
 	} else {
 		delete graphicsContext;
 		*ctx = nullptr;
@@ -112,32 +104,40 @@ bool WindowsHeadlessHost::InitGraphics(std::string *error_message, GraphicsConte
 		return false;
 	}
 
+	bool needRenderThread = gpuCore_ == GPUCORE_GLES;
+
 	if (needRenderThread) {
-		std::thread th([&]{
+		renderThread_ = std::thread([this]{
+			SetCurrentThreadName("RenderThread");
 			while (threadState_ == RenderThreadState::IDLE)
 				sleep_ms(1, "render-thread-idle-poll");
 			threadState_ = RenderThreadState::STARTING;
 
 			std::string err;
-			if (!gfx_->InitFromRenderThread(&err)) {
+			if (!gfx_->InitSurface(WINDOWSYSTEM_WIN32, nullptr, hWnd, &err)) {
 				threadState_ = RenderThreadState::START_FAILED;
 				return;
 			}
 			gfx_->ThreadStart();
 			threadState_ = RenderThreadState::STARTED;
 
-			while (threadState_ != RenderThreadState::STOP_REQUESTED) {
-				if (!gfx_->ThreadFrame(true)) {
-					break;
-				}
-			}
+			gfx_->ThreadFrameUntilCondition([this] { return threadState_ == RenderThreadState::STOP_REQUESTED; });
 
 			threadState_ = RenderThreadState::STOPPING;
 			gfx_->ThreadEnd();
-			gfx_->ShutdownFromRenderThread();
+			gfx_->ShutdownSurface();
 			threadState_ = RenderThreadState::STOPPED;
 		});
-		th.detach();
+	} else {
+		if (graphicsContext->InitSurface(WINDOWSYSTEM_WIN32, NULL, hWnd, error_message)) {
+			*ctx = graphicsContext;
+			gfx_ = graphicsContext;
+		} else {
+			delete graphicsContext;
+			*ctx = nullptr;
+			gfx_ = nullptr;
+			return false;
+		}
 	}
 
 	if (needRenderThread) {
@@ -152,10 +152,17 @@ bool WindowsHeadlessHost::InitGraphics(std::string *error_message, GraphicsConte
 }
 
 void WindowsHeadlessHost::ShutdownGraphics() {
-	while (threadState_ != RenderThreadState::STOPPED && threadState_ != RenderThreadState::IDLE)
-		sleep_ms(1, "render-thread-stop-poll");
+	if (renderThread_.joinable()) {
+		threadState_ = RenderThreadState::STOP_REQUESTED;
+		while (threadState_ != RenderThreadState::STOPPED && threadState_ != RenderThreadState::IDLE)
+			sleep_ms(1, "render-thread-stop-poll");
+		renderThread_.join();
+	} else {
+		gfx_->ShutdownSurface();
+	}
 
-	gfx_->Shutdown();
+	gfx_->ShutdownAPI();
+
 	delete gfx_;
 	gfx_ = nullptr;
 	DestroyWindow(hWnd);
